@@ -38,6 +38,8 @@ def _response(snapshot: TillShiftSnapshot) -> dict[str, object]:
         "opened_at": snapshot.opened_at,
         "cash_sales": snapshot.cash_sales,
         "cash_sale_count": snapshot.cash_sale_count,
+        "cash_refunds": snapshot.cash_refunds,
+        "cash_refund_count": snapshot.cash_refund_count,
         "paid_in": snapshot.paid_in,
         "paid_out": snapshot.paid_out,
         "expected_cash": snapshot.expected_cash,
