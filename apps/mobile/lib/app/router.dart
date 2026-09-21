@@ -6,6 +6,7 @@ import 'package:khanya_pos/features/documents/presentation/receipt_vault_page.da
 import 'package:khanya_pos/features/expenses/presentation/add_expense_page.dart';
 import 'package:khanya_pos/features/expenses/presentation/expenses_page.dart';
 import 'package:khanya_pos/features/inventory/presentation/inventory_page.dart';
+import 'package:khanya_pos/features/pos/presentation/hardware_settings_page.dart';
 import 'package:khanya_pos/features/pos/presentation/pos_page.dart';
 import 'package:khanya_pos/features/purchasing/presentation/new_purchase_page.dart';
 import 'package:khanya_pos/features/purchasing/presentation/purchases_page.dart';
@@ -30,6 +31,10 @@ final GoRouter appRouter = GoRouter(
         GoRoute(path: '/receipts', builder: (context, state) => const ReceiptVaultPage()),
         GoRoute(path: '/expenses', builder: (context, state) => const ExpensesPage()),
         GoRoute(path: '/expenses/new', builder: (context, state) => const AddExpensePage()),
+        GoRoute(
+          path: '/settings/hardware',
+          builder: (context, state) => const HardwareSettingsPage(),
+        ),
       ],
     ),
   ],
