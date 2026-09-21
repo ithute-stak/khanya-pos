@@ -11,6 +11,7 @@ import 'package:khanya_pos/core/sync/sync_bloc.dart';
 import 'package:khanya_pos/features/auth/presentation/bloc/session_bloc.dart';
 import 'package:khanya_pos/features/auth/presentation/business_context_page.dart';
 import 'package:khanya_pos/features/auth/presentation/login_page.dart';
+import 'package:khanya_pos/features/pos/data/held_sales_repository.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 
 class KhanyaPosApp extends StatefulWidget {
@@ -35,6 +36,7 @@ class _KhanyaPosAppState extends State<KhanyaPosApp> {
       providers: [
         RepositoryProvider.value(value: dependencies.productRepository),
         RepositoryProvider.value(value: dependencies.salesRepository),
+        RepositoryProvider<HeldSalesRepository>.value(value: dependencies.heldSalesRepository),
         RepositoryProvider.value(value: dependencies.purchasingRepository),
         RepositoryProvider.value(value: dependencies.documentRepository),
         RepositoryProvider.value(value: dependencies.expenseRepository),
