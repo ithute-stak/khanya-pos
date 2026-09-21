@@ -1,15 +1,23 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/core/network/api_client.dart';
+import 'package:khanya_pos/core/storage/app_database.dart';
 import 'package:khanya_pos/features/pos/domain/till_shift.dart';
 import 'package:uuid/uuid.dart';
 
 class TillRepository {
-  TillRepository({required ApiClient apiClient, Uuid? uuid})
-      : _apiClient = apiClient,
+  TillRepository({
+    required ApiClient apiClient,
+    required AppDatabase database,
+    Uuid? uuid,
+  })  : _apiClient = apiClient,
+        _database = database,
         _uuid = uuid ?? const Uuid();
 
   final ApiClient _apiClient;
+  final AppDatabase _database;
   final Uuid _uuid;
 
   Future<TillShiftSummary?> current() async {
@@ -35,6 +43,27 @@ class TillRepository {
     } on DioException catch (error) {
       throw StateError(_message(error, 'Unable to load till history.'));
     }
+  }
+
+  Future<int> pendingCashSalesCount() async {
+    final pending = await _database.getSyncablePendingSales();
+    var count = 0;
+    for (final sale in pending) {
+      try {
+        final payload = jsonDecode(sale.payloadJson);
+        if (payload is! Map) continue;
+        final payments = payload['payments'];
+        if (payments is! List) continue;
+        final hasCash = payments.whereType<Map>().any(
+              (payment) => payment['method']?.toString() == 'cash',
+            );
+        if (hasCash) count += 1;
+      } catch (_) {
+        // A malformed queued sale must not make till management unusable;
+        // normal sync/conflict handling remains responsible for that record.
+      }
+    }
+    return count;
   }
 
   Future<TillShiftSummary> open({required int openingFloatMinor}) async {
