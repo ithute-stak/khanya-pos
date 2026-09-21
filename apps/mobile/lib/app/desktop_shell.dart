@@ -250,4 +250,9 @@ const _items = <_DesktopNavItem>[
   _DesktopNavItem(label: 'Suppliers', path: '/suppliers', icon: Icons.local_shipping_outlined, shortcut: 'F7'),
   _DesktopNavItem(label: 'Receipt Vault', path: '/receipts', icon: Icons.receipt_long_outlined, shortcut: 'F8'),
   _DesktopNavItem(label: 'Expenses', path: '/expenses', icon: Icons.account_balance_wallet_outlined, shortcut: 'F10'),
+  _DesktopNavItem(
+    label: 'POS Hardware',
+    path: '/settings/hardware',
+    icon: Icons.settings_input_component_outlined,
+  ),
 ];
