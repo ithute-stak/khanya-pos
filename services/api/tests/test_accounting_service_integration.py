@@ -215,11 +215,16 @@ async def test_ledger_health_reconciles_inventory_to_gl() -> None:
 async def test_period_lock_blocks_backdated_posting_but_allows_later_posting() -> None:
     async with SessionLocal() as db:
         user, tenant, branch = await _identity(db)
+        # Cache IDs because an intentional rollback below expires ORM objects.
+        tenant_id = tenant.id
+        branch_id = branch.id
+        user_id = user.id
+
         lock_point = datetime.now(timezone.utc) - timedelta(days=1)
         settings = await advance_period_lock(
             db,
-            tenant_id=tenant.id,
-            user_id=user.id,
+            tenant_id=tenant_id,
+            user_id=user_id,
             locked_through=lock_point,
             reason="Month-end close integration test",
         )
@@ -230,9 +235,9 @@ async def test_period_lock_blocks_backdated_posting_but_allows_later_posting() -
         with pytest.raises(AccountingPeriodLockedError, match="locked through"):
             await post_manual_journal(
                 db,
-                tenant_id=tenant.id,
-                branch_id=branch.id,
-                user_id=user.id,
+                tenant_id=tenant_id,
+                branch_id=branch_id,
+                user_id=user_id,
                 client_operation_id=rejected_operation,
                 description="Backdated entry must be rejected",
                 occurred_at=lock_point - timedelta(seconds=1),
@@ -244,7 +249,7 @@ async def test_period_lock_blocks_backdated_posting_but_allows_later_posting() -
         await db.rollback()
         rejected_count = await db.scalar(
             select(func.count(JournalEntry.id)).where(
-                JournalEntry.tenant_id == tenant.id,
+                JournalEntry.tenant_id == tenant_id,
                 JournalEntry.source_type == "manual_journal",
                 JournalEntry.source_id == rejected_operation,
             )
@@ -254,9 +259,9 @@ async def test_period_lock_blocks_backdated_posting_but_allows_later_posting() -
         allowed_operation = uuid4()
         allowed = await post_manual_journal(
             db,
-            tenant_id=tenant.id,
-            branch_id=branch.id,
-            user_id=user.id,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            user_id=user_id,
             client_operation_id=allowed_operation,
             description="Entry after close boundary",
             occurred_at=lock_point + timedelta(seconds=1),
@@ -271,8 +276,8 @@ async def test_period_lock_blocks_backdated_posting_but_allows_later_posting() -
         with pytest.raises(AccountingError, match="only move forward"):
             await advance_period_lock(
                 db,
-                tenant_id=tenant.id,
-                user_id=user.id,
+                tenant_id=tenant_id,
+                user_id=user_id,
                 locked_through=lock_point - timedelta(days=1),
                 reason="A closed period must not be silently reopened",
             )
