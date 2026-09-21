@@ -18,6 +18,12 @@ from app.models.purchasing import (
     SupplierPayment,
 )
 from app.schemas.purchasing import ExpenseCreateRequest, PurchaseReceiveRequest, SupplierPaymentRequest
+from app.services.accounting import (
+    PostingLine,
+    expense_account_code,
+    payment_account_code,
+    post_journal,
+)
 from app.services.outbox import enqueue_event
 from app.services.pricing import line_total, money, quantity
 
@@ -228,10 +234,16 @@ async def complete_purchase(
     db.add(purchase)
     await db.flush()
 
+    received_inventory_value = Decimal("0.00")
+    stock_in_transit_value = Decimal("0.00")
+    non_stock_value = Decimal("0.00")
+
     for item in sorted(payload.items, key=lambda value: str(value.product_id)):
         product = locked_products[item.product_id]
         ordered_qty = quantity(item.quantity)
         received_qty = quantity(item.quantity_received if item.quantity_received is not None else item.quantity)
+        ordered_value = line_total(item.unit_cost, ordered_qty)
+        received_value = line_total(item.unit_cost, received_qty)
         db.add(
             PurchaseLine(
                 purchase_id=purchase.id,
@@ -240,9 +252,15 @@ async def complete_purchase(
                 quantity_received=received_qty,
                 unit_cost=money(item.unit_cost),
                 tax_total=money(item.tax_total),
-                line_total=line_total(item.unit_cost, ordered_qty),
+                line_total=ordered_value,
             )
         )
+
+        if product.track_stock:
+            received_inventory_value += received_value
+            stock_in_transit_value += money(ordered_value - received_value)
+        else:
+            non_stock_value += ordered_value
 
         if product.track_stock and received_qty > 0:
             stock = locked_stocks[product.id]
@@ -292,13 +310,63 @@ async def complete_purchase(
                 branch_id=branch_id,
                 supplier_id=supplier.id,
                 purchase_id=purchase.id,
-                payment_method=payload.payment_method
-                if payload.payment_method != "supplier_credit"
-                else "cash",
+                payment_method=payload.payment_method,
                 amount=amount_paid,
                 paid_by_user_id=user_id,
             )
         )
+
+    purchase_journal_lines: list[PostingLine] = []
+    received_inventory_value = money(received_inventory_value)
+    stock_in_transit_value = money(stock_in_transit_value)
+    non_stock_value = money(non_stock_value)
+    if received_inventory_value > 0:
+        purchase_journal_lines.append(
+            PostingLine(account_code="1200", debit=received_inventory_value, memo="Stock received")
+        )
+    if stock_in_transit_value > 0:
+        purchase_journal_lines.append(
+            PostingLine(
+                account_code="1210",
+                debit=stock_in_transit_value,
+                memo="Ordered stock not yet received",
+            )
+        )
+    if non_stock_value > 0:
+        purchase_journal_lines.append(
+            PostingLine(account_code="6300", debit=non_stock_value, memo="Non-stock purchase")
+        )
+    if tax_total > 0:
+        purchase_journal_lines.append(
+            PostingLine(
+                account_code="1310",
+                debit=tax_total,
+                memo="Purchase tax pending VAT/tax classification",
+            )
+        )
+    if amount_paid > 0:
+        purchase_journal_lines.append(
+            PostingLine(
+                account_code=payment_account_code(payload.payment_method),
+                credit=amount_paid,
+                memo=f"Immediate {payload.payment_method.replace('_', ' ')} payment",
+            )
+        )
+    if balance_due > 0:
+        purchase_journal_lines.append(
+            PostingLine(account_code="2000", credit=balance_due, memo="Supplier balance due")
+        )
+    await post_journal(
+        db,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        user_id=user_id,
+        source_type="purchase",
+        source_id=purchase.id,
+        description=f"Purchase {purchase.purchase_number}",
+        occurred_at=purchase.purchase_date,
+        lines=purchase_journal_lines,
+    )
 
     enqueue_event(
         db,
@@ -369,6 +437,28 @@ async def record_supplier_payment(
     )
     db.add(payment)
     await db.flush()
+
+    debit_code = "2000" if purchase is not None else "1400"
+    debit_memo = "Accounts payable settlement" if purchase is not None else "Unallocated supplier advance"
+    await post_journal(
+        db,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        user_id=user_id,
+        source_type="supplier_payment",
+        source_id=payment.id,
+        description=f"Payment to {supplier.name}",
+        occurred_at=payment.paid_at,
+        lines=[
+            PostingLine(account_code=debit_code, debit=money(payload.amount), memo=debit_memo),
+            PostingLine(
+                account_code=payment_account_code(payload.payment_method),
+                credit=money(payload.amount),
+                memo=f"{payload.payment_method.replace('_', ' ').title()} paid",
+            ),
+        ],
+    )
+
     enqueue_event(
         db,
         tenant_id=tenant_id,
@@ -451,6 +541,30 @@ async def record_expense(
     )
     db.add(expense)
     await db.flush()
+
+    await post_journal(
+        db,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        user_id=user_id,
+        source_type="expense",
+        source_id=expense.id,
+        description=f"Expense {expense.expense_number}: {expense.description}",
+        occurred_at=expense.expense_date,
+        lines=[
+            PostingLine(
+                account_code=expense_account_code(expense.category),
+                debit=expense.amount,
+                memo=expense.description,
+            ),
+            PostingLine(
+                account_code=payment_account_code(expense.payment_method),
+                credit=expense.amount,
+                memo=f"{expense.payment_method.replace('_', ' ').title()} payment",
+            ),
+        ],
+    )
+
     enqueue_event(
         db,
         tenant_id=tenant_id,
