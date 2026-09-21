@@ -22,11 +22,11 @@ class ReceiptPrinter {
       final info = await Printing.info();
       if (info.directPrint && info.canListPrinters) {
         final printers = await Printing.listPrinters();
-        final selected = printers.where((printer) => printer.name == settings.printerName).firstOrNull;
-        if (selected != null) {
+        final matches = printers.where((printer) => printer.name == settings.printerName).toList();
+        if (matches.isNotEmpty) {
           final bytes = await buildSaleReceiptPdf(receipt, paperWidthMm: widthMm);
           return Printing.directPrintPdf(
-            printer: selected,
+            printer: matches.first,
             name: 'KhanyaPOS-${receipt.reference}.pdf',
             format: saleReceiptPageFormat(receipt, paperWidthMm: widthMm),
             dynamicLayout: false,
