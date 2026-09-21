@@ -225,7 +225,7 @@ class PurchaseDraftBloc extends Bloc<PurchaseDraftEvent, PurchaseDraftState> {
       try {
         await _productRepository.refresh();
       } catch (_) {
-        // Cached products keep purchase entry available when the catalog refresh is unavailable.
+        // Cached products keep purchase entry available while offline.
       }
       final suppliers = await _purchasingRepository.listSuppliers();
       final products = await _productRepository.cachedCurrentCatalog();
@@ -237,10 +237,21 @@ class PurchaseDraftBloc extends Bloc<PurchaseDraftEvent, PurchaseDraftState> {
         ),
       );
     } catch (_) {
+      final products = await _productRepository.cachedCurrentCatalog();
+      if (products.isNotEmpty) {
+        emit(
+          state.copyWith(
+            status: PurchaseDraftStatus.ready,
+            products: products,
+            message: 'Offline — using cached products. Supplier choices may be limited.',
+          ),
+        );
+        return;
+      }
       emit(
         state.copyWith(
           status: PurchaseDraftStatus.failure,
-          message: 'Could not prepare a new purchase. Check connectivity and business context.',
+          message: 'Could not prepare a new purchase. Connect once to cache products and suppliers.',
         ),
       );
     }
@@ -297,20 +308,22 @@ class PurchaseDraftBloc extends Bloc<PurchaseDraftEvent, PurchaseDraftState> {
       try {
         await _productRepository.refresh();
       } catch (_) {
-        // The purchase is already committed server-side; realtime/sync can reconcile later.
+        // Local purchase stock projection remains active until sync succeeds.
       }
       emit(
         state.copyWith(
           status: PurchaseDraftStatus.success,
           submission: submission,
-          message: '${submission.purchaseNumber} saved successfully.',
+          message: submission.status == 'queued'
+              ? 'Purchase saved on this device and queued for sync.'
+              : 'Purchase saved and synced.',
         ),
       );
     } catch (_) {
       emit(
         state.copyWith(
           status: PurchaseDraftStatus.failure,
-          message: 'Purchase could not be saved. Review the values and connectivity.',
+          message: 'Purchase could not be saved. Review the values and sync issues.',
         ),
       );
     }

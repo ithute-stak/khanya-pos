@@ -9,6 +9,7 @@ import 'package:khanya_pos/core/sync/sync_service.dart';
 import 'package:khanya_pos/features/auth/data/auth_repository.dart';
 import 'package:khanya_pos/features/catalog/data/product_repository.dart';
 import 'package:khanya_pos/features/documents/data/document_repository.dart';
+import 'package:khanya_pos/features/documents/data/receipt_file_store.dart';
 import 'package:khanya_pos/features/expenses/data/expense_repository.dart';
 import 'package:khanya_pos/features/pos/data/sales_repository.dart';
 import 'package:khanya_pos/features/purchasing/data/purchasing_repository.dart';
@@ -54,6 +55,26 @@ class AppDependencies {
       sessionContext: sessionContext,
       syncService: syncService,
     );
+    final purchasingRepository = PurchasingRepository(
+      apiClient: apiClient,
+      database: database,
+      sessionContext: sessionContext,
+      syncService: syncService,
+    );
+    final documentRepository = DocumentRepository(
+      database: database,
+      sessionContext: sessionContext,
+      syncService: syncService,
+      fileStore: ReceiptFileStore(),
+      remoteList: () async =>
+          (await apiClient.dio.get<List<dynamic>>('/documents')).data ?? const <dynamic>[],
+    );
+    final expenseRepository = ExpenseRepository(
+      apiClient: apiClient,
+      database: database,
+      sessionContext: sessionContext,
+      syncService: syncService,
+    );
     return AppDependencies._(
       database: database,
       sessionContext: sessionContext,
@@ -62,9 +83,9 @@ class AppDependencies {
       productRepository: productRepository,
       syncService: syncService,
       salesRepository: salesRepository,
-      purchasingRepository: PurchasingRepository(apiClient: apiClient),
-      documentRepository: DocumentRepository(apiClient: apiClient),
-      expenseRepository: ExpenseRepository(apiClient: apiClient),
+      purchasingRepository: purchasingRepository,
+      documentRepository: documentRepository,
+      expenseRepository: expenseRepository,
       realtimeClient: RealtimeClient(),
     );
   }
