@@ -2,10 +2,32 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+
+class AccountingSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "accounting_settings"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", name="uq_accounting_settings_tenant"),
+        CheckConstraint(
+            "fiscal_year_start_month BETWEEN 1 AND 12",
+            name="ck_accounting_settings_fiscal_month",
+        ),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    base_currency: Mapped[str] = mapped_column(String(3), default="LSL", nullable=False)
+    fiscal_year_start_month: Mapped[int] = mapped_column(Integer(), default=1, nullable=False)
+    locked_through: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    locked_by_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    lock_reason: Mapped[str | None] = mapped_column(Text(), nullable=True)
 
 
 class Account(UUIDPrimaryKeyMixin, TimestampMixin, Base):
