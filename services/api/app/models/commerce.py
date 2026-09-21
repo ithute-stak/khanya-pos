@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -77,6 +77,12 @@ class Sale(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "tenant_id", "client_operation_id", name="uq_sales_tenant_client_operation"
         ),
         UniqueConstraint("tenant_id", "sale_number", name="uq_sales_tenant_sale_number"),
+        CheckConstraint("balance_due >= 0", name="ck_sales_balance_due_nonnegative"),
+        CheckConstraint("balance_due <= total", name="ck_sales_balance_due_not_over_total"),
+        CheckConstraint(
+            "payment_status IN ('paid','partial','unpaid')",
+            name="ck_sales_payment_status",
+        ),
     )
 
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
