@@ -97,6 +97,13 @@ class DashboardPage extends StatelessWidget {
                       onTap: () => context.push('/till'),
                     ),
                     _ModuleCard(
+                      title: 'Customers & Credit',
+                      description: 'Credit limits, balances, payments, ageing and statements',
+                      icon: Icons.groups_2_outlined,
+                      accent: KhanyaBrand.forest,
+                      onTap: () => context.push('/customers'),
+                    ),
+                    _ModuleCard(
                       title: 'Products',
                       description: 'Prices, SKUs, barcodes and product catalogue',
                       icon: Icons.inventory_2_outlined,
