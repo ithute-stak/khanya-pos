@@ -33,3 +33,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/branding/khanya_resources_corporate.webp
+    - assets/branding/khanya_resources_vertical.webp
+    - assets/branding/khanya_resources_horizontal.webp
