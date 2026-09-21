@@ -153,6 +153,15 @@ class SyncBloc extends Bloc<SyncEvent, SyncStatusState> {
     _running = true;
     emit(state.copyWith(isSyncing: true));
     try {
+      // The customer and sales projections live in separate local databases.
+      // Repair an orphaned credit reservation first in case the app was killed
+      // after reserving credit but before the sale outbox write completed.
+      try {
+        await _customerRepository.reconcileOfflineProjections();
+      } catch (_) {
+        // No business may be selected yet. A later authenticated sync will retry.
+      }
+
       final result = await _syncService.flushAll();
       if (result.synced > 0 || result.conflicts > 0) {
         try {
