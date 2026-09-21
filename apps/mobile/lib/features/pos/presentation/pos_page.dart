@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/core/sync/sync_bloc.dart';
+import 'package:khanya_pos/features/auth/presentation/bloc/session_bloc.dart';
 import 'package:khanya_pos/features/catalog/data/product_repository.dart';
 import 'package:khanya_pos/features/catalog/domain/product_summary.dart';
 import 'package:khanya_pos/features/catalog/presentation/bloc/product_catalog_bloc.dart';
@@ -10,6 +11,8 @@ import 'package:khanya_pos/features/pos/data/sales_repository.dart';
 import 'package:khanya_pos/features/pos/domain/cart.dart';
 import 'package:khanya_pos/features/pos/presentation/bloc/cart_bloc.dart';
 import 'package:khanya_pos/features/pos/presentation/bloc/checkout_bloc.dart';
+import 'package:khanya_pos/features/pos/printing/receipt_printer.dart';
+import 'package:khanya_pos/features/pos/printing/sale_receipt.dart';
 
 class PosPage extends StatelessWidget {
   const PosPage({super.key});
@@ -40,6 +43,7 @@ class _PosView extends StatefulWidget {
 class _PosViewState extends State<_PosView> {
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode(debugLabel: 'POS search');
+  SaleReceipt? _lastReceipt;
 
   @override
   void dispose() {
@@ -66,7 +70,6 @@ class _PosViewState extends State<_PosView> {
     final cart = context.read<CartBloc>().state;
     final checkout = context.read<CheckoutBloc>().state;
     if (cart.lines.isEmpty || checkout.status == CheckoutStatus.submitting) return;
-
     context.read<CheckoutBloc>().add(
           CheckoutSaleRequested(
             lines: List<CartLine>.unmodifiable(cart.lines),
@@ -75,12 +78,135 @@ class _PosViewState extends State<_PosView> {
         );
   }
 
+  SaleReceipt _makeReceipt(BuildContext context, CheckoutState state) {
+    var businessName = 'Khanya POS';
+    String? branchId;
+    String? cashierName;
+    final sessionState = context.read<SessionBloc>().state;
+    if (sessionState is SessionAuthenticated) {
+      final session = sessionState.session;
+      branchId = session.selectedBranchId;
+      cashierName = session.displayName;
+      for (final membership in session.memberships) {
+        if (membership.tenantId == session.selectedTenantId) {
+          businessName = membership.tenantName;
+          break;
+        }
+      }
+    }
+
+    final submission = state.submission!;
+    final syncStatus = switch (submission.status) {
+      SaleSubmissionStatus.synced => 'Synced',
+      SaleSubmissionStatus.queued => 'Queued for sync',
+      SaleSubmissionStatus.conflict => 'Needs sync review',
+    };
+
+    return SaleReceipt(
+      businessName: businessName,
+      reference: submission.clientOperationId,
+      issuedAt: DateTime.now(),
+      branchId: branchId,
+      cashierName: cashierName,
+      lines: state.lines.map(SaleReceiptLine.fromCartLine).toList(growable: false),
+      paymentMethod: state.paymentMethod ?? PaymentMethod.cash,
+      syncStatus: syncStatus,
+    );
+  }
+
+  Future<void> _handleCompleted(BuildContext context, CheckoutState state) async {
+    final receipt = _makeReceipt(context, state);
+    if (!mounted) return;
+    setState(() => _lastReceipt = receipt);
+    context.read<CartBloc>().add(const CartCleared());
+    context.read<SyncBloc>().add(const SyncRequested());
+    _clearSearch(context);
+
+    final status = state.submission!.status;
+    final message = switch (status) {
+      SaleSubmissionStatus.synced => 'Sale completed and synced.',
+      SaleSubmissionStatus.queued => 'Sale saved offline and queued for sync.',
+      SaleSubmissionStatus.conflict => 'Sale saved locally but needs sync review.',
+    };
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!mounted) return;
+    await _showReceiptDialog(receipt);
+  }
+
+  Future<void> _printReceipt(SaleReceipt receipt) async {
+    try {
+      final accepted = await ReceiptPrinter.printReceipt(receipt);
+      if (!mounted) return;
+      if (!accepted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Receipt printing was cancelled.')),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to open the printer. Check the Windows printer installation and try again.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _printLastReceipt() async {
+    final receipt = _lastReceipt;
+    if (receipt != null) await _printReceipt(receipt);
+  }
+
+  Future<void> _showReceiptDialog(SaleReceipt receipt) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.check_circle_outline, size: 38),
+        title: const Text('Sale completed'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Total: ${Loti.formatMinor(receipt.totalMinor)}'),
+              const SizedBox(height: 6),
+              Text('Payment: ${receipt.paymentMethod.label}'),
+              const SizedBox(height: 6),
+              Text('Reference: ${receipt.reference}'),
+              const SizedBox(height: 6),
+              Text('Status: ${receipt.syncStatus}'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Done'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              await _printReceipt(receipt);
+            },
+            icon: const Icon(Icons.print_outlined),
+            label: const Text('Print receipt'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         const SingleActivator(LogicalKeyboardKey.f4): _focusSearch,
         const SingleActivator(LogicalKeyboardKey.f9): () => _requestCheckout(context),
+        const SingleActivator(LogicalKeyboardKey.f12): _printLastReceipt,
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true): _printLastReceipt,
         const SingleActivator(LogicalKeyboardKey.escape): () => _clearSearch(context),
       },
       child: Focus(
@@ -88,16 +214,7 @@ class _PosViewState extends State<_PosView> {
         child: BlocListener<CheckoutBloc, CheckoutState>(
           listener: (context, state) {
             if (state.status == CheckoutStatus.completed && state.submission != null) {
-              context.read<CartBloc>().add(const CartCleared());
-              context.read<SyncBloc>().add(const SyncRequested());
-              _clearSearch(context);
-              final status = state.submission!.status;
-              final message = switch (status) {
-                SaleSubmissionStatus.synced => 'Sale completed and synced.',
-                SaleSubmissionStatus.queued => 'Sale saved offline and queued for sync.',
-                SaleSubmissionStatus.conflict => 'Sale saved locally but needs sync review.',
-              };
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+              _handleCompleted(context, state);
             } else if (state.status == CheckoutStatus.failed) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text(state.errorMessage ?? 'Sale failed.')),
@@ -110,11 +227,14 @@ class _PosViewState extends State<_PosView> {
               actions: [
                 if (MediaQuery.sizeOf(context).width >= 1100)
                   const Padding(
-                    padding: EdgeInsets.only(right: 16),
-                    child: Center(
-                      child: Text('F4 Search   •   F9 Pay   •   Esc Clear'),
-                    ),
+                    padding: EdgeInsets.only(right: 12),
+                    child: Center(child: Text('F4 Search  •  F9 Pay  •  F12 Print  •  Esc Clear')),
                   ),
+                IconButton(
+                  tooltip: 'Print last receipt (F12 / Ctrl+P)',
+                  onPressed: _lastReceipt == null ? null : _printLastReceipt,
+                  icon: const Icon(Icons.print_outlined),
+                ),
                 BlocBuilder<SyncBloc, SyncStatusState>(
                   builder: (context, state) => Padding(
                     padding: const EdgeInsets.only(right: 12),
@@ -142,7 +262,7 @@ class _PosViewState extends State<_PosView> {
                         ),
                       ),
                       const VerticalDivider(width: 1),
-                      SizedBox(width: 400, child: _CartPanel(closeOnComplete: false)),
+                      const SizedBox(width: 400, child: _CartPanel(closeOnComplete: false)),
                     ],
                   );
                 }
@@ -167,10 +287,7 @@ class _PosViewState extends State<_PosView> {
 }
 
 class _ProductBrowser extends StatelessWidget {
-  const _ProductBrowser({
-    required this.searchController,
-    required this.searchFocusNode,
-  });
+  const _ProductBrowser({required this.searchController, required this.searchFocusNode});
 
   final TextEditingController searchController;
   final FocusNode searchFocusNode;
@@ -178,81 +295,77 @@ class _ProductBrowser extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ProductCatalogBloc, ProductCatalogState>(
-      builder: (context, state) {
-        return Column(
-          children: [
+      builder: (context, state) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: TextField(
+              controller: searchController,
+              focusNode: searchFocusNode,
+              textInputAction: TextInputAction.search,
+              onChanged: (value) => context.read<ProductCatalogBloc>().add(ProductCatalogQueryChanged(value)),
+              onSubmitted: (value) => _handleSubmitted(context, state, value),
+              decoration: InputDecoration(
+                hintText: 'Scan barcode or search product',
+                prefixIcon: const Icon(Icons.qr_code_scanner),
+                suffixIcon: searchController.text.isEmpty
+                    ? const Icon(Icons.search)
+                    : IconButton(
+                        tooltip: 'Clear search (Esc)',
+                        onPressed: () {
+                          searchController.clear();
+                          context.read<ProductCatalogBloc>().add(const ProductCatalogQueryChanged(''));
+                          searchFocusNode.requestFocus();
+                        },
+                        icon: const Icon(Icons.close),
+                      ),
+              ),
+            ),
+          ),
+          if (MediaQuery.sizeOf(context).width >= 900)
             Padding(
-              padding: const EdgeInsets.all(14),
-              child: TextField(
-                controller: searchController,
-                focusNode: searchFocusNode,
-                textInputAction: TextInputAction.search,
-                onChanged: (value) => context.read<ProductCatalogBloc>().add(ProductCatalogQueryChanged(value)),
-                onSubmitted: (value) => _handleSubmitted(context, state, value),
-                decoration: InputDecoration(
-                  hintText: 'Scan barcode or search product',
-                  prefixIcon: const Icon(Icons.qr_code_scanner),
-                  suffixIcon: searchController.text.isEmpty
-                      ? const Icon(Icons.search)
-                      : IconButton(
-                          tooltip: 'Clear search (Esc)',
-                          onPressed: () {
-                            searchController.clear();
-                            context.read<ProductCatalogBloc>().add(const ProductCatalogQueryChanged(''));
-                            searchFocusNode.requestFocus();
-                          },
-                          icon: const Icon(Icons.close),
-                        ),
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'USB scanner ready: scan a barcode and Enter adds the matching item to the cart.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                 ),
               ),
             ),
-            if (MediaQuery.sizeOf(context).width >= 900)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'USB barcode scanners work as keyboard input: scan a barcode and the item is added when Enter is received.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ),
+          if (state.lastError != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(state.lastError!, style: Theme.of(context).textTheme.bodySmall),
               ),
-            if (state.lastError != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(state.lastError!, style: Theme.of(context).textTheme.bodySmall),
-                ),
-              ),
-            Expanded(
-              child: state.visibleProducts.isEmpty
-                  ? Center(
-                      child: state.isRefreshing
-                          ? const CircularProgressIndicator()
-                          : const Text('No products available. Add or sync products first.'),
-                    )
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        return GridView.builder(
-                          padding: const EdgeInsets.all(14),
-                          gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: constraints.maxWidth >= 700 ? 220 : 190,
-                            mainAxisExtent: 176,
-                            mainAxisSpacing: 10,
-                            crossAxisSpacing: 10,
-                          ),
-                          itemCount: state.visibleProducts.length,
-                          itemBuilder: (context, index) => _SellableProductCard(product: state.visibleProducts[index]),
-                        );
-                      },
+            ),
+          Expanded(
+            child: state.visibleProducts.isEmpty
+                ? Center(
+                    child: state.isRefreshing
+                        ? const CircularProgressIndicator()
+                        : const Text('No products available. Add or sync products first.'),
+                  )
+                : LayoutBuilder(
+                    builder: (context, constraints) => GridView.builder(
+                      padding: const EdgeInsets.all(14),
+                      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: constraints.maxWidth >= 700 ? 220 : 190,
+                        mainAxisExtent: 176,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                      ),
+                      itemCount: state.visibleProducts.length,
+                      itemBuilder: (context, index) => _SellableProductCard(product: state.visibleProducts[index]),
                     ),
-            ),
-          ],
-        );
-      },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -268,7 +381,6 @@ class _ProductBrowser extends StatelessWidget {
         break;
       }
     }
-
     if (exactMatch == null) return;
 
     final available = exactMatch.tracksStock ? exactMatch.availableWholeUnits : null;
@@ -298,9 +410,7 @@ class _SellableProductCard extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: soldOut
-            ? null
-            : () => context.read<CartBloc>().add(CartProductAdded(product.toPosProduct())),
+        onTap: soldOut ? null : () => context.read<CartBloc>().add(CartProductAdded(product.toPosProduct())),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
@@ -308,7 +418,10 @@ class _SellableProductCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.inventory_2_outlined, color: soldOut ? Colors.grey : Theme.of(context).colorScheme.primary),
+                  Icon(
+                    Icons.inventory_2_outlined,
+                    color: soldOut ? Colors.grey : Theme.of(context).colorScheme.primary,
+                  ),
                   const Spacer(),
                   if (soldOut)
                     const Chip(label: Text('Out'), visualDensity: VisualDensity.compact)
@@ -317,7 +430,12 @@ class _SellableProductCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 10),
-              Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                product.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               const SizedBox(height: 4),
               Text(product.sku, style: Theme.of(context).textTheme.bodySmall),
               const Spacer(),
@@ -384,10 +502,7 @@ class _MobileCartBar extends StatelessWidget {
           BlocProvider.value(value: cartBloc),
           BlocProvider.value(value: checkoutBloc),
         ],
-        child: const FractionallySizedBox(
-          heightFactor: 0.88,
-          child: _CartPanel(closeOnComplete: true),
-        ),
+        child: const FractionallySizedBox(heightFactor: 0.88, child: _CartPanel(closeOnComplete: true)),
       ),
     );
   }
@@ -491,7 +606,10 @@ class _CartPanel extends StatelessWidget {
                               ),
                             ),
                     icon: submitting
-                        ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Icon(Icons.check_circle_outline),
                     label: Text(submitting ? 'Saving sale…' : 'Pay ${Loti.formatMinor(cart.totalMinor)}  [F9]'),
                   );
