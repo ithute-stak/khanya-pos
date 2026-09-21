@@ -64,6 +64,7 @@ class PurchaseReceiveRequest(BaseModel):
 
 
 class SupplierPaymentRequest(BaseModel):
+    client_operation_id: UUID
     purchase_id: UUID | None = None
     payment_method: str = Field(pattern=r"^(cash|card|mobile_money|bank_transfer)$")
     amount: Decimal = Field(gt=0)
