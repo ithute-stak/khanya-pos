@@ -25,7 +25,7 @@ from app.services.accounting import (
     post_journal,
 )
 from app.services.outbox import enqueue_event
-from app.services.pricing import line_total, money, quantity
+from app.services.pricing import line_total, money, quantity, unit_cost
 
 
 class PurchasingValidationError(ValueError):
@@ -118,6 +118,18 @@ async def _existing_purchase(
         select(Purchase).where(
             Purchase.tenant_id == tenant_id,
             Purchase.client_operation_id == operation_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def _existing_supplier_payment(
+    db: AsyncSession, tenant_id: UUID, operation_id: UUID
+) -> SupplierPayment | None:
+    result = await db.execute(
+        select(SupplierPayment).where(
+            SupplierPayment.tenant_id == tenant_id,
+            SupplierPayment.client_operation_id == operation_id,
         )
     )
     return result.scalar_one_or_none()
@@ -242,8 +254,9 @@ async def complete_purchase(
         product = locked_products[item.product_id]
         ordered_qty = quantity(item.quantity)
         received_qty = quantity(item.quantity_received if item.quantity_received is not None else item.quantity)
-        ordered_value = line_total(item.unit_cost, ordered_qty)
-        received_value = line_total(item.unit_cost, received_qty)
+        purchase_unit_cost = unit_cost(item.unit_cost)
+        ordered_value = line_total(purchase_unit_cost, ordered_qty)
+        received_value = line_total(purchase_unit_cost, received_qty)
         db.add(
             PurchaseLine(
                 purchase_id=purchase.id,
@@ -265,14 +278,14 @@ async def complete_purchase(
         if product.track_stock and received_qty > 0:
             stock = locked_stocks[product.id]
             old_on_hand = quantity(stock.on_hand)
-            old_cost = money(product.cost_price)
+            old_cost = unit_cost(product.cost_price)
             new_on_hand = quantity(old_on_hand + received_qty)
             if old_on_hand > 0:
-                product.cost_price = money(
-                    ((old_on_hand * old_cost) + (received_qty * money(item.unit_cost))) / new_on_hand
+                product.cost_price = unit_cost(
+                    ((old_on_hand * old_cost) + (received_qty * purchase_unit_cost)) / new_on_hand
                 )
             else:
-                product.cost_price = money(item.unit_cost)
+                product.cost_price = purchase_unit_cost
             stock.on_hand = new_on_hand
             db.add(
                 StockMovement(
@@ -281,7 +294,7 @@ async def complete_purchase(
                     product_id=product.id,
                     movement_type="purchase_receipt",
                     quantity_delta=received_qty,
-                    unit_cost=money(item.unit_cost),
+                    unit_cost=purchase_unit_cost,
                     reference_type="purchase",
                     reference_id=purchase.id,
                     reason=f"Purchase {purchase.purchase_number}",
@@ -310,6 +323,7 @@ async def complete_purchase(
                 branch_id=branch_id,
                 supplier_id=supplier.id,
                 purchase_id=purchase.id,
+                client_operation_id=uuid4(),
                 payment_method=payload.payment_method,
                 amount=amount_paid,
                 paid_by_user_id=user_id,
@@ -403,6 +417,12 @@ async def record_supplier_payment(
     supplier_id: UUID,
     payload: SupplierPaymentRequest,
 ) -> SupplierPayment:
+    existing = await _existing_supplier_payment(db, tenant_id, payload.client_operation_id)
+    if existing is not None:
+        if existing.supplier_id != supplier_id:
+            raise PurchasePaymentError("The payment operation ID is already used for another supplier")
+        return existing
+
     supplier = await _supplier(db, tenant_id, supplier_id)
     assert supplier is not None
     purchase: Purchase | None = None
@@ -430,6 +450,7 @@ async def record_supplier_payment(
         branch_id=branch_id,
         supplier_id=supplier.id,
         purchase_id=purchase.id if purchase is not None else None,
+        client_operation_id=payload.client_operation_id,
         payment_method=payload.payment_method,
         amount=money(payload.amount),
         reference=payload.reference,
@@ -470,20 +491,37 @@ async def record_supplier_payment(
             "payment_id": str(payment.id),
             "purchase_id": str(purchase.id) if purchase is not None else None,
             "amount": str(payment.amount),
+            "client_operation_id": str(payment.client_operation_id),
         },
     )
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        existing = await _existing_supplier_payment(db, tenant_id, payload.client_operation_id)
+        if existing is not None:
+            return existing
+        raise
     return payment
 
 
-async def supplier_outstanding_balance(db: AsyncSession, *, tenant_id: UUID, supplier_id: UUID) -> Decimal:
-    value = await db.scalar(
+async def supplier_outstanding_balance(
+    db: AsyncSession, *, tenant_id: UUID, supplier_id: UUID
+) -> Decimal:
+    purchase_balance = await db.scalar(
         select(func.coalesce(func.sum(Purchase.balance_due), 0)).where(
             Purchase.tenant_id == tenant_id,
             Purchase.supplier_id == supplier_id,
         )
     )
-    return money(Decimal(value or 0))
+    unallocated_advances = await db.scalar(
+        select(func.coalesce(func.sum(SupplierPayment.amount), 0)).where(
+            SupplierPayment.tenant_id == tenant_id,
+            SupplierPayment.supplier_id == supplier_id,
+            SupplierPayment.purchase_id.is_(None),
+        )
+    )
+    return money(Decimal(purchase_balance or 0) - Decimal(unallocated_advances or 0))
 
 
 async def _existing_expense(
