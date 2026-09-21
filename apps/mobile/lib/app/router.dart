@@ -1,6 +1,9 @@
 import 'package:go_router/go_router.dart';
 import 'package:khanya_pos/app/desktop_shell.dart';
 import 'package:khanya_pos/features/catalog/presentation/products_page.dart';
+import 'package:khanya_pos/features/customers/presentation/customer_detail_page.dart';
+import 'package:khanya_pos/features/customers/presentation/customer_statement_page.dart';
+import 'package:khanya_pos/features/customers/presentation/customers_page.dart';
 import 'package:khanya_pos/features/dashboard/presentation/dashboard_page.dart';
 import 'package:khanya_pos/features/documents/presentation/receipt_vault_page.dart';
 import 'package:khanya_pos/features/expenses/presentation/add_expense_page.dart';
@@ -26,6 +29,19 @@ final GoRouter appRouter = GoRouter(
         GoRoute(path: '/pos', builder: (context, state) => const PosPage()),
         GoRoute(path: '/till', builder: (context, state) => const TillPage()),
         GoRoute(path: '/products', builder: (context, state) => const ProductsPage()),
+        GoRoute(path: '/customers', builder: (context, state) => const CustomersPage()),
+        GoRoute(
+          path: '/customers/:customerId',
+          builder: (context, state) => CustomerDetailPage(
+            customerId: state.pathParameters['customerId']!,
+          ),
+        ),
+        GoRoute(
+          path: '/customers/:customerId/statement',
+          builder: (context, state) => CustomerStatementPage(
+            customerId: state.pathParameters['customerId']!,
+          ),
+        ),
         GoRoute(path: '/inventory', builder: (context, state) => const InventoryPage()),
         GoRoute(path: '/purchases', builder: (context, state) => const PurchasesPage()),
         GoRoute(path: '/purchases/new', builder: (context, state) => const NewPurchasePage()),

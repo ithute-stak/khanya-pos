@@ -8,6 +8,8 @@ import 'package:khanya_pos/core/storage/app_database.dart';
 import 'package:khanya_pos/core/sync/sync_service.dart';
 import 'package:khanya_pos/features/auth/data/auth_repository.dart';
 import 'package:khanya_pos/features/catalog/data/product_repository.dart';
+import 'package:khanya_pos/features/customers/data/customer_database.dart';
+import 'package:khanya_pos/features/customers/data/customer_repository.dart';
 import 'package:khanya_pos/features/documents/data/document_repository.dart';
 import 'package:khanya_pos/features/documents/data/receipt_file_store.dart';
 import 'package:khanya_pos/features/expenses/data/expense_repository.dart';
@@ -20,10 +22,12 @@ import 'package:khanya_pos/features/purchasing/data/purchasing_repository.dart';
 class AppDependencies {
   AppDependencies._({
     required this.database,
+    required this.customerDatabase,
     required this.sessionContext,
     required this.apiClient,
     required this.authRepository,
     required this.productRepository,
+    required this.customerRepository,
     required this.syncService,
     required this.salesRepository,
     required this.heldSalesRepository,
@@ -37,6 +41,7 @@ class AppDependencies {
 
   factory AppDependencies.create() {
     final database = AppDatabase();
+    final customerDatabase = CustomerDatabase();
     final sessionContext = SessionContext();
     final apiClient = ApiClient(
       baseUrl: AppConfig.apiBaseUrl,
@@ -55,9 +60,21 @@ class AppDependencies {
       database: database,
       sessionContext: sessionContext,
     );
-    final syncService = SyncService(apiClient: apiClient, database: database);
+    final syncService = SyncService(
+      apiClient: apiClient,
+      database: database,
+      customerDatabase: customerDatabase,
+    );
+    final customerRepository = CustomerRepository(
+      apiClient: apiClient,
+      appDatabase: database,
+      customerDatabase: customerDatabase,
+      sessionContext: sessionContext,
+      syncService: syncService,
+    );
     final salesRepository = SalesRepository(
       database: database,
+      customerDatabase: customerDatabase,
       sessionContext: sessionContext,
       syncService: syncService,
     );
@@ -89,10 +106,12 @@ class AppDependencies {
     );
     return AppDependencies._(
       database: database,
+      customerDatabase: customerDatabase,
       sessionContext: sessionContext,
       apiClient: apiClient,
       authRepository: authRepository,
       productRepository: productRepository,
+      customerRepository: customerRepository,
       syncService: syncService,
       salesRepository: salesRepository,
       heldSalesRepository: heldSalesRepository,
@@ -106,10 +125,12 @@ class AppDependencies {
   }
 
   final AppDatabase database;
+  final CustomerDatabase customerDatabase;
   final SessionContext sessionContext;
   final ApiClient apiClient;
   final AuthRepository authRepository;
   final ProductRepository productRepository;
+  final CustomerRepository customerRepository;
   final SyncService syncService;
   final SalesRepository salesRepository;
   final HeldSalesRepository heldSalesRepository;
@@ -123,6 +144,7 @@ class AppDependencies {
   Future<void> close() async {
     await realtimeClient.close();
     await sessionContext.close();
+    await customerDatabase.close();
     await database.close();
     apiClient.dio.close(force: true);
   }

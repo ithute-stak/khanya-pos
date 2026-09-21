@@ -29,6 +29,7 @@ class DesktopShell extends StatelessWidget {
             const SingleActivator(LogicalKeyboardKey.f1): () => context.go('/'),
             const SingleActivator(LogicalKeyboardKey.f2): () => context.go('/pos'),
             const SingleActivator(LogicalKeyboardKey.f3): () => context.go('/products'),
+            const SingleActivator(LogicalKeyboardKey.digit4, control: true): () => context.go('/customers'),
             const SingleActivator(LogicalKeyboardKey.f5): () => context.go('/inventory'),
             const SingleActivator(LogicalKeyboardKey.f6): () => context.go('/purchases'),
             const SingleActivator(LogicalKeyboardKey.f7): () => context.go('/suppliers'),
@@ -98,7 +99,7 @@ class _DesktopSidebar extends StatelessWidget {
                 const _DesktopSystemStatus(),
                 const SizedBox(height: 12),
                 Text(
-                  'F1 Dashboard  •  F2 New Sale\nF3 Products  •  F5 Inventory',
+                  'F1 Dashboard  •  F2 New Sale\nF3 Products  •  Ctrl+4 Customers\nF5 Inventory  •  F6 Purchases',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                         height: 1.5,
@@ -241,6 +242,7 @@ const _items = <_DesktopNavItem>[
   _DesktopNavItem(label: 'New Sale', path: '/pos', icon: Icons.point_of_sale_outlined, shortcut: 'F2'),
   _DesktopNavItem(label: 'Till & Shift', path: '/till', icon: Icons.price_check_outlined),
   _DesktopNavItem(label: 'Products', path: '/products', icon: Icons.inventory_2_outlined, shortcut: 'F3'),
+  _DesktopNavItem(label: 'Customers', path: '/customers', icon: Icons.groups_2_outlined, shortcut: 'Ctrl+4'),
   _DesktopNavItem(label: 'Inventory', path: '/inventory', icon: Icons.warehouse_outlined, shortcut: 'F5'),
   _DesktopNavItem(
     label: 'Purchases',

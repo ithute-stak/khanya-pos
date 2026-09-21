@@ -16,8 +16,10 @@ import 'package:khanya_pos/features/pos/hardware/pos_hardware_service.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 import 'package:khanya_pos/features/pos/presentation/bloc/cart_bloc.dart';
 import 'package:khanya_pos/features/pos/presentation/bloc/checkout_bloc.dart';
+import 'package:khanya_pos/features/pos/presentation/bloc/pos_credit_cubit.dart';
 import 'package:khanya_pos/features/pos/presentation/cash_tender_dialog.dart';
 import 'package:khanya_pos/features/pos/presentation/held_sales_dialog.dart';
+import 'package:khanya_pos/features/pos/presentation/pos_customer_credit_panel.dart';
 import 'package:khanya_pos/features/pos/printing/receipt_printer.dart';
 import 'package:khanya_pos/features/pos/printing/sale_receipt.dart';
 
@@ -25,9 +27,18 @@ Future<void> _submitCheckout(BuildContext context, CartState cart) async {
   final checkout = context.read<CheckoutBloc>().state;
   if (cart.lines.isEmpty || checkout.status == CheckoutStatus.submitting) return;
 
+  final credit = context.read<PosCreditCubit>().state;
+  final paidMinor = credit.paidMinorFor(cart.totalMinor);
+  if (!credit.canSubmit(cart.totalMinor)) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('The requested credit exceeds the selected customer’s available limit.')),
+    );
+    return;
+  }
+
   int? cashTenderedMinor;
-  if (cart.paymentMethod == PaymentMethod.cash) {
-    cashTenderedMinor = await showCashTenderDialog(context, totalMinor: cart.totalMinor);
+  if (cart.paymentMethod == PaymentMethod.cash && paidMinor > 0) {
+    cashTenderedMinor = await showCashTenderDialog(context, totalMinor: paidMinor);
     if (cashTenderedMinor == null || !context.mounted) return;
   }
 
@@ -35,6 +46,8 @@ Future<void> _submitCheckout(BuildContext context, CartState cart) async {
         CheckoutSaleRequested(
           lines: List<CartLine>.unmodifiable(cart.lines),
           paymentMethod: cart.paymentMethod,
+          customer: credit.customer,
+          immediatePaymentMinor: paidMinor,
           cashTenderedMinor: cashTenderedMinor,
         ),
       );
@@ -53,6 +66,7 @@ class PosPage extends StatelessWidget {
         ),
         BlocProvider(create: (_) => CartBloc()),
         BlocProvider(create: (_) => CheckoutBloc(context.read<SalesRepository>())),
+        BlocProvider(create: (_) => PosCreditCubit()),
       ],
       child: const _PosView(),
     );
@@ -118,9 +132,10 @@ class _PosViewState extends State<_PosView> {
       if (!mounted) return;
       context.read<CartBloc>().add(const CartCleared());
       context.read<CheckoutBloc>().add(const CheckoutReset());
+      context.read<PosCreditCubit>().reset();
       _clearSearch(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sale held as “${heldSale.label}”.')),
+        SnackBar(content: Text('Sale held as “${heldSale.label}”. Reselect a customer when resuming credit sales.')),
       );
     } catch (_) {
       if (!mounted) return;
@@ -213,6 +228,7 @@ class _PosViewState extends State<_PosView> {
           ),
         );
     context.read<CheckoutBloc>().add(const CheckoutReset());
+    context.read<PosCreditCubit>().reset();
     _clearSearch(context);
 
     var removed = true;
@@ -272,8 +288,11 @@ class _PosViewState extends State<_PosView> {
       issuedAt: DateTime.now(),
       branchId: branchId,
       cashierName: cashierName,
+      customerName: state.customer?.name,
       lines: state.lines.map(SaleReceiptLine.fromCartLine).toList(growable: false),
       paymentMethod: state.paymentMethod ?? PaymentMethod.cash,
+      paidNowMinor: state.paidMinor,
+      balanceDueMinor: state.balanceDueMinor,
       syncStatus: syncStatus,
       cashTenderedMinor: state.cashTenderedMinor,
     );
@@ -284,6 +303,7 @@ class _PosViewState extends State<_PosView> {
     if (!mounted) return;
     setState(() => _lastReceipt = receipt);
     context.read<CartBloc>().add(const CartCleared());
+    context.read<PosCreditCubit>().reset();
     context.read<SyncBloc>().add(const SyncRequested());
     _clearSearch(context);
 
@@ -299,6 +319,7 @@ class _PosViewState extends State<_PosView> {
     if (!mounted) return;
 
     if (receipt.paymentMethod == PaymentMethod.cash &&
+        receipt.paidMinor > 0 &&
         hardware.hasPrinter &&
         hardware.directThermalPrinting &&
         hardware.openCashDrawerOnCashSale) {
@@ -410,7 +431,7 @@ class _PosViewState extends State<_PosView> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         icon: const Icon(Icons.check_circle_outline, size: 38),
-        title: const Text('Sale completed'),
+        title: Text(receipt.isCreditSale ? 'Credit sale completed' : 'Sale completed'),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: Column(
@@ -418,8 +439,23 @@ class _PosViewState extends State<_PosView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Total: ${Loti.formatMinor(receipt.totalMinor)}'),
-              const SizedBox(height: 6),
-              Text('Payment: ${receipt.paymentMethod.label}'),
+              if (receipt.customerName != null) ...[
+                const SizedBox(height: 6),
+                Text('Customer: ${receipt.customerName}'),
+              ],
+              if (receipt.paidMinor > 0) ...[
+                const SizedBox(height: 6),
+                Text('Payment: ${receipt.paymentMethod.label}'),
+              ],
+              if (receipt.isCreditSale) ...[
+                const SizedBox(height: 6),
+                Text('Paid now: ${Loti.formatMinor(receipt.paidMinor)}'),
+                const SizedBox(height: 6),
+                Text(
+                  'Balance due: ${Loti.formatMinor(receipt.creditBalanceMinor)}',
+                  style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ],
               if (receipt.cashTenderedMinor != null) ...[
                 const SizedBox(height: 6),
                 Text('Cash received: ${Loti.formatMinor(receipt.cashTenderedMinor!)}'),
@@ -458,7 +494,7 @@ class _PosViewState extends State<_PosView> {
   Widget build(BuildContext context) {
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.f4): _focusSearch,
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true): _focusSearch,
         const SingleActivator(LogicalKeyboardKey.f9): () {
           _requestCheckout(context);
         },
@@ -493,7 +529,7 @@ class _PosViewState extends State<_PosView> {
                   const Padding(
                     padding: EdgeInsets.only(right: 12),
                     child: Center(
-                      child: Text('F4 Search  •  F9 Pay  •  Ctrl+H Hold  •  F11 Drawer  •  F12 Print'),
+                      child: Text('Ctrl+F Search  •  F9 Pay  •  Ctrl+H Hold  •  F11 Drawer  •  F12 Print'),
                     ),
                   ),
                 BlocBuilder<CartBloc, CartState>(
@@ -545,7 +581,7 @@ class _PosViewState extends State<_PosView> {
                         ),
                       ),
                       const VerticalDivider(width: 1),
-                      const SizedBox(width: 400, child: _CartPanel(closeOnComplete: false)),
+                      const SizedBox(width: 420, child: _CartPanel(closeOnComplete: false)),
                     ],
                   );
                 }
@@ -776,6 +812,7 @@ class _MobileCartBar extends StatelessWidget {
   void _showCart(BuildContext context) {
     final cartBloc = context.read<CartBloc>();
     final checkoutBloc = context.read<CheckoutBloc>();
+    final creditCubit = context.read<PosCreditCubit>();
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -784,8 +821,9 @@ class _MobileCartBar extends StatelessWidget {
         providers: [
           BlocProvider.value(value: cartBloc),
           BlocProvider.value(value: checkoutBloc),
+          BlocProvider.value(value: creditCubit),
         ],
-        child: const FractionallySizedBox(heightFactor: 0.88, child: _CartPanel(closeOnComplete: true)),
+        child: const FractionallySizedBox(heightFactor: 0.92, child: _CartPanel(closeOnComplete: true)),
       ),
     );
   }
@@ -814,7 +852,13 @@ class _CartPanel extends StatelessWidget {
                 const Spacer(),
                 BlocBuilder<CartBloc, CartState>(
                   builder: (context, state) => TextButton(
-                    onPressed: state.lines.isEmpty ? null : () => context.read<CartBloc>().add(const CartCleared()),
+                    onPressed: state.lines.isEmpty
+                        ? null
+                        : () {
+                            context.read<CartBloc>().add(const CartCleared());
+                            context.read<CheckoutBloc>().add(const CheckoutReset());
+                            context.read<PosCreditCubit>().reset();
+                          },
                     child: const Text('Clear'),
                   ),
                 ),
@@ -862,34 +906,62 @@ class _CartPanel extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             BlocBuilder<CartBloc, CartState>(
-              builder: (context, state) => DropdownButtonFormField<PaymentMethod>(
-                initialValue: state.paymentMethod,
-                decoration: const InputDecoration(labelText: 'Payment method'),
-                items: [
-                  for (final method in PaymentMethod.values)
-                    DropdownMenuItem(value: method, child: Text(method.label)),
-                ],
-                onChanged: (method) {
-                  if (method != null) context.read<CartBloc>().add(CartPaymentMethodChanged(method));
+              builder: (context, cart) => PosCustomerCreditPanel(totalMinor: cart.totalMinor),
+            ),
+            const SizedBox(height: 12),
+            BlocBuilder<CartBloc, CartState>(
+              builder: (context, cart) => BlocBuilder<PosCreditCubit, PosCreditState>(
+                builder: (context, credit) {
+                  if (credit.paidMinorFor(cart.totalMinor) == 0) {
+                    return InputDecorator(
+                      decoration: const InputDecoration(labelText: 'Payment method'),
+                      child: const Text('No immediate payment • customer credit'),
+                    );
+                  }
+                  return DropdownButtonFormField<PaymentMethod>(
+                    initialValue: cart.paymentMethod,
+                    decoration: const InputDecoration(labelText: 'Payment method'),
+                    items: [
+                      for (final method in PaymentMethod.values)
+                        DropdownMenuItem(value: method, child: Text(method.label)),
+                    ],
+                    onChanged: (method) {
+                      if (method != null) context.read<CartBloc>().add(CartPaymentMethodChanged(method));
+                    },
+                  );
                 },
               ),
             ),
             const SizedBox(height: 12),
             BlocBuilder<CartBloc, CartState>(
               builder: (context, cart) => BlocBuilder<CheckoutBloc, CheckoutState>(
-                builder: (context, checkout) {
-                  final submitting = checkout.status == CheckoutStatus.submitting;
-                  return FilledButton.icon(
-                    onPressed: cart.lines.isEmpty || submitting ? null : () => _submitCheckout(context, cart),
-                    icon: submitting
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.check_circle_outline),
-                    label: Text(submitting ? 'Saving sale…' : 'Pay ${Loti.formatMinor(cart.totalMinor)}  [F9]'),
-                  );
-                },
+                builder: (context, checkout) => BlocBuilder<PosCreditCubit, PosCreditState>(
+                  builder: (context, credit) {
+                    final submitting = checkout.status == CheckoutStatus.submitting;
+                    final paidMinor = credit.paidMinorFor(cart.totalMinor);
+                    final creditMinor = credit.creditMinorFor(cart.totalMinor);
+                    final allowed = credit.canSubmit(cart.totalMinor);
+                    final label = submitting
+                        ? 'Saving sale…'
+                        : creditMinor <= 0
+                            ? 'Pay ${Loti.formatMinor(cart.totalMinor)}  [F9]'
+                            : paidMinor == 0
+                                ? 'Charge ${Loti.formatMinor(creditMinor)} to customer  [F9]'
+                                : 'Pay ${Loti.formatMinor(paidMinor)} • Credit ${Loti.formatMinor(creditMinor)}  [F9]';
+                    return FilledButton.icon(
+                      onPressed: cart.lines.isEmpty || submitting || !allowed
+                          ? null
+                          : () => _submitCheckout(context, cart),
+                      icon: submitting
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(creditMinor > 0 ? Icons.credit_score_outlined : Icons.check_circle_outline),
+                      label: Text(label),
+                    );
+                  },
+                ),
               ),
             ),
           ],

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:khanya_pos/core/network/api_client.dart';
 import 'package:khanya_pos/core/storage/app_database.dart';
+import 'package:khanya_pos/features/customers/data/customer_database.dart';
 
 class SyncRunResult {
   const SyncRunResult({
@@ -33,12 +34,17 @@ class SyncRunResult {
 }
 
 class SyncService {
-  SyncService({required ApiClient apiClient, required AppDatabase database})
-      : _apiClient = apiClient,
-        _database = database;
+  SyncService({
+    required ApiClient apiClient,
+    required AppDatabase database,
+    required CustomerDatabase customerDatabase,
+  })  : _apiClient = apiClient,
+        _database = database,
+        _customerDatabase = customerDatabase;
 
   final ApiClient _apiClient;
   final AppDatabase _database;
+  final CustomerDatabase _customerDatabase;
 
   Future<SyncRunResult> flushAll() async {
     var result = const SyncRunResult.empty();
@@ -54,6 +60,10 @@ class SyncService {
     final sales = await flushPendingSales();
     result = result.merge(sales);
     if (sales.networkUnavailable) return result;
+
+    final customerPayments = await flushPendingCustomerPayments();
+    result = result.merge(customerPayments);
+    if (customerPayments.networkUnavailable) return result;
 
     final expenses = await _flushPendingExpenses(uploadDocumentsFirst: false);
     return result.merge(expenses);
@@ -260,6 +270,7 @@ class SyncService {
           '/pos/sales/complete',
           data: jsonDecode(sale.payloadJson),
         );
+        await _customerDatabase.finalizeCreditReservation(sale.clientOperationId);
         await _database.deletePendingSale(sale.clientOperationId);
         synced += 1;
       } on DioException catch (error) {
@@ -271,11 +282,63 @@ class SyncService {
             status: 'conflict',
             lastError: detail,
           );
+          await _customerDatabase.releaseCreditReservation(sale.clientOperationId);
           conflicts += 1;
           continue;
         }
         await _database.markPendingSale(
           clientOperationId: sale.clientOperationId,
+          status: 'pending',
+          lastError: detail,
+        );
+        if (error.response == null) networkUnavailable = true;
+        break;
+      }
+    }
+
+    return SyncRunResult(
+      attempted: attempted,
+      synced: synced,
+      conflicts: conflicts,
+      networkUnavailable: networkUnavailable,
+    );
+  }
+
+  Future<SyncRunResult> flushPendingCustomerPayments() async {
+    final pending = await _customerDatabase.getSyncablePendingPayments();
+    var attempted = 0;
+    var synced = 0;
+    var conflicts = 0;
+    var networkUnavailable = false;
+
+    for (final payment in pending) {
+      attempted += 1;
+      await _customerDatabase.markPendingPayment(
+        clientOperationId: payment.clientOperationId,
+        status: 'syncing',
+        incrementAttempts: true,
+      );
+      try {
+        await _apiClient.dio.post<Map<String, dynamic>>(
+          '/customers/${payment.customerId}/payments',
+          data: jsonDecode(payment.payloadJson),
+        );
+        await _customerDatabase.deletePendingPayment(payment.clientOperationId);
+        synced += 1;
+      } on DioException catch (error) {
+        final statusCode = error.response?.statusCode;
+        final detail = _errorDetail(error);
+        if (_isPermanentClientError(statusCode)) {
+          await _customerDatabase.markPendingPayment(
+            clientOperationId: payment.clientOperationId,
+            status: 'conflict',
+            lastError: detail,
+          );
+          conflicts += 1;
+          continue;
+        }
+        await _customerDatabase.markPendingPayment(
+          clientOperationId: payment.clientOperationId,
           status: 'pending',
           lastError: detail,
         );
