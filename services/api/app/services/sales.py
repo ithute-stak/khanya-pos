@@ -11,7 +11,7 @@ from app.models.commerce import BranchProductStock, Payment, Product, Sale, Sale
 from app.schemas.commerce import SaleCompleteRequest
 from app.services.accounting import PostingLine, payment_account_code, post_journal
 from app.services.outbox import enqueue_event
-from app.services.pricing import line_total, money, quantity
+from app.services.pricing import line_total, money, quantity, unit_cost
 
 
 class SaleValidationError(ValueError):
@@ -140,13 +140,14 @@ async def complete_sale(
     for product_id in sorted(requested, key=str):
         product = locked_products[product_id]
         qty = requested[product_id]
+        current_cost = unit_cost(product.cost_price)
         db.add(
             SaleLine(
                 sale_id=sale.id,
                 product_id=product.id,
                 quantity=qty,
                 unit_price=money(product.selling_price),
-                unit_cost=money(product.cost_price),
+                unit_cost=current_cost,
                 discount_total=Decimal("0.00"),
                 tax_total=Decimal("0.00"),
                 line_total=line_total(product.selling_price, qty),
@@ -154,7 +155,7 @@ async def complete_sale(
         )
 
         if product.track_stock:
-            cost_of_goods += line_total(product.cost_price, qty)
+            cost_of_goods += line_total(current_cost, qty)
             stock = locked_stocks[product_id]
             assert stock is not None
             stock.on_hand = quantity(stock.on_hand - qty)
@@ -165,7 +166,7 @@ async def complete_sale(
                     product_id=product.id,
                     movement_type="sale",
                     quantity_delta=-qty,
-                    unit_cost=money(product.cost_price),
+                    unit_cost=current_cost,
                     reference_type="sale",
                     reference_id=sale.id,
                     reason=f"Sale {sale.sale_number}",
