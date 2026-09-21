@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.core.database import SessionLocal
+from app.models.accounting import Account, JournalEntry, JournalLine
 from app.models.commerce import BranchProductStock, Product, StockMovement
 from app.models.identity import Branch, Tenant, User
 from app.models.outbox import OutboxEvent
@@ -136,8 +137,33 @@ async def test_purchase_receipt_updates_stock_cost_supplier_balance_and_is_idemp
         outbox_count = await db.scalar(
             select(func.count(OutboxEvent.id)).where(OutboxEvent.tenant_id == tenant.id)
         )
+
+        journal = (
+            await db.execute(
+                select(JournalEntry).where(
+                    JournalEntry.tenant_id == tenant.id,
+                    JournalEntry.source_type == "purchase",
+                    JournalEntry.source_id == first.id,
+                )
+            )
+        ).scalar_one()
+        journal_lines = (
+            await db.execute(
+                select(JournalLine, Account)
+                .join(Account, Account.id == JournalLine.account_id)
+                .where(JournalLine.journal_entry_id == journal.id)
+            )
+        ).all()
+        postings = {account.code: (line.debit, line.credit) for line, account in journal_lines}
+        total_debits = sum((line.debit for line, _ in journal_lines), Decimal("0.00"))
+        total_credits = sum((line.credit for line, _ in journal_lines), Decimal("0.00"))
+
         assert purchase_count == 1
         assert line_count == 1
         assert payment_count == 1
         assert movement_count == 1
         assert outbox_count == 2
+        assert total_debits == total_credits == Decimal("210.00")
+        assert postings["1200"] == (Decimal("210.00"), Decimal("0.00"))
+        assert postings["1000"] == (Decimal("0.00"), Decimal("210.00"))
+        assert len(journal_lines) == 2
