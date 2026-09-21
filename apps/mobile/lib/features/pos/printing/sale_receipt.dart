@@ -60,24 +60,36 @@ String formatMalotiMinor(int minor) {
   return '${negative ? '-' : ''}M $whole.$cents';
 }
 
-Future<Uint8List> buildSaleReceiptPdf(SaleReceipt receipt) async {
-  final document = pw.Document(
-    title: 'Khanya POS Receipt ${receipt.reference}',
-    author: 'Khanya POS',
-    creator: 'Khanya POS',
-  );
-
+PdfPageFormat saleReceiptPageFormat(
+  SaleReceipt receipt, {
+  int paperWidthMm = 80,
+}) {
+  final widthMm = paperWidthMm == 58 ? 58 : 80;
   final lineCount = receipt.lines.isEmpty ? 1 : receipt.lines.length;
-  final heightMm = (105 + (lineCount * 15)).clamp(130, 500).toDouble();
+  final perLineMm = widthMm == 58 ? 20 : 15;
+  final heightMm = (115 + (lineCount * perLineMm)).clamp(140, 2000).toDouble();
   final margin = 4 * PdfPageFormat.mm;
-  final paper = PdfPageFormat(
-    80 * PdfPageFormat.mm,
+  return PdfPageFormat(
+    widthMm * PdfPageFormat.mm,
     heightMm * PdfPageFormat.mm,
     marginLeft: margin,
     marginRight: margin,
     marginTop: margin,
     marginBottom: margin,
   );
+}
+
+Future<Uint8List> buildSaleReceiptPdf(
+  SaleReceipt receipt, {
+  int paperWidthMm = 80,
+}) async {
+  final document = pw.Document(
+    title: 'Khanya POS Receipt ${receipt.reference}',
+    author: 'Khanya POS',
+    creator: 'Khanya POS',
+  );
+
+  final paper = saleReceiptPageFormat(receipt, paperWidthMm: paperWidthMm);
 
   document.addPage(
     pw.Page(

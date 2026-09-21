@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,6 +11,8 @@ import 'package:khanya_pos/features/catalog/domain/product_summary.dart';
 import 'package:khanya_pos/features/catalog/presentation/bloc/product_catalog_bloc.dart';
 import 'package:khanya_pos/features/pos/data/sales_repository.dart';
 import 'package:khanya_pos/features/pos/domain/cart.dart';
+import 'package:khanya_pos/features/pos/hardware/pos_hardware_service.dart';
+import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 import 'package:khanya_pos/features/pos/presentation/bloc/cart_bloc.dart';
 import 'package:khanya_pos/features/pos/presentation/bloc/checkout_bloc.dart';
 import 'package:khanya_pos/features/pos/printing/receipt_printer.dart';
@@ -78,6 +82,15 @@ class _PosViewState extends State<_PosView> {
         );
   }
 
+  Future<PosHardwareSettings> _readHardwareSettings() async {
+    final repository = context.read<PosHardwareSettingsRepository>();
+    try {
+      return await repository.read();
+    } catch (_) {
+      return const PosHardwareSettings();
+    }
+  }
+
   SaleReceipt _makeReceipt(BuildContext context, CheckoutState state) {
     var businessName = 'Khanya POS';
     String? branchId;
@@ -130,6 +143,55 @@ class _PosViewState extends State<_PosView> {
     };
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 
+    final hardware = await _readHardwareSettings();
+    if (!mounted) return;
+
+    if (receipt.paymentMethod == PaymentMethod.cash &&
+        hardware.hasPrinter &&
+        hardware.directThermalPrinting &&
+        hardware.openCashDrawerOnCashSale) {
+      try {
+        final opened = await PosHardwareService.openCashDrawer(hardware);
+        if (!opened && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Sale saved, but the cash drawer did not open.')),
+          );
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Sale saved, but the cash drawer could not be opened.')),
+          );
+        }
+      }
+    }
+
+    if (!mounted) return;
+    if (hardware.autoPrintReceipts && hardware.hasPrinter) {
+      try {
+        final printed = await ReceiptPrinter.printReceipt(
+          receipt,
+          settings: hardware,
+          showDialogWhenUnconfigured: false,
+        );
+        if (!mounted) return;
+        if (printed) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Receipt sent to the configured printer.')),
+          );
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Automatic receipt printing failed. You can print it manually.')),
+        );
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Automatic receipt printing failed. You can print it manually.')),
+        );
+      }
+    }
+
     await Future<void>.delayed(const Duration(milliseconds: 120));
     if (!mounted) return;
     await _showReceiptDialog(receipt);
@@ -137,7 +199,13 @@ class _PosViewState extends State<_PosView> {
 
   Future<void> _printReceipt(SaleReceipt receipt) async {
     try {
-      final accepted = await ReceiptPrinter.printReceipt(receipt);
+      final hardware = await _readHardwareSettings();
+      if (!mounted) return;
+      final accepted = await ReceiptPrinter.printReceipt(
+        receipt,
+        settings: hardware,
+        showDialogWhenUnconfigured: true,
+      );
       if (!mounted) return;
       if (!accepted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -157,6 +225,32 @@ class _PosViewState extends State<_PosView> {
   Future<void> _printLastReceipt() async {
     final receipt = _lastReceipt;
     if (receipt != null) await _printReceipt(receipt);
+  }
+
+  Future<void> _openDrawer() async {
+    final hardware = await _readHardwareSettings();
+    if (!mounted) return;
+    if (!hardware.hasPrinter || !hardware.directThermalPrinting) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Configure an ESC/POS receipt printer in POS Hardware before opening the drawer.'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final opened = await PosHardwareService.openCashDrawer(hardware);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(opened ? 'Cash drawer opened.' : 'The cash drawer command was not accepted.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open the cash drawer. Check the printer and drawer cable.')),
+      );
+    }
   }
 
   Future<void> _showReceiptDialog(SaleReceipt receipt) async {
@@ -205,6 +299,7 @@ class _PosViewState extends State<_PosView> {
       bindings: <ShortcutActivator, VoidCallback>{
         const SingleActivator(LogicalKeyboardKey.f4): _focusSearch,
         const SingleActivator(LogicalKeyboardKey.f9): () => _requestCheckout(context),
+        const SingleActivator(LogicalKeyboardKey.f11): _openDrawer,
         const SingleActivator(LogicalKeyboardKey.f12): _printLastReceipt,
         const SingleActivator(LogicalKeyboardKey.keyP, control: true): _printLastReceipt,
         const SingleActivator(LogicalKeyboardKey.escape): () => _clearSearch(context),
@@ -228,8 +323,15 @@ class _PosViewState extends State<_PosView> {
                 if (MediaQuery.sizeOf(context).width >= 1100)
                   const Padding(
                     padding: EdgeInsets.only(right: 12),
-                    child: Center(child: Text('F4 Search  •  F9 Pay  •  F12 Print  •  Esc Clear')),
+                    child: Center(
+                      child: Text('F4 Search  •  F9 Pay  •  F11 Drawer  •  F12 Print  •  Esc Clear'),
+                    ),
                   ),
+                IconButton(
+                  tooltip: 'Open cash drawer (F11)',
+                  onPressed: _openDrawer,
+                  icon: const Icon(Icons.point_of_sale_outlined),
+                ),
                 IconButton(
                   tooltip: 'Print last receipt (F12 / Ctrl+P)',
                   onPressed: _lastReceipt == null ? null : _printLastReceipt,

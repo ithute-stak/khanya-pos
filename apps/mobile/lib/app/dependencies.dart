@@ -12,6 +12,7 @@ import 'package:khanya_pos/features/documents/data/document_repository.dart';
 import 'package:khanya_pos/features/documents/data/receipt_file_store.dart';
 import 'package:khanya_pos/features/expenses/data/expense_repository.dart';
 import 'package:khanya_pos/features/pos/data/sales_repository.dart';
+import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 import 'package:khanya_pos/features/purchasing/data/purchasing_repository.dart';
 
 class AppDependencies {
@@ -26,6 +27,7 @@ class AppDependencies {
     required this.purchasingRepository,
     required this.documentRepository,
     required this.expenseRepository,
+    required this.hardwareSettingsRepository,
     required this.realtimeClient,
   });
 
@@ -86,6 +88,7 @@ class AppDependencies {
       purchasingRepository: purchasingRepository,
       documentRepository: documentRepository,
       expenseRepository: expenseRepository,
+      hardwareSettingsRepository: PosHardwareSettingsRepository(),
       realtimeClient: RealtimeClient(),
     );
   }
@@ -100,6 +103,7 @@ class AppDependencies {
   final PurchasingRepository purchasingRepository;
   final DocumentRepository documentRepository;
   final ExpenseRepository expenseRepository;
+  final PosHardwareSettingsRepository hardwareSettingsRepository;
   final RealtimeClient realtimeClient;
 
   Future<void> close() async {
