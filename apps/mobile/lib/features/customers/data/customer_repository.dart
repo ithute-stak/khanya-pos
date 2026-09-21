@@ -101,44 +101,7 @@ class CustomerRepository {
     final tenantId = _requireTenant();
     try {
       final response = await _apiClient.dio.get<Map<String, dynamic>>('/customers/$customerId');
-      final detail = CustomerDetail.fromJson(response.data!);
-      final now = DateTime.now().toUtc();
-      await _customerDatabase.replaceCustomers(
-        tenantId: tenantId,
-        customers: [
-          for (final row in await _customerDatabase.getCustomers(tenantId))
-            if (row.customerId != customerId)
-              CachedCustomersCompanion.insert(
-                customerId: row.customerId,
-                tenantId: row.tenantId,
-                code: row.code,
-                name: row.name,
-                phone: Value(row.phone),
-                email: Value(row.email),
-                creditLimitMinor: Value(row.creditLimitMinor),
-                paymentTermsDays: Value(row.paymentTermsDays),
-                outstandingMinor: Value(row.outstandingMinor),
-                availableCreditMinor: Value(row.availableCreditMinor),
-                isActive: Value(row.isActive),
-                updatedAt: row.updatedAt,
-              ),
-          CachedCustomersCompanion.insert(
-            customerId: detail.summary.id,
-            tenantId: tenantId,
-            code: detail.summary.code,
-            name: detail.summary.name,
-            phone: Value(detail.summary.phone),
-            email: Value(detail.summary.email),
-            creditLimitMinor: Value(detail.summary.creditLimitMinor),
-            paymentTermsDays: Value(detail.summary.paymentTermsDays),
-            outstandingMinor: Value(detail.summary.outstandingMinor),
-            availableCreditMinor: Value(detail.summary.availableCreditMinor),
-            isActive: Value(detail.summary.isActive),
-            updatedAt: now,
-          ),
-        ],
-      );
-      return detail;
+      return CustomerDetail.fromJson(response.data!);
     } catch (_) {
       final row = await _customerDatabase.getCustomer(
         tenantId: tenantId,
