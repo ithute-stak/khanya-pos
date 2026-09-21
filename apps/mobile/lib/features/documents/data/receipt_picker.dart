@@ -1,7 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 
-
 enum ReceiptSource { camera, gallery, pdf }
 
 enum ReceiptPurpose { purchase, expense }
@@ -30,14 +29,12 @@ class ReceiptPicker {
         final file = await _imagePicker.pickImage(source: ImageSource.gallery);
         return file == null ? null : PickedReceipt(path: file.path, name: file.name);
       case ReceiptSource.pdf:
-        final result = await FilePicker.platform.pickFiles(
+        final file = await FilePicker.pickFile(
           type: FileType.custom,
           allowedExtensions: const ['pdf'],
-          allowMultiple: false,
         );
-        final file = result?.files.single;
-        if (file == null || file.path == null) return null;
-        return PickedReceipt(path: file.path!, name: file.name);
+        if (file == null) return null;
+        return PickedReceipt(path: file.xFile.path, name: file.name);
     }
   }
 }
