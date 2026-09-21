@@ -1,12 +1,14 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.accounting import Account
 from app.models.commerce import Sale
 from app.models.customers import Customer, CustomerPayment, CustomerPaymentAllocation
 from app.schemas.customers import CustomerPaymentRequest
@@ -39,6 +41,24 @@ class RecordedCustomerPayment:
     method: str
     received_at: datetime
     idempotent_replay: bool = False
+
+
+async def ensure_customer_advance_account(db: AsyncSession, *, tenant_id: UUID) -> None:
+    await db.execute(
+        pg_insert(Account)
+        .values(
+            id=uuid4(),
+            tenant_id=tenant_id,
+            code="2050",
+            name="Customer Advances",
+            account_type="liability",
+            report_group="customer_advance",
+            normal_balance="credit",
+            is_system=True,
+            is_active=True,
+        )
+        .on_conflict_do_nothing(index_elements=["tenant_id", "code"])
+    )
 
 
 async def customer_outstanding_balance(
@@ -207,14 +227,18 @@ async def record_customer_payment(
                 .where(
                     Sale.id == requested.sale_id,
                     Sale.tenant_id == tenant_id,
+                    Sale.branch_id == branch_id,
                     Sale.customer_id == customer_id,
                     Sale.status == "completed",
+                    Sale.balance_due > 0,
                 )
                 .with_for_update()
             )
             sale = sale_result.scalar_one_or_none()
             if sale is None:
-                raise CustomerPaymentError(f"Sale {requested.sale_id} is not an open customer sale")
+                raise CustomerPaymentError(
+                    f"Sale {requested.sale_id} is not an open customer sale for this branch"
+                )
             amount = money(requested.amount)
             if amount > money(sale.balance_due):
                 raise CustomerPaymentError(
@@ -226,6 +250,7 @@ async def record_customer_payment(
             select(Sale)
             .where(
                 Sale.tenant_id == tenant_id,
+                Sale.branch_id == branch_id,
                 Sale.customer_id == customer_id,
                 Sale.status == "completed",
                 Sale.balance_due > 0,
@@ -257,6 +282,9 @@ async def record_customer_payment(
         )
 
     advance = money(payment.amount - allocated_total)
+    if advance > 0:
+        await ensure_customer_advance_account(db, tenant_id=tenant_id)
+
     journal_lines = [
         PostingLine(
             account_code=payment_account_code(payment.method),
