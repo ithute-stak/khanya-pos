@@ -7,13 +7,13 @@ import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 import 'package:khanya_pos/features/pos/printing/sale_receipt.dart';
 
 void main() {
-  const receipt = SaleReceipt(
+  final receipt = SaleReceipt(
     businessName: 'Khanya Resources',
     reference: 'sale-123456',
     issuedAt: DateTime.utc(2026, 9, 21, 14, 30),
     branchId: 'Maseru',
     cashierName: 'Cashier One',
-    lines: [
+    lines: const [
       SaleReceiptLine(
         name: 'Bread',
         sku: 'BR-001',
@@ -68,6 +68,6 @@ void main() {
 
     expect(bytes.take(2), orderedEquals(const [0x1b, 0x40]));
     expect(bytes.length, greaterThan(40));
-    expect(bytes.length < 3 || bytes.sublist(bytes.length - 3) != const [0x1d, 0x56, 0x01], isTrue);
+    expect(bytes.sublist(bytes.length - 3), orderedEquals(const [0x1b, 0x64, 0x03]));
   });
 }
