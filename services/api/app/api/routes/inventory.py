@@ -10,8 +10,9 @@ from app.api.deps import Principal, TenantContext, get_current_principal, requir
 from app.core.database import get_db
 from app.models.commerce import BranchProductStock, Product, StockMovement
 from app.schemas.commerce import StockAdjustmentRequest
+from app.services.accounting import PostingLine, post_journal
 from app.services.outbox import enqueue_event
-from app.services.pricing import money, quantity
+from app.services.pricing import line_total, quantity, unit_cost
 
 router = APIRouter()
 
@@ -86,9 +87,6 @@ async def adjust_stock(
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
 
-    # The product row lock serializes creation of the first branch stock row.
-    # Re-check the operation after acquiring it in case another device committed
-    # the same offline operation while this request was waiting.
     replay = await _adjustment_replay(
         db,
         tenant_id=context.tenant.id,
@@ -120,23 +118,55 @@ async def adjust_stock(
         db.add(stock)
         await db.flush()
 
-    new_on_hand = quantity(stock.on_hand + payload.quantity_delta)
+    delta = quantity(payload.quantity_delta)
+    new_on_hand = quantity(stock.on_hand + delta)
     if new_on_hand < 0:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Adjustment would make stock negative")
     stock.on_hand = new_on_hand
+    current_cost = unit_cost(product.cost_price)
     movement = StockMovement(
         tenant_id=context.tenant.id,
         branch_id=context.branch.id,
         product_id=product.id,
         client_operation_id=payload.client_operation_id,
         movement_type="adjustment",
-        quantity_delta=quantity(payload.quantity_delta),
-        unit_cost=money(product.cost_price),
-        reason=payload.reason.strip(),
+        quantity_delta=delta,
+        unit_cost=current_cost,
+        reason=f"{payload.adjustment_type}: {payload.reason.strip()}",
         performed_by_user_id=principal.user.id,
     )
     db.add(movement)
     await db.flush()
+
+    adjustment_value = line_total(current_cost, abs(delta))
+    if adjustment_value > 0:
+        if delta > 0:
+            credit_account = "3000" if payload.adjustment_type == "opening_balance" else "4010"
+            lines = [
+                PostingLine(account_code="1200", debit=adjustment_value, memo=payload.reason),
+                PostingLine(
+                    account_code=credit_account,
+                    credit=adjustment_value,
+                    memo="Opening inventory" if credit_account == "3000" else "Inventory adjustment gain",
+                ),
+            ]
+        else:
+            lines = [
+                PostingLine(account_code="5010", debit=adjustment_value, memo=payload.reason),
+                PostingLine(account_code="1200", credit=adjustment_value, memo="Inventory adjustment"),
+            ]
+        await post_journal(
+            db,
+            tenant_id=context.tenant.id,
+            branch_id=context.branch.id,
+            user_id=principal.user.id,
+            source_type="inventory_adjustment",
+            source_id=movement.id,
+            description=f"Inventory adjustment for {product.name}: {payload.reason.strip()}",
+            occurred_at=movement.occurred_at,
+            lines=lines,
+        )
+
     enqueue_event(
         db,
         tenant_id=context.tenant.id,
@@ -147,6 +177,7 @@ async def adjust_stock(
             "product_id": str(product.id),
             "on_hand": str(stock.on_hand),
             "source": "adjustment",
+            "adjustment_type": payload.adjustment_type,
             "movement_id": str(movement.id),
         },
     )
