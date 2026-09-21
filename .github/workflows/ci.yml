@@ -58,8 +58,12 @@ jobs:
         run: alembic upgrade head
       - name: Verify schema matches models
         run: alembic check
-      - name: Test
+      - name: Unit tests
         run: pytest -q
+      - name: POS database integration test
+        env:
+          RUN_INTEGRATION_TESTS: "1"
+        run: pytest -q tests/test_sale_service_integration.py
 
   mobile:
     name: Flutter
