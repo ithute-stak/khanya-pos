@@ -8,6 +8,7 @@ import 'package:khanya_pos/features/documents/data/receipt_picker.dart';
 import 'package:khanya_pos/features/documents/presentation/bloc/receipt_capture_bloc.dart';
 import 'package:khanya_pos/features/documents/presentation/receipt_capture_buttons.dart';
 import 'package:khanya_pos/features/purchasing/data/purchasing_repository.dart';
+import 'package:khanya_pos/features/purchasing/domain/purchasing_models.dart';
 import 'package:khanya_pos/features/purchasing/presentation/bloc/purchase_draft_bloc.dart';
 
 class NewPurchasePage extends StatelessWidget {
@@ -40,7 +41,8 @@ class _NewPurchaseView extends StatelessWidget {
     return MultiBlocListener(
       listeners: [
         BlocListener<ReceiptCaptureBloc, ReceiptCaptureState>(
-          listenWhen: (previous, current) => previous.selected?.id != current.selected?.id && current.selected != null,
+          listenWhen: (previous, current) =>
+              previous.selected?.id != current.selected?.id && current.selected != null,
           listener: (context, state) {
             context.read<PurchaseDraftBloc>().add(PurchaseDraftReceiptAttached(state.selected!));
           },
@@ -49,7 +51,9 @@ class _NewPurchaseView extends StatelessWidget {
           listenWhen: (previous, current) => previous.status != current.status,
           listener: (context, state) {
             if (state.status == PurchaseDraftStatus.success) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.message ?? 'Purchase saved.')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(state.message ?? 'Purchase saved.')),
+              );
               context.pop();
             }
           },
@@ -59,7 +63,8 @@ class _NewPurchaseView extends StatelessWidget {
         appBar: AppBar(title: const Text('New Purchase')),
         body: BlocBuilder<PurchaseDraftBloc, PurchaseDraftState>(
           builder: (context, state) {
-            if (state.status == PurchaseDraftStatus.loading || state.status == PurchaseDraftStatus.initial) {
+            if (state.status == PurchaseDraftStatus.loading ||
+                state.status == PurchaseDraftStatus.initial) {
               return const Center(child: CircularProgressIndicator());
             }
             return LayoutBuilder(
@@ -82,7 +87,9 @@ class _NewPurchaseView extends StatelessWidget {
                                 Expanded(flex: 2, child: side),
                               ],
                             )
-                          : Column(children: [details, const SizedBox(height: 16), side]),
+                          : Column(
+                              children: [details, const SizedBox(height: 16), side],
+                            ),
                     ),
                   ),
                 );
@@ -115,7 +122,10 @@ class _PurchaseDetails extends StatelessWidget {
                   initialValue: state.supplierId,
                   decoration: const InputDecoration(labelText: 'Supplier (optional)'),
                   items: [
-                    const DropdownMenuItem<String?>(value: null, child: Text('Cash / one-off supplier')),
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('Cash / one-off supplier'),
+                    ),
                     ...state.suppliers.map(
                       (supplier) => DropdownMenuItem<String?>(
                         value: supplier.id,
@@ -123,13 +133,19 @@ class _PurchaseDetails extends StatelessWidget {
                       ),
                     ),
                   ],
-                  onChanged: (value) => context.read<PurchaseDraftBloc>().add(PurchaseDraftSupplierSelected(value)),
+                  onChanged: (value) => context
+                      .read<PurchaseDraftBloc>()
+                      .add(PurchaseDraftSupplierSelected(value)),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   initialValue: state.invoiceNumber,
-                  decoration: const InputDecoration(labelText: 'Supplier invoice / receipt number'),
-                  onChanged: (value) => context.read<PurchaseDraftBloc>().add(PurchaseDraftInvoiceChanged(value)),
+                  decoration: const InputDecoration(
+                    labelText: 'Supplier invoice / receipt number',
+                  ),
+                  onChanged: (value) => context
+                      .read<PurchaseDraftBloc>()
+                      .add(PurchaseDraftInvoiceChanged(value)),
                 ),
               ],
             ),
@@ -157,7 +173,9 @@ class _PurchaseDetails extends StatelessWidget {
                 if (state.lines.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Text('Add the products purchased. Stock is updated only after the purchase is confirmed.'),
+                    child: Text(
+                      'Add the products purchased. Stock is updated only after the purchase is confirmed.',
+                    ),
                   )
                 else
                   ...state.lines.map((line) => _PurchaseLineTile(line: line)),
@@ -184,7 +202,10 @@ class _PurchaseDetails extends StatelessWidget {
                   children: [
                     Text('Choose product', style: Theme.of(sheetContext).textTheme.titleLarge),
                     const Spacer(),
-                    IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close)),
+                    IconButton(
+                      onPressed: () => Navigator.pop(sheetContext),
+                      icon: const Icon(Icons.close),
+                    ),
                   ],
                 ),
               ),
@@ -197,9 +218,13 @@ class _PurchaseDetails extends StatelessWidget {
                     return ListTile(
                       enabled: !alreadyAdded,
                       title: Text(product.name),
-                      subtitle: Text('${product.sku} • Current cost ${Loti.formatMinor(product.costPriceMinor)}'),
+                      subtitle: Text(
+                        '${product.sku} • Current cost ${Loti.formatMinor(product.costPriceMinor)}',
+                      ),
                       trailing: alreadyAdded ? const Icon(Icons.check) : const Icon(Icons.add),
-                      onTap: alreadyAdded ? null : () => Navigator.pop(sheetContext, product.id),
+                      onTap: alreadyAdded
+                          ? null
+                          : () => Navigator.pop(sheetContext, product.id),
                     );
                   },
                 ),
@@ -217,7 +242,7 @@ class _PurchaseDetails extends StatelessWidget {
 
 class _PurchaseLineTile extends StatelessWidget {
   const _PurchaseLineTile({required this.line});
-  final dynamic line;
+  final PurchaseDraftLine line;
 
   @override
   Widget build(BuildContext context) {
@@ -235,10 +260,14 @@ class _PurchaseLineTile extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Expanded(child: Text(line.product.name, style: Theme.of(context).textTheme.titleSmall)),
+                  Expanded(
+                    child: Text(line.product.name, style: Theme.of(context).textTheme.titleSmall),
+                  ),
                   IconButton(
                     tooltip: 'Remove',
-                    onPressed: () => context.read<PurchaseDraftBloc>().add(PurchaseDraftLineRemoved(line.product.id as String)),
+                    onPressed: () => context
+                        .read<PurchaseDraftBloc>()
+                        .add(PurchaseDraftLineRemoved(line.product.id)),
                     icon: const Icon(Icons.delete_outline),
                   ),
                 ],
@@ -249,11 +278,14 @@ class _PurchaseLineTile extends StatelessWidget {
                   Expanded(
                     child: TextFormField(
                       key: ValueKey('qty-${line.product.id}'),
-                      initialValue: ScaledDecimal.fromMilli(line.quantityMilli as int),
+                      initialValue: ScaledDecimal.fromMilli(line.quantityMilli),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(labelText: 'Quantity (${line.product.unit})'),
                       onChanged: (value) => context.read<PurchaseDraftBloc>().add(
-                            PurchaseDraftQuantityChanged(productId: line.product.id as String, value: value),
+                            PurchaseDraftQuantityChanged(
+                              productId: line.product.id,
+                              value: value,
+                            ),
                           ),
                     ),
                   ),
@@ -261,11 +293,14 @@ class _PurchaseLineTile extends StatelessWidget {
                   Expanded(
                     child: TextFormField(
                       key: ValueKey('cost-${line.product.id}'),
-                      initialValue: ScaledDecimal.fromMinor(line.unitCostMinor as int),
+                      initialValue: ScaledDecimal.fromMinor(line.unitCostMinor),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(labelText: 'Unit cost (M)'),
                       onChanged: (value) => context.read<PurchaseDraftBloc>().add(
-                            PurchaseDraftCostChanged(productId: line.product.id as String, value: value),
+                            PurchaseDraftCostChanged(
+                              productId: line.product.id,
+                              value: value,
+                            ),
                           ),
                     ),
                   ),
@@ -274,7 +309,7 @@ class _PurchaseLineTile extends StatelessWidget {
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerRight,
-                child: Text('Line total ${Loti.formatMinor(line.lineTotalMinor as int)}'),
+                child: Text('Line total ${Loti.formatMinor(line.lineTotalMinor)}'),
               ),
             ],
           ),
@@ -300,7 +335,9 @@ class _ReceiptPaymentSummary extends StatelessWidget {
               children: [
                 Text('Shopping receipt', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 6),
-                const Text('Attach the supplier receipt or invoice so it stays with this purchase.'),
+                const Text(
+                  'Attach the supplier receipt or invoice so it stays with this purchase.',
+                ),
                 const SizedBox(height: 14),
                 const ReceiptCaptureButtons(purpose: ReceiptPurpose.purchase),
               ],
@@ -328,7 +365,9 @@ class _ReceiptPaymentSummary extends StatelessWidget {
                   ],
                   onChanged: (value) {
                     if (value != null) {
-                      context.read<PurchaseDraftBloc>().add(PurchaseDraftPaymentMethodChanged(value));
+                      context
+                          .read<PurchaseDraftBloc>()
+                          .add(PurchaseDraftPaymentMethodChanged(value));
                     }
                   },
                 ),
@@ -338,7 +377,9 @@ class _ReceiptPaymentSummary extends StatelessWidget {
                   initialValue: ScaledDecimal.fromMinor(state.amountPaidMinor),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'Amount paid now (M)'),
-                  onChanged: (value) => context.read<PurchaseDraftBloc>().add(PurchaseDraftAmountPaidChanged(value)),
+                  onChanged: (value) => context
+                      .read<PurchaseDraftBloc>()
+                      .add(PurchaseDraftAmountPaidChanged(value)),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -346,7 +387,9 @@ class _ReceiptPaymentSummary extends StatelessWidget {
                   minLines: 2,
                   maxLines: 4,
                   decoration: const InputDecoration(labelText: 'Notes (optional)'),
-                  onChanged: (value) => context.read<PurchaseDraftBloc>().add(PurchaseDraftNotesChanged(value)),
+                  onChanged: (value) => context
+                      .read<PurchaseDraftBloc>()
+                      .add(PurchaseDraftNotesChanged(value)),
                 ),
               ],
             ),
@@ -372,12 +415,22 @@ class _ReceiptPaymentSummary extends StatelessWidget {
                   width: double.infinity,
                   child: FilledButton.icon(
                     onPressed: state.canSubmit
-                        ? () => context.read<PurchaseDraftBloc>().add(const PurchaseDraftSubmitted())
+                        ? () => context
+                            .read<PurchaseDraftBloc>()
+                            .add(const PurchaseDraftSubmitted())
                         : null,
                     icon: state.status == PurchaseDraftStatus.submitting
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Icon(Icons.check_circle_outline),
-                    label: Text(state.status == PurchaseDraftStatus.submitting ? 'Saving...' : 'Confirm Purchase'),
+                    label: Text(
+                      state.status == PurchaseDraftStatus.submitting
+                          ? 'Saving...'
+                          : 'Confirm Purchase',
+                    ),
                   ),
                 ),
                 if (state.message != null) ...[
@@ -401,7 +454,14 @@ class _SummaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = bold ? Theme.of(context).textTheme.titleMedium : Theme.of(context).textTheme.bodyLarge;
-    return Row(children: [Expanded(child: Text(label, style: style)), Text(value, style: style)]);
+    final style = bold
+        ? Theme.of(context).textTheme.titleMedium
+        : Theme.of(context).textTheme.bodyLarge;
+    return Row(
+      children: [
+        Expanded(child: Text(label, style: style)),
+        Text(value, style: style),
+      ],
+    );
   }
 }

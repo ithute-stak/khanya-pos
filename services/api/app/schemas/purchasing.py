@@ -49,6 +49,19 @@ class PurchaseReceiveRequest(BaseModel):
             raise ValueError("A product may only appear once per purchase")
         return value
 
+    @model_validator(mode="after")
+    def validate_payment_and_supplier(self) -> "PurchaseReceiveRequest":
+        if self.payment_method == "supplier_credit" and self.amount_paid != 0:
+            raise ValueError(
+                "Supplier credit must have amount_paid = 0; use the actual payment method for partial payments"
+            )
+        estimated_total = sum(
+            (item.quantity * item.unit_cost) + item.tax_total for item in self.items
+        )
+        if self.amount_paid < estimated_total and self.supplier_id is None:
+            raise ValueError("A supplier is required when the purchase has an outstanding balance")
+        return self
+
 
 class SupplierPaymentRequest(BaseModel):
     purchase_id: UUID | None = None
@@ -71,4 +84,7 @@ class ExpenseCreateRequest(BaseModel):
 
 class DocumentExtractionUpdate(BaseModel):
     extracted_data: dict[str, object]
-    processing_status: str = Field(default="reviewed", pattern=r"^(uploaded|processing|review_required|reviewed|failed)$")
+    processing_status: str = Field(
+        default="reviewed",
+        pattern=r"^(uploaded|processing|review_required|reviewed|failed)$",
+    )
