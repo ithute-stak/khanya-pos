@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:khanya_pos/app/app_theme.dart';
 import 'package:khanya_pos/app/dependencies.dart';
 import 'package:khanya_pos/app/router.dart';
+import 'package:khanya_pos/core/branding/khanya_brand.dart';
 import 'package:khanya_pos/core/connectivity/connectivity_bloc.dart';
 import 'package:khanya_pos/core/realtime/realtime_bloc.dart';
 import 'package:khanya_pos/core/sync/sync_bloc.dart';
@@ -103,7 +104,7 @@ class _AppView extends StatelessWidget {
         ),
       ],
       child: MaterialApp.router(
-        title: 'Khanya POS',
+        title: KhanyaBrand.appName,
         debugShowCheckedModeBanner: false,
         theme: KhanyaTheme.light,
         routerConfig: appRouter,
@@ -122,7 +123,7 @@ class _SessionGate extends StatelessWidget {
     return BlocBuilder<SessionBloc, SessionState>(
       builder: (context, state) {
         if (state is SessionInitial || state is SessionRestoring) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const KhanyaLoadingView(message: 'Restoring your secure workspace…');
         }
         if (state is SessionAuthenticated) {
           if (state.session.selectedTenantId == null || state.session.selectedBranchId == null) {
