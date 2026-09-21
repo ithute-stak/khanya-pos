@@ -1,16 +1,24 @@
 from datetime import datetime
+from decimal import Decimal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import TenantContext, require_permissions
+from app.api.deps import Principal, TenantContext, get_current_principal, require_permissions
 from app.core.database import get_db
 from app.models.accounting import Account, JournalEntry, JournalLine
+from app.schemas.accounting import JournalReversalRequest, ManualJournalCreateRequest
 from app.services.accounting import (
+    AccountingError,
+    PostingLine,
     balance_sheet,
     ensure_default_chart,
+    ledger_health,
+    post_manual_journal,
     profit_and_loss,
+    reverse_manual_journal,
     trial_balance,
 )
 
@@ -25,9 +33,7 @@ async def list_accounts(
     await ensure_default_chart(db, context.tenant.id)
     await db.commit()
     result = await db.execute(
-        select(Account)
-        .where(Account.tenant_id == context.tenant.id, Account.is_active.is_(True))
-        .order_by(Account.code)
+        select(Account).where(Account.tenant_id == context.tenant.id).order_by(Account.code)
     )
     return [
         {
@@ -38,6 +44,7 @@ async def list_accounts(
             "report_group": account.report_group,
             "normal_balance": account.normal_balance,
             "is_system": account.is_system,
+            "is_active": account.is_active,
         }
         for account in result.scalars().all()
     ]
@@ -72,6 +79,7 @@ async def list_journals(
                 "occurred_at": entry.occurred_at,
                 "status": entry.status,
                 "reversal_of_id": entry.reversal_of_id,
+                "reversal_reason": entry.reversal_reason,
                 "lines": [
                     {
                         "id": line.id,
@@ -89,6 +97,77 @@ async def list_journals(
     return output
 
 
+@router.post("/journals/manual", status_code=status.HTTP_201_CREATED)
+async def create_manual_journal(
+    payload: ManualJournalCreateRequest,
+    context: TenantContext = Depends(require_permissions("accounting.write")),
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    try:
+        entry = await post_manual_journal(
+            db,
+            tenant_id=context.tenant.id,
+            branch_id=context.branch.id if context.branch is not None else None,
+            user_id=principal.user.id,
+            client_operation_id=payload.client_operation_id,
+            description=payload.description,
+            occurred_at=payload.occurred_at,
+            lines=[
+                PostingLine(
+                    account_code=line.account_code,
+                    debit=line.debit,
+                    credit=line.credit,
+                    memo=line.memo,
+                )
+                for line in payload.lines
+            ],
+        )
+        await db.commit()
+        return {
+            "id": entry.id,
+            "entry_number": entry.entry_number,
+            "source_type": entry.source_type,
+            "source_id": entry.source_id,
+            "occurred_at": entry.occurred_at,
+        }
+    except AccountingError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/journals/{journal_entry_id}/reverse", status_code=status.HTTP_201_CREATED)
+async def reverse_journal(
+    journal_entry_id: UUID,
+    payload: JournalReversalRequest,
+    context: TenantContext = Depends(require_permissions("accounting.write")),
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    try:
+        entry = await reverse_manual_journal(
+            db,
+            tenant_id=context.tenant.id,
+            branch_id=context.branch.id if context.branch is not None else None,
+            user_id=principal.user.id,
+            journal_entry_id=journal_entry_id,
+            client_operation_id=payload.client_operation_id,
+            reason=payload.reason,
+            occurred_at=payload.occurred_at,
+        )
+        await db.commit()
+        return {
+            "id": entry.id,
+            "entry_number": entry.entry_number,
+            "reversal_of_id": entry.reversal_of_id,
+            "reversal_reason": entry.reversal_reason,
+            "occurred_at": entry.occurred_at,
+        }
+    except AccountingError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
 @router.get("/ledger")
 async def general_ledger(
     account_code: str | None = None,
@@ -97,6 +176,8 @@ async def general_ledger(
     context: TenantContext = Depends(require_permissions("accounting.read")),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, object]]:
+    if start is not None and end is not None and end < start:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="end must not be before start")
     statement = (
         select(JournalEntry, JournalLine, Account)
         .join(JournalLine, JournalLine.journal_entry_id == JournalEntry.id)
@@ -145,13 +226,14 @@ async def get_trial_balance(
         branch_id=context.branch.id if context.branch is not None else None,
         as_of=as_of,
     )
-    total_debits = sum((row["debits"] for row in rows), start=0)
-    total_credits = sum((row["credits"] for row in rows), start=0)
+    total_debits = sum((Decimal(row["debits"]) for row in rows), Decimal("0.00"))
+    total_credits = sum((Decimal(row["credits"]) for row in rows), Decimal("0.00"))
     return {
         "as_of": as_of,
         "accounts": rows,
         "total_debits": total_debits,
         "total_credits": total_credits,
+        "difference": total_debits - total_credits,
     }
 
 
@@ -190,3 +272,15 @@ async def get_balance_sheet(
         as_of=as_of,
     )
     return {"as_of": as_of, **report}
+
+
+@router.get("/reconciliation")
+async def get_ledger_reconciliation(
+    context: TenantContext = Depends(require_permissions("accounting.read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    return await ledger_health(
+        db,
+        tenant_id=context.tenant.id,
+        branch_id=context.branch.id if context.branch is not None else None,
+    )
