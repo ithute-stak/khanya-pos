@@ -1,5 +1,16 @@
 import 'package:equatable/equatable.dart';
 
+enum PaymentMethod {
+  cash('cash', 'Cash'),
+  card('card', 'Card'),
+  mobileMoney('mobile_money', 'Mobile money'),
+  bankTransfer('bank_transfer', 'Bank transfer');
+
+  const PaymentMethod(this.apiValue, this.label);
+  final String apiValue;
+  final String label;
+}
+
 class PosProduct extends Equatable {
   const PosProduct({
     required this.id,

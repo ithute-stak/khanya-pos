@@ -1,29 +1,128 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:khanya_pos/app/app_theme.dart';
+import 'package:khanya_pos/app/dependencies.dart';
 import 'package:khanya_pos/app/router.dart';
 import 'package:khanya_pos/core/connectivity/connectivity_bloc.dart';
+import 'package:khanya_pos/core/realtime/realtime_bloc.dart';
+import 'package:khanya_pos/core/sync/sync_bloc.dart';
 import 'package:khanya_pos/features/auth/presentation/bloc/session_bloc.dart';
+import 'package:khanya_pos/features/auth/presentation/business_context_page.dart';
+import 'package:khanya_pos/features/auth/presentation/login_page.dart';
 
-class KhanyaPosApp extends StatelessWidget {
-  const KhanyaPosApp({super.key});
+class KhanyaPosApp extends StatefulWidget {
+  const KhanyaPosApp({super.key, required this.dependencies});
+  final AppDependencies dependencies;
+
+  @override
+  State<KhanyaPosApp> createState() => _KhanyaPosAppState();
+}
+
+class _KhanyaPosAppState extends State<KhanyaPosApp> {
+  @override
+  void dispose() {
+    unawaited(widget.dependencies.close());
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocProvider(
+    final dependencies = widget.dependencies;
+    return MultiRepositoryProvider(
       providers: [
-        BlocProvider(create: (_) => ConnectivityBloc()..add(const ConnectivityStarted())),
-        BlocProvider(create: (_) => SessionBloc()..add(const SessionStarted())),
+        RepositoryProvider.value(value: dependencies.productRepository),
+        RepositoryProvider.value(value: dependencies.salesRepository),
+      ],
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider(create: (_) => ConnectivityBloc()..add(const ConnectivityStarted())),
+          BlocProvider(
+            create: (_) => SessionBloc(
+              authRepository: dependencies.authRepository,
+              sessionContext: dependencies.sessionContext,
+            )..add(const SessionStarted()),
+          ),
+          BlocProvider(
+            create: (_) => SyncBloc(
+              database: dependencies.database,
+              syncService: dependencies.syncService,
+              productRepository: dependencies.productRepository,
+            )..add(const SyncStarted()),
+          ),
+          BlocProvider(
+            create: (_) => RealtimeBloc(
+              client: dependencies.realtimeClient,
+              sessionContext: dependencies.sessionContext,
+              productRepository: dependencies.productRepository,
+            ),
+          ),
+        ],
+        child: const _AppView(),
+      ),
+    );
+  }
+}
+
+class _AppView extends StatelessWidget {
+  const _AppView();
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiBlocListener(
+      listeners: [
+        BlocListener<SessionBloc, SessionState>(
+          listener: (context, state) {
+            if (state is SessionAuthenticated) {
+              context.read<SyncBloc>().add(const SyncRequested());
+              context.read<RealtimeBloc>().add(const RealtimeActivated());
+            } else if (state is SessionUnauthenticated) {
+              context.read<RealtimeBloc>().add(const RealtimeStopped());
+            }
+          },
+        ),
+        BlocListener<ConnectivityBloc, ConnectivityState>(
+          listenWhen: (previous, current) =>
+              previous.isNetworkAvailable != current.isNetworkAvailable && current.isNetworkAvailable,
+          listener: (context, state) {
+            if (context.read<SessionBloc>().state is SessionAuthenticated) {
+              context.read<SyncBloc>().add(const SyncRequested());
+              context.read<RealtimeBloc>().add(const RealtimeActivated());
+            }
+          },
+        ),
       ],
       child: MaterialApp.router(
         title: 'Khanya POS',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B4AA2)),
-          scaffoldBackgroundColor: const Color(0xFFF8FAFD),
-        ),
+        theme: KhanyaTheme.light,
         routerConfig: appRouter,
+        builder: (context, child) => _SessionGate(child: child ?? const SizedBox.shrink()),
       ),
+    );
+  }
+}
+
+class _SessionGate extends StatelessWidget {
+  const _SessionGate({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<SessionBloc, SessionState>(
+      builder: (context, state) {
+        if (state is SessionInitial || state is SessionRestoring) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        if (state is SessionAuthenticated) {
+          if (state.session.selectedTenantId == null || state.session.selectedBranchId == null) {
+            return BusinessContextPage(state: state);
+          }
+          return child;
+        }
+        return const LoginPage();
+      },
     );
   }
 }
