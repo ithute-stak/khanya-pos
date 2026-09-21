@@ -59,7 +59,8 @@ class SaleReceipt {
 
   int get totalMinor => lines.fold(0, (total, line) => total + line.lineTotalMinor);
   int get paidMinor => paidNowMinor ?? totalMinor;
-  int get creditBalanceMinor => balanceDueMinor ?? (totalMinor - paidMinor).clamp(0, totalMinor);
+  int get creditBalanceMinor =>
+      balanceDueMinor ?? (totalMinor - paidMinor).clamp(0, totalMinor).toInt();
   bool get isCreditSale => creditBalanceMinor > 0;
 
   int? get cashChangeMinor {
