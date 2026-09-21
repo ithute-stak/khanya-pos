@@ -26,6 +26,7 @@ try {
 
     $releaseDir = (Resolve-Path 'build\windows\x64\runner\Release').Path
     $installerDir = Join-Path $appRoot 'build\windows\installer'
+    $iconFile = (Resolve-Path 'windows\runner\resources\app_icon.ico').Path
     New-Item -ItemType Directory -Force -Path $installerDir | Out-Null
 
     $isccCandidates = @()
@@ -49,7 +50,7 @@ try {
     $appVersion = $versionMatch.Matches[0].Groups[1].Value
 
     Write-Host "==> Packaging Khanya POS $appVersion installer"
-    & $iscc "/DSourceDir=$releaseDir" "/DOutputDir=$installerDir" "/DMyAppVersion=$appVersion" $installerScript
+    & $iscc "/DSourceDir=$releaseDir" "/DOutputDir=$installerDir" "/DMyAppVersion=$appVersion" "/DIconFile=$iconFile" $installerScript
     if ($LASTEXITCODE -ne 0) { throw 'Inno Setup packaging failed.' }
 
     $installer = Join-Path $installerDir 'KhanyaPOS-Setup.exe'

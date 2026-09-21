@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:khanya_pos/core/branding/khanya_brand.dart';
 import 'package:khanya_pos/features/auth/presentation/bloc/session_bloc.dart';
 
 class LoginPage extends StatefulWidget {
@@ -24,10 +25,12 @@ class _LoginPageState extends State<LoginPage> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
-    context.read<SessionBloc>().add(SessionLoginRequested(
-          identifier: _identifierController.text,
-          password: _passwordController.text,
-        ));
+    context.read<SessionBloc>().add(
+          SessionLoginRequested(
+            identifier: _identifierController.text,
+            password: _passwordController.text,
+          ),
+        );
   }
 
   @override
@@ -37,156 +40,134 @@ class _LoginPageState extends State<LoginPage> {
     final error = state is SessionFailure ? state.message : null;
 
     return Scaffold(
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final desktop = constraints.maxWidth >= 900;
-            if (!desktop) {
+      body: KhanyaBrandedBackground(
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 860;
               return Center(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: wide ? 44 : 20,
+                    vertical: 24,
+                  ),
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 440),
-                    child: _buildLoginCard(
-                      context,
-                      loading: loading,
-                      error: error,
-                      showCompactBrand: true,
-                    ),
+                    constraints: const BoxConstraints(maxWidth: 1040),
+                    child: wide
+                        ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const Expanded(child: _BrandPanel()),
+                              const SizedBox(width: 42),
+                              Expanded(child: _LoginCard(formKey: _formKey, identifierController: _identifierController, passwordController: _passwordController, loading: loading, error: error, obscurePassword: _obscurePassword, onTogglePassword: () => setState(() => _obscurePassword = !_obscurePassword), onSubmit: _submit)),
+                            ],
+                          )
+                        : Column(
+                            children: [
+                              const _BrandPanel(compact: true),
+                              const SizedBox(height: 20),
+                              _LoginCard(formKey: _formKey, identifierController: _identifierController, passwordController: _passwordController, loading: loading, error: error, obscurePassword: _obscurePassword, onTogglePassword: () => setState(() => _obscurePassword = !_obscurePassword), onSubmit: _submit),
+                            ],
+                          ),
                   ),
                 ),
               );
-            }
-
-            return Row(
-              children: [
-                Expanded(
-                  flex: 6,
-                  child: Container(
-                    height: double.infinity,
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFFFCFDFC),
-                          Color(0xFFEAF4E8),
-                        ],
-                      ),
-                    ),
-                    child: Stack(
-                      children: [
-                        Positioned(
-                          left: -110,
-                          bottom: -130,
-                          child: Container(
-                            width: 360,
-                            height: 360,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.06),
-                            ),
-                          ),
-                        ),
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 36),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 560, maxHeight: 760),
-                              child: Image.asset(
-                                'assets/branding/khanya_resources_vertical.webp',
-                                fit: BoxFit.contain,
-                                semanticLabel: 'Khanya Resources Management and Consultancy Services',
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 5,
-                  child: Center(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 36),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 440),
-                        child: _buildLoginCard(
-                          context,
-                          loading: loading,
-                          error: error,
-                          showCompactBrand: false,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
+            },
+          ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildLoginCard(
-    BuildContext context, {
-    required bool loading,
-    required String? error,
-    required bool showCompactBrand,
-  }) {
+class _BrandPanel extends StatelessWidget {
+  const _BrandPanel({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: compact ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+      children: [
+        KhanyaLogo(height: compact ? 145 : 260, borderRadius: 24),
+        SizedBox(height: compact ? 16 : 24),
+        Text(
+          'Simple sales. Smarter business.',
+          textAlign: compact ? TextAlign.center : TextAlign.start,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: KhanyaBrand.forestDark,
+                fontWeight: FontWeight.w900,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Run sales, stock, purchases, expenses and accounting from one Khanya workspace — even when connectivity is unreliable.',
+          textAlign: compact ? TextAlign.center : TextAlign.start,
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: KhanyaBrand.navy.withValues(alpha: 0.72),
+                height: 1.45,
+              ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LoginCard extends StatelessWidget {
+  const _LoginCard({
+    required this.formKey,
+    required this.identifierController,
+    required this.passwordController,
+    required this.loading,
+    required this.error,
+    required this.obscurePassword,
+    required this.onTogglePassword,
+    required this.onSubmit,
+  });
+
+  final GlobalKey<FormState> formKey;
+  final TextEditingController identifierController;
+  final TextEditingController passwordController;
+  final bool loading;
+  final String? error;
+  final bool obscurePassword;
+  final VoidCallback onTogglePassword;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
     return AutofillGroup(
       child: Form(
-        key: _formKey,
+        key: formKey,
         child: Card(
           child: Padding(
             padding: const EdgeInsets.all(28),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (showCompactBrand) ...[
-                  Image.asset(
-                    'assets/branding/khanya_resources_horizontal.webp',
-                    height: 92,
-                    fit: BoxFit.contain,
-                    alignment: Alignment.centerLeft,
-                    semanticLabel: 'Khanya Resources',
-                  ),
-                  const SizedBox(height: 22),
-                ] else ...[
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(18),
+                const KhanyaBrandTitle(),
+                const SizedBox(height: 26),
+                Text(
+                  'Welcome back',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: KhanyaBrand.navy,
+                        fontWeight: FontWeight.w900,
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Icon(
-                          Icons.point_of_sale_rounded,
-                          size: 34,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-                Text('Welcome back', style: Theme.of(context).textTheme.headlineMedium),
+                ),
                 const SizedBox(height: 6),
                 Text(
-                  'Sign in to Khanya Resources POS.',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.black54),
+                  'Sign in to continue to your business workspace.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black54),
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 18),
-                  _ErrorBanner(message: error),
+                  _ErrorBanner(message: error!),
                 ],
                 const SizedBox(height: 24),
                 TextFormField(
-                  controller: _identifierController,
+                  controller: identifierController,
                   enabled: !loading,
                   keyboardType: TextInputType.emailAddress,
                   autofillHints: const [AutofillHints.username, AutofillHints.email],
@@ -197,48 +178,57 @@ class _LoginPageState extends State<LoginPage> {
                   validator: (value) => value == null || value.trim().isEmpty
                       ? 'Enter your email or phone number'
                       : null,
-                  onFieldSubmitted: (_) => _submit(),
+                  onFieldSubmitted: (_) => onSubmit(),
                 ),
                 const SizedBox(height: 14),
                 TextFormField(
-                  controller: _passwordController,
+                  controller: passwordController,
                   enabled: !loading,
-                  obscureText: _obscurePassword,
+                  obscureText: obscurePassword,
                   autofillHints: const [AutofillHints.password],
                   decoration: InputDecoration(
                     labelText: 'Password',
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
-                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                      icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                      onPressed: onTogglePassword,
+                      icon: Icon(obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
                     ),
                   ),
                   validator: (value) => value == null || value.isEmpty ? 'Enter your password' : null,
-                  onFieldSubmitted: (_) => _submit(),
+                  onFieldSubmitted: (_) => onSubmit(),
                 ),
                 const SizedBox(height: 22),
                 FilledButton.icon(
-                  onPressed: loading ? null : _submit,
+                  onPressed: loading ? null : onSubmit,
                   icon: loading
                       ? const SizedBox.square(
                           dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : const Icon(Icons.login),
+                      : const Icon(Icons.login_rounded),
                   label: Text(loading ? 'Signing in…' : 'Sign in'),
                 ),
                 const SizedBox(height: 18),
-                const Row(
-                  children: [
-                    Icon(Icons.offline_bolt_outlined, size: 18),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'After your first successful sign-in, saved products and queued sales remain available offline.',
-                        style: TextStyle(fontSize: 12.5),
-                      ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F7F2),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.offline_bolt_outlined, size: 19, color: KhanyaBrand.forest),
+                        SizedBox(width: 9),
+                        Expanded(
+                          child: Text(
+                            'After your first successful sign-in, saved products and queued work remain available offline.',
+                            style: TextStyle(fontSize: 12.5),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),

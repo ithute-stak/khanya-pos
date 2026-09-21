@@ -8,17 +8,21 @@
 #ifndef OutputDir
   #define OutputDir "..\..\build\windows\installer"
 #endif
+#ifndef IconFile
+  #define IconFile "..\..\windows\runner\resources\app_icon.ico"
+#endif
 
 [Setup]
 AppId={{4D90A0A7-CCF0-4AE6-B74F-F27DEBB8312A}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppPublisher=Ithute
+AppPublisher=Khanya Resources Pty Ltd
 DefaultDirName={localappdata}\Programs\Khanya POS
 DefaultGroupName=Khanya POS
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
 OutputBaseFilename=KhanyaPOS-Setup
+SetupIconFile={#IconFile}
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
@@ -26,6 +30,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 WizardStyle=modern
 UninstallDisplayName=Khanya POS
+UninstallDisplayIcon={app}\khanya_pos.exe
 SetupLogging=yes
 
 [Tasks]
