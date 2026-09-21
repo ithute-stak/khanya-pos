@@ -1,15 +1,48 @@
-from sqlalchemy import and_, or_, select
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import TenantContext, require_permissions
 from app.core.database import get_db
 from app.models.commerce import BranchProductStock, Product, ProductCategory
-from app.schemas.commerce import ProductCreate
+from app.schemas.commerce import ProductCategoryCreate, ProductCreate
 from app.services.pricing import money, quantity
 
 router = APIRouter()
+
+
+@router.post("/categories", status_code=status.HTTP_201_CREATED)
+async def create_category(
+    payload: ProductCategoryCreate,
+    context: TenantContext = Depends(require_permissions("inventory.write")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    category = ProductCategory(tenant_id=context.tenant.id, name=payload.name.strip())
+    try:
+        db.add(category)
+        await db.commit()
+        await db.refresh(category)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category already exists") from exc
+    return {"id": category.id, "name": category.name, "is_active": category.is_active}
+
+
+@router.get("/categories")
+async def list_categories(
+    context: TenantContext = Depends(require_permissions("inventory.read")),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, object]]:
+    result = await db.execute(
+        select(ProductCategory)
+        .where(ProductCategory.tenant_id == context.tenant.id, ProductCategory.is_active.is_(True))
+        .order_by(ProductCategory.name)
+    )
+    return [
+        {"id": category.id, "name": category.name, "is_active": category.is_active}
+        for category in result.scalars().all()
+    ]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -53,6 +86,7 @@ async def create_product(
         "name": product.name,
         "sku": product.sku,
         "barcode": product.barcode,
+        "category_id": product.category_id,
         "unit": product.unit,
         "selling_price": product.selling_price,
         "cost_price": product.cost_price,
@@ -94,6 +128,7 @@ async def list_products(
             "name": product.name,
             "sku": product.sku,
             "barcode": product.barcode,
+            "category_id": product.category_id,
             "unit": product.unit,
             "selling_price": product.selling_price,
             "cost_price": product.cost_price,
