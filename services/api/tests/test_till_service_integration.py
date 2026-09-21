@@ -1,5 +1,4 @@
 import os
-from datetime import timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -75,7 +74,7 @@ async def test_till_shift_reconciles_cash_sales_movements_and_variance() -> None
             total=Decimal("50.00"),
             balance_due=Decimal("0.00"),
             payment_status="paid",
-            completed_at=opened.opened_at + timedelta(seconds=1),
+            completed_at=opened.opened_at,
         )
         db.add(sale)
         await db.flush()
