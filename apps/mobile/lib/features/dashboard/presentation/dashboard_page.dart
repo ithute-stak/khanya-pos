@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:khanya_pos/core/branding/khanya_brand.dart';
 import 'package:khanya_pos/core/connectivity/connectivity_bloc.dart';
 import 'package:khanya_pos/core/realtime/realtime_bloc.dart';
 import 'package:khanya_pos/core/sync/sync_bloc.dart';
@@ -16,15 +17,20 @@ class DashboardPage extends StatelessWidget {
     final membership = session?.memberships
         .where((item) => item.tenantId == session.selectedTenantId)
         .firstOrNull;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Khanya POS'),
+        title: const KhanyaBrandTitle(compact: true),
         actions: [
           BlocBuilder<ConnectivityBloc, ConnectivityState>(
             builder: (context, state) => Padding(
               padding: const EdgeInsets.only(right: 6),
               child: Chip(
-                avatar: Icon(state.isNetworkAvailable ? Icons.cloud_done : Icons.cloud_off, size: 17),
+                avatar: Icon(
+                  state.isNetworkAvailable ? Icons.cloud_done : Icons.cloud_off,
+                  size: 17,
+                  color: state.isNetworkAvailable ? KhanyaBrand.forest : Colors.orange.shade800,
+                ),
                 label: Text(state.isNetworkAvailable ? 'Online' : 'Offline'),
               ),
             ),
@@ -48,19 +54,20 @@ class DashboardPage extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        session == null ? 'Welcome' : 'Hello ${session.displayName.split(' ').first}',
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        membership?.tenantName ?? 'Khanya Resources Small Business POS',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.black54),
+                      _DashboardHero(
+                        firstName: session == null ? null : session.displayName.split(' ').first,
+                        businessName: membership?.tenantName,
                       ),
                       const SizedBox(height: 16),
                       const _SystemStatusCard(),
                       const SizedBox(height: 22),
-                      Text('Business tools', style: Theme.of(context).textTheme.titleLarge),
+                      Text(
+                        'Business tools',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              color: KhanyaBrand.navy,
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
                     ],
                   ),
                 ),
@@ -79,48 +86,56 @@ class DashboardPage extends StatelessWidget {
                       title: 'New Sale',
                       description: 'Fast checkout, offline queue and payments',
                       icon: Icons.point_of_sale,
+                      accent: KhanyaBrand.forest,
                       onTap: () => context.push('/pos'),
                     ),
                     _ModuleCard(
                       title: 'Products',
                       description: 'Prices, SKUs, barcodes and product catalogue',
                       icon: Icons.inventory_2_outlined,
+                      accent: KhanyaBrand.navy,
                       onTap: () => context.push('/products'),
                     ),
                     _ModuleCard(
                       title: 'Inventory',
                       description: 'On-hand quantities and low-stock visibility',
                       icon: Icons.warehouse_outlined,
+                      accent: KhanyaBrand.goldDark,
                       onTap: () => context.push('/inventory'),
                     ),
                     _ModuleCard(
                       title: 'Purchases',
                       description: 'Buy stock, receive items and track supplier balances',
                       icon: Icons.shopping_bag_outlined,
+                      accent: KhanyaBrand.forest,
                       onTap: () => context.push('/purchases'),
                     ),
                     _ModuleCard(
                       title: 'Receipt Vault',
                       description: 'Photograph and keep shopping receipts and supplier invoices',
                       icon: Icons.receipt_long_outlined,
+                      accent: KhanyaBrand.goldDark,
                       onTap: () => context.push('/receipts'),
                     ),
                     _ModuleCard(
                       title: 'Suppliers',
                       description: 'Supplier contacts, purchases and outstanding balances',
                       icon: Icons.local_shipping_outlined,
+                      accent: KhanyaBrand.navy,
                       onTap: () => context.push('/suppliers'),
                     ),
                     _ModuleCard(
                       title: 'Expenses',
                       description: 'Rent, electricity, transport, fuel and daily business costs',
                       icon: Icons.account_balance_wallet_outlined,
+                      accent: KhanyaBrand.forest,
                       onTap: () => context.push('/expenses'),
                     ),
                     const _ModuleCard(
                       title: 'Accounting',
-                      description: 'Next: ledgers, reports and tax readiness',
+                      description: 'Ledgers, reconciliation and financial reporting foundation',
                       icon: Icons.account_balance_outlined,
+                      accent: KhanyaBrand.navy,
                     ),
                   ]),
                 ),
@@ -128,6 +143,72 @@ class DashboardPage extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _DashboardHero extends StatelessWidget {
+  const _DashboardHero({required this.firstName, required this.businessName});
+
+  final String? firstName;
+  final String? businessName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [KhanyaBrand.forestDark, KhanyaBrand.forest, Color(0xFF258A3C)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: KhanyaBrand.forest.withValues(alpha: 0.20),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const KhanyaMark(size: 74, radius: 18),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  firstName == null ? 'Welcome to Khanya POS' : 'Good day, $firstName',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  businessName ?? KhanyaBrand.companyName,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.88),
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'People • Process • Profit • A Brighter Tomorrow',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFFFFE7A3),
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -179,15 +260,30 @@ class _StatusItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 19), const SizedBox(width: 7), Text(label)]);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 19, color: KhanyaBrand.forest),
+        const SizedBox(width: 7),
+        Text(label),
+      ],
+    );
   }
 }
 
 class _ModuleCard extends StatelessWidget {
-  const _ModuleCard({required this.title, required this.description, required this.icon, this.onTap});
+  const _ModuleCard({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.accent,
+    this.onTap,
+  });
+
   final String title;
   final String description;
   final IconData icon;
+  final Color accent;
   final VoidCallback? onTap;
 
   @override
@@ -201,11 +297,28 @@ class _ModuleCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, size: 28, color: onTap == null ? Colors.grey : Theme.of(context).colorScheme.primary),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(9),
+                  child: Icon(icon, size: 25, color: onTap == null ? Colors.grey : accent),
+                ),
+              ),
               const Spacer(),
-              Text(title, style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
               const SizedBox(height: 4),
-              Text(description, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
           ),
         ),
