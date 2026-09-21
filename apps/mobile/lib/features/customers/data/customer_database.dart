@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
@@ -157,8 +155,8 @@ final class CustomerDatabase extends _$CustomerDatabase {
         customerId: reservation.customerId,
       );
       if (customer != null) {
-        final nextOutstanding = math.max(0, customer.outstandingMinor - reservation.creditMinor);
-        final nextAvailable = math.min(
+        final nextOutstanding = _maxInt(0, customer.outstandingMinor - reservation.creditMinor);
+        final nextAvailable = _minInt(
           customer.creditLimitMinor,
           customer.availableCreditMinor + reservation.creditMinor,
         );
@@ -183,17 +181,15 @@ final class CustomerDatabase extends _$CustomerDatabase {
   Future<void> reconcileCreditReservations({
     required String tenantId,
     required Set<String> activeSaleOperationIds,
-  }) {
-    return transaction(() async {
-      final reservations = await (select(pendingCustomerCredits)
-            ..where((row) => row.tenantId.equals(tenantId)))
-          .get();
-      for (final reservation in reservations) {
-        if (!activeSaleOperationIds.contains(reservation.clientOperationId)) {
-          await releaseCreditReservation(reservation.clientOperationId);
-        }
+  }) async {
+    final reservations = await (select(pendingCustomerCredits)
+          ..where((row) => row.tenantId.equals(tenantId)))
+        .get();
+    for (final reservation in reservations) {
+      if (!activeSaleOperationIds.contains(reservation.clientOperationId)) {
+        await releaseCreditReservation(reservation.clientOperationId);
       }
-    });
+    }
   }
 
   Future<void> queuePayment({
@@ -213,7 +209,7 @@ final class CustomerDatabase extends _$CustomerDatabase {
       }
       final amountMinor = payment.amountMinor.value;
       if (amountMinor <= 0) throw StateError('Payment amount must be greater than zero.');
-      final applied = math.min(amountMinor, customer.outstandingMinor);
+      final applied = _minInt(amountMinor, customer.outstandingMinor);
 
       await into(pendingCustomerPayments).insert(
         payment.copyWith(projectedAppliedMinor: Value(applied)),
@@ -255,7 +251,7 @@ final class CustomerDatabase extends _$CustomerDatabase {
           await _writeProjection(
             customer,
             outstandingMinor: customer.outstandingMinor + applied,
-            availableCreditMinor: math.max(0, customer.availableCreditMinor - applied),
+            availableCreditMinor: _maxInt(0, customer.availableCreditMinor - applied),
           );
         }
       }
@@ -280,20 +276,22 @@ final class CustomerDatabase extends _$CustomerDatabase {
   }
 
   Stream<int> watchPendingCount() {
+    final count = pendingCustomerPayments.clientOperationId.count();
     return (selectOnly(pendingCustomerPayments)
-          ..addColumns([pendingCustomerPayments.clientOperationId.count()])
+          ..addColumns([count])
           ..where(pendingCustomerPayments.status.equals('pending') |
               pendingCustomerPayments.status.equals('syncing')))
         .watchSingle()
-        .map((row) => row.read(pendingCustomerPayments.clientOperationId.count()) ?? 0);
+        .map((row) => row.read(count) ?? 0);
   }
 
   Stream<int> watchConflictCount() {
+    final count = pendingCustomerPayments.clientOperationId.count();
     return (selectOnly(pendingCustomerPayments)
-          ..addColumns([pendingCustomerPayments.clientOperationId.count()])
+          ..addColumns([count])
           ..where(pendingCustomerPayments.status.equals('conflict')))
         .watchSingle()
-        .map((row) => row.read(pendingCustomerPayments.clientOperationId.count()) ?? 0);
+        .map((row) => row.read(count) ?? 0);
   }
 
   Future<void> _reapplyCreditReservations(String tenantId) async {
@@ -317,7 +315,7 @@ final class CustomerDatabase extends _$CustomerDatabase {
     for (final payment in payments) {
       final customer = await getCustomer(tenantId: tenantId, customerId: payment.customerId);
       if (customer == null) continue;
-      final applied = math.min(payment.amountMinor, customer.outstandingMinor);
+      final applied = _minInt(payment.amountMinor, customer.outstandingMinor);
       await (update(pendingCustomerPayments)
             ..where((row) => row.clientOperationId.equals(payment.clientOperationId)))
           .write(PendingCustomerPaymentsCompanion(projectedAppliedMinor: Value(applied)));
@@ -329,15 +327,15 @@ final class CustomerDatabase extends _$CustomerDatabase {
     return _writeProjection(
       customer,
       outstandingMinor: customer.outstandingMinor + creditMinor,
-      availableCreditMinor: math.max(0, customer.availableCreditMinor - creditMinor),
+      availableCreditMinor: _maxInt(0, customer.availableCreditMinor - creditMinor),
     );
   }
 
   Future<void> _applyPayment(CachedCustomer customer, int appliedMinor) {
     return _writeProjection(
       customer,
-      outstandingMinor: math.max(0, customer.outstandingMinor - appliedMinor),
-      availableCreditMinor: math.min(
+      outstandingMinor: _maxInt(0, customer.outstandingMinor - appliedMinor),
+      availableCreditMinor: _minInt(
         customer.creditLimitMinor,
         customer.availableCreditMinor + appliedMinor,
       ),
@@ -362,3 +360,6 @@ final class CustomerDatabase extends _$CustomerDatabase {
     );
   }
 }
+
+int _minInt(int a, int b) => a < b ? a : b;
+int _maxInt(int a, int b) => a > b ? a : b;
