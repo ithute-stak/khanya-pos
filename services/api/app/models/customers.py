@@ -4,7 +4,16 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -15,6 +24,11 @@ class Customer(Base):
     __tablename__ = "customers"
     __table_args__ = (
         UniqueConstraint("tenant_id", "code", name="uq_customers_tenant_code"),
+        CheckConstraint("credit_limit >= 0", name="ck_customers_credit_limit_nonnegative"),
+        CheckConstraint(
+            "payment_terms_days BETWEEN 0 AND 365",
+            name="ck_customers_payment_terms_days",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -46,6 +60,11 @@ class CustomerPayment(Base):
     __table_args__ = (
         UniqueConstraint(
             "tenant_id", "client_operation_id", name="uq_customer_payments_tenant_operation"
+        ),
+        CheckConstraint("amount > 0", name="ck_customer_payments_amount_positive"),
+        CheckConstraint(
+            "method IN ('cash','card','mobile_money','bank_transfer')",
+            name="ck_customer_payments_method",
         ),
     )
 
@@ -82,6 +101,7 @@ class CustomerPaymentAllocation(Base):
     __tablename__ = "customer_payment_allocations"
     __table_args__ = (
         UniqueConstraint("payment_id", "sale_id", name="uq_customer_payment_allocations_payment_sale"),
+        CheckConstraint("amount > 0", name="ck_customer_payment_allocations_amount_positive"),
     )
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
