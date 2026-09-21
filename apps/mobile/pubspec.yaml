@@ -1,5 +1,5 @@
 name: khanya_pos
-description: Khanya Resources Small Business POS mobile application.
+description: Khanya Resources cross-platform point-of-sale client for mobile, tablet, and Windows.
 publish_to: "none"
 version: 0.4.0+4
 
