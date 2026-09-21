@@ -1,7 +1,9 @@
 from decimal import Decimal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import Principal, TenantContext, get_current_principal, require_permissions
@@ -14,6 +16,43 @@ from app.services.pricing import money, quantity
 router = APIRouter()
 
 
+async def _adjustment_replay(
+    db: AsyncSession,
+    *,
+    tenant_id: UUID,
+    branch_id: UUID,
+    product_id: UUID,
+    operation_id: UUID,
+) -> dict[str, object] | None:
+    existing_result = await db.execute(
+        select(StockMovement).where(
+            StockMovement.tenant_id == tenant_id,
+            StockMovement.client_operation_id == operation_id,
+        )
+    )
+    existing = existing_result.scalar_one_or_none()
+    if existing is None:
+        return None
+    if existing.branch_id != branch_id or existing.product_id != product_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Client operation ID was already used for a different stock adjustment",
+        )
+    stock_result = await db.execute(
+        select(BranchProductStock).where(
+            BranchProductStock.branch_id == branch_id,
+            BranchProductStock.product_id == product_id,
+        )
+    )
+    stock = stock_result.scalar_one_or_none()
+    return {
+        "movement_id": existing.id,
+        "product_id": existing.product_id,
+        "on_hand": stock.on_hand if stock else Decimal("0"),
+        "idempotent_replay": True,
+    }
+
+
 @router.post("/adjustments", status_code=status.HTTP_201_CREATED)
 async def adjust_stock(
     payload: StockAdjustmentRequest,
@@ -24,38 +63,41 @@ async def adjust_stock(
     if context.branch is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Branch-ID is required")
 
-    existing_result = await db.execute(
-        select(StockMovement).where(
-            StockMovement.tenant_id == context.tenant.id,
-            StockMovement.client_operation_id == payload.client_operation_id,
-        )
+    replay = await _adjustment_replay(
+        db,
+        tenant_id=context.tenant.id,
+        branch_id=context.branch.id,
+        product_id=payload.product_id,
+        operation_id=payload.client_operation_id,
     )
-    existing = existing_result.scalar_one_or_none()
-    if existing is not None:
-        stock_result = await db.execute(
-            select(BranchProductStock).where(
-                BranchProductStock.branch_id == context.branch.id,
-                BranchProductStock.product_id == existing.product_id,
-            )
-        )
-        stock = stock_result.scalar_one_or_none()
-        return {
-            "movement_id": existing.id,
-            "product_id": existing.product_id,
-            "on_hand": stock.on_hand if stock else Decimal("0"),
-            "idempotent_replay": True,
-        }
+    if replay is not None:
+        return replay
 
     product_result = await db.execute(
-        select(Product).where(
+        select(Product)
+        .where(
             Product.id == payload.product_id,
             Product.tenant_id == context.tenant.id,
             Product.is_active.is_(True),
         )
+        .with_for_update()
     )
     product = product_result.scalar_one_or_none()
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+
+    # The product row lock serializes creation of the first branch stock row.
+    # Re-check the operation after acquiring it in case another device committed
+    # the same offline operation while this request was waiting.
+    replay = await _adjustment_replay(
+        db,
+        tenant_id=context.tenant.id,
+        branch_id=context.branch.id,
+        product_id=payload.product_id,
+        operation_id=payload.client_operation_id,
+    )
+    if replay is not None:
+        return replay
 
     stock_result = await db.execute(
         select(BranchProductStock)
@@ -108,7 +150,20 @@ async def adjust_stock(
             "movement_id": str(movement.id),
         },
     )
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        replay = await _adjustment_replay(
+            db,
+            tenant_id=context.tenant.id,
+            branch_id=context.branch.id,
+            product_id=payload.product_id,
+            operation_id=payload.client_operation_id,
+        )
+        if replay is not None:
+            return replay
+        raise
     return {
         "movement_id": movement.id,
         "product_id": product.id,
