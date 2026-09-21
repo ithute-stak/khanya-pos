@@ -1,3 +1,4 @@
+from app.models.accounting import Account, JournalEntry, JournalLine
 from app.models.base import Base
 from app.models.commerce import (
     BranchProductStock,
@@ -28,12 +29,15 @@ from app.models.purchasing import (
 )
 
 __all__ = [
+    "Account",
     "Base",
     "Branch",
     "BranchProductStock",
     "BusinessDocument",
     "Device",
     "Expense",
+    "JournalEntry",
+    "JournalLine",
     "MembershipBranch",
     "OutboxEvent",
     "Payment",
