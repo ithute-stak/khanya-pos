@@ -9,6 +9,7 @@ import 'package:khanya_pos/features/auth/presentation/bloc/session_bloc.dart';
 import 'package:khanya_pos/features/catalog/data/product_repository.dart';
 import 'package:khanya_pos/features/catalog/domain/product_summary.dart';
 import 'package:khanya_pos/features/catalog/presentation/bloc/product_catalog_bloc.dart';
+import 'package:khanya_pos/features/pos/data/held_sales_repository.dart';
 import 'package:khanya_pos/features/pos/data/sales_repository.dart';
 import 'package:khanya_pos/features/pos/domain/cart.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_service.dart';
@@ -16,6 +17,7 @@ import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 import 'package:khanya_pos/features/pos/presentation/bloc/cart_bloc.dart';
 import 'package:khanya_pos/features/pos/presentation/bloc/checkout_bloc.dart';
 import 'package:khanya_pos/features/pos/presentation/cash_tender_dialog.dart';
+import 'package:khanya_pos/features/pos/presentation/held_sales_dialog.dart';
 import 'package:khanya_pos/features/pos/printing/receipt_printer.dart';
 import 'package:khanya_pos/features/pos/printing/sale_receipt.dart';
 
@@ -93,6 +95,142 @@ class _PosViewState extends State<_PosView> {
   Future<void> _requestCheckout(BuildContext context) async {
     final cart = context.read<CartBloc>().state;
     await _submitCheckout(context, cart);
+  }
+
+  Future<void> _holdCurrentSale() async {
+    final cart = context.read<CartBloc>().state;
+    if (cart.lines.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add products before holding a sale.')),
+      );
+      return;
+    }
+
+    final label = await showHoldSaleDialog(context);
+    if (label == null || !mounted) return;
+
+    try {
+      final heldSale = await context.read<HeldSalesRepository>().hold(
+            lines: List<CartLine>.unmodifiable(cart.lines),
+            paymentMethod: cart.paymentMethod,
+            label: label,
+          );
+      if (!mounted) return;
+      context.read<CartBloc>().add(const CartCleared());
+      context.read<CheckoutBloc>().add(const CheckoutReset());
+      _clearSearch(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sale held as “${heldSale.label}”.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('The sale could not be held. The current cart was kept.')),
+      );
+    }
+  }
+
+  Future<void> _resumeHeldSale() async {
+    final repository = context.read<HeldSalesRepository>();
+    final heldSale = await showHeldSalesDialog(context, repository: repository);
+    if (heldSale == null || !mounted) return;
+
+    final currentCart = context.read<CartBloc>().state;
+    if (currentCart.lines.isNotEmpty) {
+      final replace = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              icon: const Icon(Icons.swap_horiz, size: 38),
+              title: const Text('Replace current cart?'),
+              content: const Text(
+                'Resuming this held sale will replace the products currently in the cart. You can hold the current cart first if you need to keep it.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Replace cart'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (!replace || !mounted) return;
+    }
+
+    final products = context.read<ProductCatalogBloc>().state.products;
+    final restoredLines = <CartLine>[];
+    var adjusted = false;
+
+    for (final heldLine in heldSale.lines) {
+      ProductSummary? product;
+      for (final candidate in products) {
+        if (candidate.id == heldLine.productId) {
+          product = candidate;
+          break;
+        }
+      }
+      if (product == null) {
+        adjusted = true;
+        continue;
+      }
+
+      var quantity = heldLine.quantity;
+      final available = product.tracksStock ? product.availableWholeUnits : null;
+      if (available != null) {
+        if (available <= 0) {
+          adjusted = true;
+          continue;
+        }
+        if (quantity > available) {
+          quantity = available;
+          adjusted = true;
+        }
+      }
+      if (quantity <= 0) {
+        adjusted = true;
+        continue;
+      }
+      restoredLines.add(CartLine(product: product.toPosProduct(), quantity: quantity));
+    }
+
+    if (restoredLines.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('None of the held items are currently available. The held sale was kept.'),
+        ),
+      );
+      return;
+    }
+
+    context.read<CartBloc>().add(
+          CartReplaced(
+            lines: List<CartLine>.unmodifiable(restoredLines),
+            paymentMethod: heldSale.paymentMethod,
+          ),
+        );
+    context.read<CheckoutBloc>().add(const CheckoutReset());
+    _clearSearch(context);
+
+    var removed = true;
+    try {
+      await repository.remove(heldSale.id);
+    } catch (_) {
+      removed = false;
+    }
+    if (!mounted) return;
+
+    final message = StringBuffer('Resumed “${heldSale.label}”.');
+    if (adjusted) {
+      message.write(' Some items were unavailable or quantities were reduced to current stock.');
+    }
+    if (!removed) {
+      message.write(' Its held copy could not be removed, so it may still appear in Held Sales.');
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message.toString())));
   }
 
   Future<PosHardwareSettings> _readHardwareSettings() async {
@@ -324,6 +462,12 @@ class _PosViewState extends State<_PosView> {
         const SingleActivator(LogicalKeyboardKey.f9): () {
           _requestCheckout(context);
         },
+        const SingleActivator(LogicalKeyboardKey.keyH, control: true): () {
+          _holdCurrentSale();
+        },
+        const SingleActivator(LogicalKeyboardKey.keyH, control: true, shift: true): () {
+          _resumeHeldSale();
+        },
         const SingleActivator(LogicalKeyboardKey.f11): _openDrawer,
         const SingleActivator(LogicalKeyboardKey.f12): _printLastReceipt,
         const SingleActivator(LogicalKeyboardKey.keyP, control: true): _printLastReceipt,
@@ -345,13 +489,25 @@ class _PosViewState extends State<_PosView> {
             appBar: AppBar(
               title: const Text('New Sale'),
               actions: [
-                if (MediaQuery.sizeOf(context).width >= 1100)
+                if (MediaQuery.sizeOf(context).width >= 1180)
                   const Padding(
                     padding: EdgeInsets.only(right: 12),
                     child: Center(
-                      child: Text('F4 Search  •  F9 Pay  •  F11 Drawer  •  F12 Print  •  Esc Clear'),
+                      child: Text('F4 Search  •  F9 Pay  •  Ctrl+H Hold  •  F11 Drawer  •  F12 Print'),
                     ),
                   ),
+                BlocBuilder<CartBloc, CartState>(
+                  builder: (context, cart) => IconButton(
+                    tooltip: 'Hold current sale (Ctrl+H)',
+                    onPressed: cart.lines.isEmpty ? null : _holdCurrentSale,
+                    icon: const Icon(Icons.pause_circle_outline),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Held sales (Ctrl+Shift+H)',
+                  onPressed: _resumeHeldSale,
+                  icon: const Icon(Icons.restore_outlined),
+                ),
                 IconButton(
                   tooltip: 'Open cash drawer (F11)',
                   onPressed: _openDrawer,
