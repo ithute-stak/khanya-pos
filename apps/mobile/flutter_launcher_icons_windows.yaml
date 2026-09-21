@@ -1,0 +1,8 @@
+flutter_launcher_icons:
+  android: false
+  ios: false
+  image_path: assets/branding/khanya_app_icon_safe.jpg
+  windows:
+    generate: true
+    image_path: assets/branding/khanya_app_icon_safe.jpg
+    icon_size: 256
