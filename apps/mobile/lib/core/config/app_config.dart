@@ -1,10 +1,22 @@
+import 'dart:io';
+
 class AppConfig {
   const AppConfig._();
 
-  static const apiBaseUrl = String.fromEnvironment(
+  static const _configuredApiBaseUrl = String.fromEnvironment(
     'KHANYA_API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8000/api/v1',
+    defaultValue: '',
   );
+
+  static String get apiBaseUrl {
+    final configured = _configuredApiBaseUrl.trim();
+    if (configured.isNotEmpty) return configured;
+
+    // Android emulators reach the host through 10.0.2.2. Native desktop
+    // clients can use the normal loopback address during local development.
+    if (Platform.isAndroid) return 'http://10.0.2.2:8000/api/v1';
+    return 'http://127.0.0.1:8000/api/v1';
+  }
 
   static Uri tenantWebSocketUri({
     required String tenantId,

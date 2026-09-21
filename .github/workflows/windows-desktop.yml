@@ -1,0 +1,73 @@
+name: Windows Desktop
+
+on:
+  push:
+    branches: [main, "feature/**"]
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/windows-desktop.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/windows-desktop.yml"
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: "Khanya API base URL compiled into this Windows build"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Prepare Windows project
+        shell: pwsh
+        run: ./tool/windows/bootstrap.ps1
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $apiBaseUrl = "${{ github.event.inputs.api_base_url }}"
+          if ([string]::IsNullOrWhiteSpace($apiBaseUrl)) {
+            $apiBaseUrl = "http://127.0.0.1:8000/api/v1"
+          }
+          ./tool/windows/build_installer.ps1 -ApiBaseUrl $apiBaseUrl
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: khanya-pos-windows-installer
+          path: apps/mobile/build/windows/installer/KhanyaPOS-Setup.exe
+          if-no-files-found: error
+          retention-days: 14
