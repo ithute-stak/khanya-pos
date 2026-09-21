@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -10,6 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.commerce import BranchProductStock, Payment, Product, Sale, SaleLine, StockMovement
 from app.schemas.commerce import SaleCompleteRequest
 from app.services.accounting import PostingLine, payment_account_code, post_journal
+from app.services.customers import (
+    CustomerCreditLimitError,
+    CustomerValidationError,
+    assert_credit_available,
+)
 from app.services.idempotency import acquire_operation_lock
 from app.services.outbox import enqueue_event
 from app.services.pricing import line_total, money, quantity, unit_cost
@@ -37,9 +42,12 @@ class CompletedSale:
     id: UUID
     sale_number: str
     client_operation_id: UUID
+    customer_id: UUID | None
     total: Decimal
+    balance_due: Decimal
     status: str
     payment_status: str
+    due_at: datetime | None
     completed_at: datetime
     idempotent_replay: bool = False
 
@@ -60,9 +68,12 @@ def _as_result(sale: Sale, *, replay: bool) -> CompletedSale:
         id=sale.id,
         sale_number=sale.sale_number,
         client_operation_id=sale.client_operation_id,
-        total=sale.total,
+        customer_id=sale.customer_id,
+        total=money(sale.total),
+        balance_due=money(sale.balance_due),
         status=sale.status,
         payment_status=sale.payment_status,
+        due_at=sale.due_at,
         completed_at=sale.completed_at,
         idempotent_replay=replay,
     )
@@ -88,7 +99,9 @@ async def complete_sale(
 
     requested: dict[UUID, Decimal] = {}
     for item in payload.items:
-        requested[item.product_id] = quantity(requested.get(item.product_id, Decimal("0")) + item.quantity)
+        requested[item.product_id] = quantity(
+            requested.get(item.product_id, Decimal("0")) + item.quantity
+        )
 
     locked_products: dict[UUID, Product] = {}
     locked_stocks: dict[UUID, BranchProductStock | None] = {}
@@ -123,14 +136,48 @@ async def complete_sale(
         subtotal += line_total(product.selling_price, requested[product_id])
 
     subtotal = money(subtotal)
-    payment_total = money(sum((money(payment.amount) for payment in payload.payments), Decimal("0.00")))
-    if payment_total != subtotal:
-        raise PaymentMismatchError(f"Payments total {payment_total} does not equal sale total {subtotal}")
+    payment_total = money(
+        sum((money(payment.amount) for payment in payload.payments), Decimal("0.00"))
+    )
+    if payment_total > subtotal:
+        raise PaymentMismatchError(
+            f"Payments total {payment_total} cannot exceed sale total {subtotal}"
+        )
+
+    balance_due = money(subtotal - payment_total)
+    customer = None
+    if payload.customer_id is not None:
+        try:
+            customer = await assert_credit_available(
+                db,
+                tenant_id=tenant_id,
+                customer_id=payload.customer_id,
+                additional_credit=balance_due,
+            )
+        except (CustomerValidationError, CustomerCreditLimitError) as exc:
+            raise PaymentMismatchError(str(exc)) from exc
+    elif balance_due > 0:
+        raise PaymentMismatchError(
+            f"Payments total {payment_total} is short by {balance_due}; a customer is required for credit"
+        )
+
+    completed_at = datetime.now(timezone.utc)
+    due_at = None
+    if balance_due > 0 and customer is not None:
+        due_at = completed_at + timedelta(days=customer.payment_terms_days)
+
+    if balance_due == 0:
+        payment_status = "paid"
+    elif payment_total > 0:
+        payment_status = "partial"
+    else:
+        payment_status = "unpaid"
 
     sale = Sale(
         tenant_id=tenant_id,
         branch_id=branch_id,
         cashier_user_id=cashier_user_id,
+        customer_id=payload.customer_id,
         client_operation_id=payload.client_operation_id,
         sale_number=_sale_number(),
         status="completed",
@@ -138,7 +185,10 @@ async def complete_sale(
         discount_total=Decimal("0.00"),
         tax_total=Decimal("0.00"),
         total=subtotal,
-        payment_status="paid",
+        balance_due=balance_due,
+        payment_status=payment_status,
+        due_at=due_at,
+        completed_at=completed_at,
     )
     db.add(sale)
     await db.flush()
@@ -214,6 +264,11 @@ async def complete_sale(
         )
         for payment in payload.payments
     ]
+    if balance_due > 0:
+        accounting_lines.append(
+            PostingLine(account_code="1100", debit=balance_due, memo="Customer accounts receivable")
+        )
+
     net_revenue = money(sale.total - sale.tax_total)
     if net_revenue > 0:
         accounting_lines.append(
@@ -252,7 +307,10 @@ async def complete_sale(
         payload={
             "sale_id": str(sale.id),
             "sale_number": sale.sale_number,
+            "customer_id": str(sale.customer_id) if sale.customer_id else None,
             "total": str(sale.total),
+            "balance_due": str(sale.balance_due),
+            "payment_status": sale.payment_status,
             "client_operation_id": str(sale.client_operation_id),
         },
     )

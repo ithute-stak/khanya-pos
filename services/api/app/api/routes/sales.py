@@ -45,9 +45,12 @@ async def complete_pos_sale(
         "id": sale.id,
         "sale_number": sale.sale_number,
         "client_operation_id": sale.client_operation_id,
+        "customer_id": sale.customer_id,
         "total": sale.total,
+        "balance_due": sale.balance_due,
         "status": sale.status,
         "payment_status": sale.payment_status,
+        "due_at": sale.due_at,
         "completed_at": sale.completed_at,
         "idempotent_replay": sale.idempotent_replay,
     }

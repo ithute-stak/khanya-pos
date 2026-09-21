@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     accounting,
     auth,
+    customers,
     devices,
     documents,
     expenses,
@@ -11,6 +12,7 @@ from app.api.routes import (
     products,
     purchases,
     realtime,
+    receivables,
     sales,
     staff,
     suppliers,
@@ -26,6 +28,8 @@ api_router.include_router(devices.router, prefix="/devices", tags=["devices"])
 api_router.include_router(products.router, prefix="/products", tags=["products"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
 api_router.include_router(sales.router, prefix="/pos/sales", tags=["sales"])
+api_router.include_router(customers.router, prefix="/customers", tags=["customers"])
+api_router.include_router(receivables.router, prefix="/customers", tags=["customers", "accounting"])
 api_router.include_router(suppliers.router, prefix="/suppliers", tags=["suppliers"])
 api_router.include_router(purchases.router, prefix="/purchases", tags=["purchases"])
 api_router.include_router(expenses.router, prefix="/expenses", tags=["expenses"])

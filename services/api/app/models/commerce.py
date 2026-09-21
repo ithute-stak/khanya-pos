@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -77,11 +77,20 @@ class Sale(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "tenant_id", "client_operation_id", name="uq_sales_tenant_client_operation"
         ),
         UniqueConstraint("tenant_id", "sale_number", name="uq_sales_tenant_sale_number"),
+        CheckConstraint("balance_due >= 0", name="ck_sales_balance_due_nonnegative"),
+        CheckConstraint("balance_due <= total", name="ck_sales_balance_due_not_over_total"),
+        CheckConstraint(
+            "payment_status IN ('paid','partial','unpaid')",
+            name="ck_sales_payment_status",
+        ),
     )
 
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
     branch_id: Mapped[UUID] = mapped_column(ForeignKey("branches.id", ondelete="CASCADE"), index=True)
     cashier_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    customer_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     client_operation_id: Mapped[UUID] = mapped_column(index=True)
     sale_number: Mapped[str] = mapped_column(String(64), index=True)
     status: Mapped[str] = mapped_column(String(24), default="completed", index=True)
@@ -89,7 +98,9 @@ class Sale(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     discount_total: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0.00"))
     tax_total: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0.00"))
     total: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    balance_due: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0.00"), nullable=False)
     payment_status: Mapped[str] = mapped_column(String(24), default="paid", index=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     completed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True
     )

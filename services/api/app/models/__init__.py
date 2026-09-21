@@ -9,6 +9,7 @@ from app.models.commerce import (
     SaleLine,
     StockMovement,
 )
+from app.models.customers import Customer, CustomerPayment, CustomerPaymentAllocation
 from app.models.identity import (
     Branch,
     Device,
@@ -35,6 +36,9 @@ __all__ = [
     "Branch",
     "BranchProductStock",
     "BusinessDocument",
+    "Customer",
+    "CustomerPayment",
+    "CustomerPaymentAllocation",
     "Device",
     "Expense",
     "JournalEntry",
