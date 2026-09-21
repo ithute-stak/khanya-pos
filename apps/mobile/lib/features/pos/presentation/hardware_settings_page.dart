@@ -40,9 +40,11 @@ class _HardwareSettingsPageState extends State<HardwareSettingsPage> {
       final repository = context.read<PosHardwareSettingsRepository>();
       final settings = await repository.read();
       final info = await Printing.info();
-      final printers = info.canListPrinters
-          ? (await Printing.listPrinters()).map((printer) => printer.name).toSet().toList()..sort()
-          : <String>[];
+      final printers = <String>[];
+      if (info.canListPrinters) {
+        printers.addAll((await Printing.listPrinters()).map((printer) => printer.name).toSet());
+        printers.sort();
+      }
       if (settings.hasPrinter && !printers.contains(settings.printerName)) {
         printers.add(settings.printerName!);
         printers.sort();
@@ -63,9 +65,10 @@ class _HardwareSettingsPageState extends State<HardwareSettingsPage> {
   }
 
   Future<void> _save() async {
+    final repository = context.read<PosHardwareSettingsRepository>();
     setState(() => _saving = true);
     try {
-      await context.read<PosHardwareSettingsRepository>().write(_settings);
+      await repository.write(_settings);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('POS hardware settings saved on this computer.')),
