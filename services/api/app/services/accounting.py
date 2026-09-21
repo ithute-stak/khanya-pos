@@ -7,13 +7,17 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.accounting import Account, JournalEntry, JournalLine
+from app.models.accounting import Account, AccountingSettings, JournalEntry, JournalLine
 from app.models.commerce import BranchProductStock, Product, Sale
-from app.models.purchasing import Expense, Purchase, SupplierPayment
+from app.models.purchasing import Expense, Purchase, PurchaseLine, SupplierPayment
 from app.services.pricing import money
 
 
 class AccountingError(ValueError):
+    pass
+
+
+class AccountingPeriodLockedError(AccountingError):
     pass
 
 
@@ -117,6 +121,55 @@ def expense_account_code(category: str) -> str:
     return EXPENSE_ACCOUNT_CODES.get(normalized, "6990")
 
 
+async def ensure_accounting_settings(
+    db: AsyncSession,
+    tenant_id: UUID,
+) -> AccountingSettings:
+    await db.execute(
+        pg_insert(AccountingSettings)
+        .values(
+            id=uuid4(),
+            tenant_id=tenant_id,
+            base_currency="LSL",
+            fiscal_year_start_month=1,
+        )
+        .on_conflict_do_nothing(index_elements=["tenant_id"])
+    )
+    result = await db.execute(
+        select(AccountingSettings).where(AccountingSettings.tenant_id == tenant_id)
+    )
+    return result.scalar_one()
+
+
+async def advance_period_lock(
+    db: AsyncSession,
+    *,
+    tenant_id: UUID,
+    user_id: UUID,
+    locked_through: datetime,
+    reason: str,
+) -> AccountingSettings:
+    requested = _aware(locked_through)
+    now = datetime.now(timezone.utc)
+    if requested > now:
+        raise AccountingError("Accounting period lock cannot be set in the future")
+
+    await ensure_accounting_settings(db, tenant_id)
+    result = await db.execute(
+        select(AccountingSettings)
+        .where(AccountingSettings.tenant_id == tenant_id)
+        .with_for_update()
+    )
+    settings = result.scalar_one()
+    if settings.locked_through is not None and requested <= _aware(settings.locked_through):
+        raise AccountingError("Accounting period lock may only move forward")
+    settings.locked_through = requested
+    settings.locked_by_user_id = user_id
+    settings.lock_reason = reason.strip()
+    await db.flush()
+    return settings
+
+
 async def ensure_default_chart(db: AsyncSession, tenant_id: UUID) -> dict[str, Account]:
     for code, name, account_type, report_group, normal_balance in DEFAULT_ACCOUNTS:
         await db.execute(
@@ -148,6 +201,19 @@ def _aware(value: datetime) -> datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
+async def _assert_period_open(
+    db: AsyncSession,
+    *,
+    tenant_id: UUID,
+    occurred_at: datetime,
+) -> None:
+    settings = await ensure_accounting_settings(db, tenant_id)
+    if settings.locked_through is not None and _aware(occurred_at) <= _aware(settings.locked_through):
+        raise AccountingPeriodLockedError(
+            f"Accounting period is locked through {_aware(settings.locked_through).isoformat()}"
+        )
+
+
 async def post_journal(
     db: AsyncSession,
     *,
@@ -172,6 +238,8 @@ async def post_journal(
     existing = existing_result.scalar_one_or_none()
     if existing is not None:
         return existing
+
+    await _assert_period_open(db, tenant_id=tenant_id, occurred_at=occurred_at)
 
     normalized: list[PostingLine] = []
     for line in lines:
@@ -419,7 +487,8 @@ async def profit_and_loss(
         .order_by(Account.code)
     )
 
-    revenue = Decimal("0.00")
+    sales_revenue = Decimal("0.00")
+    other_income = Decimal("0.00")
     cost_of_sales = Decimal("0.00")
     operating_expenses = Decimal("0.00")
     accounts: list[dict[str, object]] = []
@@ -427,21 +496,33 @@ async def profit_and_loss(
         debit = money(Decimal(debits or 0))
         credit = money(Decimal(credits or 0))
         value = money(credit - debit) if account.account_type == "income" else money(debit - credit)
-        if account.account_type == "income":
-            revenue += value
+        if account.account_type == "income" and account.report_group == "revenue":
+            sales_revenue += value
+        elif account.account_type == "income":
+            other_income += value
         elif account.report_group == "cost_of_sales":
             cost_of_sales += value
         else:
             operating_expenses += value
-        accounts.append({"code": account.code, "name": account.name, "amount": value})
+        accounts.append(
+            {
+                "code": account.code,
+                "name": account.name,
+                "report_group": account.report_group,
+                "amount": value,
+            }
+        )
 
-    revenue = money(revenue)
+    sales_revenue = money(sales_revenue)
+    other_income = money(other_income)
     cost_of_sales = money(cost_of_sales)
     operating_expenses = money(operating_expenses)
-    gross_profit = money(revenue - cost_of_sales)
-    net_profit = money(gross_profit - operating_expenses)
+    gross_profit = money(sales_revenue - cost_of_sales)
+    net_profit = money(gross_profit + other_income - operating_expenses)
     return {
-        "revenue": revenue,
+        "revenue": sales_revenue,
+        "sales_revenue": sales_revenue,
+        "other_income": other_income,
         "cost_of_sales": cost_of_sales,
         "gross_profit": gross_profit,
         "operating_expenses": operating_expenses,
@@ -510,6 +591,22 @@ async def ledger_health(
             Product.tenant_id == tenant_id,
         )
     )
+    transit_stmt = (
+        select(
+            func.coalesce(
+                func.sum((PurchaseLine.quantity - PurchaseLine.quantity_received) * PurchaseLine.unit_cost),
+                0,
+            )
+        )
+        .join(Purchase, Purchase.id == PurchaseLine.purchase_id)
+        .join(Product, Product.id == PurchaseLine.product_id)
+        .where(
+            Purchase.tenant_id == tenant_id,
+            Product.tenant_id == tenant_id,
+            Product.track_stock.is_(True),
+            PurchaseLine.quantity > PurchaseLine.quantity_received,
+        )
+    )
     ap_stmt = select(func.coalesce(func.sum(Purchase.balance_due), 0)).where(
         Purchase.tenant_id == tenant_id
     )
@@ -519,10 +616,12 @@ async def ledger_health(
     )
     if branch_id is not None:
         inventory_stmt = inventory_stmt.where(BranchProductStock.branch_id == branch_id)
+        transit_stmt = transit_stmt.where(Purchase.branch_id == branch_id)
         ap_stmt = ap_stmt.where(Purchase.branch_id == branch_id)
         advance_stmt = advance_stmt.where(SupplierPayment.branch_id == branch_id)
 
     inventory_subledger = money(Decimal(await db.scalar(inventory_stmt) or 0))
+    transit_subledger = money(Decimal(await db.scalar(transit_stmt) or 0))
     payable_subledger = money(Decimal(await db.scalar(ap_stmt) or 0))
     advances_subledger = money(Decimal(await db.scalar(advance_stmt) or 0))
 
@@ -547,11 +646,13 @@ async def ledger_health(
 
     trial_difference = money(debits - credits)
     inventory_difference = money(by_code.get("1200", Decimal("0.00")) - inventory_subledger)
+    transit_difference = money(by_code.get("1210", Decimal("0.00")) - transit_subledger)
     payable_difference = money(by_code.get("2000", Decimal("0.00")) - payable_subledger)
     advance_difference = money(by_code.get("1400", Decimal("0.00")) - advances_subledger)
     healthy = (
         trial_difference == 0
         and inventory_difference == 0
+        and transit_difference == 0
         and payable_difference == 0
         and advance_difference == 0
         and missing_sales == 0
@@ -564,6 +665,9 @@ async def ledger_health(
         "inventory_gl": money(by_code.get("1200", Decimal("0.00"))),
         "inventory_subledger": inventory_subledger,
         "inventory_difference": inventory_difference,
+        "stock_in_transit_gl": money(by_code.get("1210", Decimal("0.00"))),
+        "stock_in_transit_subledger": transit_subledger,
+        "stock_in_transit_difference": transit_difference,
         "accounts_payable_gl": money(by_code.get("2000", Decimal("0.00"))),
         "accounts_payable_subledger": payable_subledger,
         "accounts_payable_difference": payable_difference,
