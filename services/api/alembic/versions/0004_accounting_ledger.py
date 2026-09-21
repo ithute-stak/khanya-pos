@@ -22,6 +22,26 @@ def _timestamps() -> list[sa.Column]:
 
 
 def upgrade() -> None:
+    op.add_column(
+        "supplier_payments",
+        sa.Column("client_operation_id", sa.Uuid(), nullable=True),
+    )
+    op.execute(
+        "UPDATE supplier_payments SET client_operation_id = gen_random_uuid() "
+        "WHERE client_operation_id IS NULL"
+    )
+    op.alter_column("supplier_payments", "client_operation_id", nullable=False)
+    op.create_unique_constraint(
+        "uq_supplier_payments_tenant_client_operation",
+        "supplier_payments",
+        ["tenant_id", "client_operation_id"],
+    )
+    op.create_index(
+        "ix_supplier_payments_client_operation_id",
+        "supplier_payments",
+        ["client_operation_id"],
+    )
+
     op.create_table(
         "accounts",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -101,3 +121,10 @@ def downgrade() -> None:
     op.drop_table("journal_lines")
     op.drop_table("journal_entries")
     op.drop_table("accounts")
+    op.drop_index("ix_supplier_payments_client_operation_id", table_name="supplier_payments")
+    op.drop_constraint(
+        "uq_supplier_payments_tenant_client_operation",
+        "supplier_payments",
+        type_="unique",
+    )
+    op.drop_column("supplier_payments", "client_operation_id")
