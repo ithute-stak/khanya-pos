@@ -52,7 +52,7 @@ async def test_purchase_receipt_updates_stock_cost_supplier_balance_and_is_idemp
             sku=f"OIL-{suffix}",
             unit="bottle",
             selling_price=Decimal("52.00"),
-            cost_price=Decimal("40.00"),
+            cost_price=Decimal("40.000000"),
             reorder_level=Decimal("2.000"),
             track_stock=True,
         )
@@ -116,7 +116,7 @@ async def test_purchase_receipt_updates_stock_cost_supplier_balance_and_is_idemp
             await db.execute(select(Product).where(Product.id == product.id))
         ).scalar_one()
         assert stock.on_hand == Decimal("15.000")
-        assert refreshed_product.cost_price == Decimal("40.67")
+        assert refreshed_product.cost_price == Decimal("40.666667")
 
         purchase_count = await db.scalar(
             select(func.count(Purchase.id)).where(
