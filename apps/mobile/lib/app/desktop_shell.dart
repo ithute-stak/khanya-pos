@@ -223,19 +223,16 @@ class _DesktopNavItem {
     required this.path,
     required this.icon,
     this.shortcut,
-    this.prefixes = const [],
   });
 
   final String label;
   final String path;
   final IconData icon;
   final String? shortcut;
-  final List<String> prefixes;
 
   bool matches(String location) {
     if (path == '/') return location == '/';
-    if (location == path || location.startsWith('$path/')) return true;
-    return prefixes.any((prefix) => location == prefix || location.startsWith('$prefix/'));
+    return location == path || location.startsWith('$path/');
   }
 }
 
