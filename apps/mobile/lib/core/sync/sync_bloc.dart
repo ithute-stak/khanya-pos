@@ -102,20 +102,20 @@ class SyncBloc extends Bloc<SyncEvent, SyncStatusState> {
     _running = true;
     emit(state.copyWith(isSyncing: true));
     try {
-      final result = await _syncService.flushPendingSales();
+      final result = await _syncService.flushAll();
       if (result.synced > 0 || result.conflicts > 0) {
         try {
           await _productRepository.refresh();
         } catch (_) {
-          // Local state remains available; reconciliation will retry later.
+          // Local projections remain available; reconciliation will retry later.
         }
       }
       final message = result.networkUnavailable
-          ? 'Offline — queued sales will sync automatically.'
+          ? 'Offline — saved work will sync automatically.'
           : result.conflicts > 0
-              ? '${result.conflicts} sale(s) need sync review.'
+              ? '${result.conflicts} item(s) need sync review.'
               : result.synced > 0
-                  ? '${result.synced} sale(s) synced.'
+                  ? '${result.synced} queued item(s) synced.'
                   : null;
       emit(state.copyWith(isSyncing: false, lastMessage: message));
     } catch (_) {
