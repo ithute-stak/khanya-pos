@@ -93,15 +93,29 @@ class DashboardPage extends StatelessWidget {
                       icon: Icons.warehouse_outlined,
                       onTap: () => context.push('/inventory'),
                     ),
-                    const _ModuleCard(
-                      title: 'Purchases & Receipts',
-                      description: 'Next: supplier purchases and receipt capture',
-                      icon: Icons.receipt_long_outlined,
+                    _ModuleCard(
+                      title: 'Purchases',
+                      description: 'Buy stock, receive items and track supplier balances',
+                      icon: Icons.shopping_bag_outlined,
+                      onTap: () => context.push('/purchases'),
                     ),
-                    const _ModuleCard(
+                    _ModuleCard(
+                      title: 'Receipt Vault',
+                      description: 'Photograph and keep shopping receipts and supplier invoices',
+                      icon: Icons.receipt_long_outlined,
+                      onTap: () => context.push('/receipts'),
+                    ),
+                    _ModuleCard(
+                      title: 'Suppliers',
+                      description: 'Supplier contacts, purchases and outstanding balances',
+                      icon: Icons.local_shipping_outlined,
+                      onTap: () => context.push('/suppliers'),
+                    ),
+                    _ModuleCard(
                       title: 'Expenses',
-                      description: 'Next: daily costs and supporting receipts',
+                      description: 'Rent, electricity, transport, fuel and daily business costs',
                       icon: Icons.account_balance_wallet_outlined,
+                      onTap: () => context.push('/expenses'),
                     ),
                     const _ModuleCard(
                       title: 'Accounting',

@@ -1,7 +1,7 @@
 name: khanya_pos
 description: Khanya Resources Small Business POS mobile application.
 publish_to: "none"
-version: 0.2.0+2
+version: 0.3.0+3
 
 environment:
   sdk: ">=3.12.0 <4.0.0"
@@ -19,6 +19,8 @@ dependencies:
   web_socket_channel: ^3.0.3
   flutter_secure_storage: ^11.2.0
   uuid: ^4.6.0
+  image_picker: ^1.1.2
+  file_picker: ^13.1.0
 
 dev_dependencies:
   flutter_test:

@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 15
     refresh_token_days: int = 30
+    object_storage_endpoint: str = "http://localhost:9000"
+    object_storage_access_key: str = "khanya"
+    object_storage_secret_key: str = "khanya-development-only"
+    object_storage_bucket: str = "khanya-documents"
+    object_storage_region: str = "us-east-1"
+    max_receipt_upload_bytes: int = 15 * 1024 * 1024
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

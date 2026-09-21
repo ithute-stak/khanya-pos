@@ -18,20 +18,34 @@ from app.models.identity import (
     UserSession,
 )
 from app.models.outbox import OutboxEvent
+from app.models.purchasing import (
+    BusinessDocument,
+    Expense,
+    Purchase,
+    PurchaseLine,
+    Supplier,
+    SupplierPayment,
+)
 
 __all__ = [
     "Base",
     "Branch",
     "BranchProductStock",
+    "BusinessDocument",
     "Device",
+    "Expense",
     "MembershipBranch",
     "OutboxEvent",
     "Payment",
     "Product",
     "ProductCategory",
+    "Purchase",
+    "PurchaseLine",
     "Sale",
     "SaleLine",
     "StockMovement",
+    "Supplier",
+    "SupplierPayment",
     "Tenant",
     "TenantMembership",
     "User",

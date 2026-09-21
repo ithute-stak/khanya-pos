@@ -34,6 +34,9 @@ class _KhanyaPosAppState extends State<KhanyaPosApp> {
       providers: [
         RepositoryProvider.value(value: dependencies.productRepository),
         RepositoryProvider.value(value: dependencies.salesRepository),
+        RepositoryProvider.value(value: dependencies.purchasingRepository),
+        RepositoryProvider.value(value: dependencies.documentRepository),
+        RepositoryProvider.value(value: dependencies.expenseRepository),
       ],
       child: MultiBlocProvider(
         providers: [

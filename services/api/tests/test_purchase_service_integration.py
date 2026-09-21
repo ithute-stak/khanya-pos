@@ -1,0 +1,143 @@
+import os
+from decimal import Decimal
+from uuid import uuid4
+
+import pytest
+from sqlalchemy import func, select
+
+from app.core.database import SessionLocal
+from app.models.commerce import BranchProductStock, Product, StockMovement
+from app.models.identity import Branch, Tenant, User
+from app.models.outbox import OutboxEvent
+from app.models.purchasing import Purchase, PurchaseLine, Supplier, SupplierPayment
+from app.schemas.purchasing import PurchaseLineInput, PurchaseReceiveRequest
+from app.services.purchasing import complete_purchase
+
+pytestmark = pytest.mark.skipif(
+    os.getenv("RUN_INTEGRATION_TESTS") != "1",
+    reason="database integration tests are opt-in",
+)
+
+
+@pytest.mark.asyncio
+async def test_purchase_receipt_updates_stock_cost_supplier_balance_and_is_idempotent() -> None:
+    suffix = uuid4().hex[:12]
+    operation_id = uuid4()
+
+    async with SessionLocal() as db:
+        user = User(
+            email=f"buyer-{suffix}@example.test",
+            display_name="Integration Buyer",
+            password_hash="not-used-by-this-test",
+        )
+        tenant = Tenant(name=f"Purchase Shop {suffix}", slug=f"purchase-{suffix}")
+        db.add_all([user, tenant])
+        await db.flush()
+        branch = Branch(
+            tenant_id=tenant.id,
+            name="Main Branch",
+            code=f"P{suffix[:6]}",
+            location="Maseru",
+            is_main=True,
+        )
+        supplier = Supplier(
+            tenant_id=tenant.id,
+            code=f"SUP-{suffix[:6]}",
+            name="Integration Wholesaler",
+        )
+        product = Product(
+            tenant_id=tenant.id,
+            name="Cooking Oil 750ml",
+            sku=f"OIL-{suffix}",
+            unit="bottle",
+            selling_price=Decimal("52.00"),
+            cost_price=Decimal("40.00"),
+            reorder_level=Decimal("2.000"),
+            track_stock=True,
+        )
+        db.add_all([branch, supplier, product])
+        await db.flush()
+        db.add(
+            BranchProductStock(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                product_id=product.id,
+                on_hand=Decimal("10.000"),
+                reserved=Decimal("0.000"),
+            )
+        )
+        await db.commit()
+
+        request = PurchaseReceiveRequest(
+            client_operation_id=operation_id,
+            supplier_id=supplier.id,
+            supplier_invoice_number="INV-1001",
+            payment_method="cash",
+            amount_paid=Decimal("210.00"),
+            items=[
+                PurchaseLineInput(
+                    product_id=product.id,
+                    quantity=Decimal("5"),
+                    unit_cost=Decimal("42.00"),
+                )
+            ],
+        )
+        first = await complete_purchase(
+            db,
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            user_id=user.id,
+            payload=request,
+        )
+        second = await complete_purchase(
+            db,
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            user_id=user.id,
+            payload=request,
+        )
+
+        assert first.total == Decimal("210.00")
+        assert first.balance_due == Decimal("0.00")
+        assert first.idempotent_replay is False
+        assert second.id == first.id
+        assert second.idempotent_replay is True
+
+        stock = (
+            await db.execute(
+                select(BranchProductStock).where(
+                    BranchProductStock.branch_id == branch.id,
+                    BranchProductStock.product_id == product.id,
+                )
+            )
+        ).scalar_one()
+        refreshed_product = (
+            await db.execute(select(Product).where(Product.id == product.id))
+        ).scalar_one()
+        assert stock.on_hand == Decimal("15.000")
+        assert refreshed_product.cost_price == Decimal("40.67")
+
+        purchase_count = await db.scalar(
+            select(func.count(Purchase.id)).where(
+                Purchase.tenant_id == tenant.id,
+                Purchase.client_operation_id == operation_id,
+            )
+        )
+        line_count = await db.scalar(select(func.count(PurchaseLine.id)).where(PurchaseLine.purchase_id == first.id))
+        payment_count = await db.scalar(
+            select(func.count(SupplierPayment.id)).where(SupplierPayment.purchase_id == first.id)
+        )
+        movement_count = await db.scalar(
+            select(func.count(StockMovement.id)).where(
+                StockMovement.reference_type == "purchase",
+                StockMovement.reference_id == first.id,
+            )
+        )
+        outbox_count = await db.scalar(
+            select(func.count(OutboxEvent.id)).where(OutboxEvent.tenant_id == tenant.id)
+        )
+        assert purchase_count == 1
+        assert line_count == 1
+        assert payment_count == 1
+        assert movement_count == 1
+        assert outbox_count == 2

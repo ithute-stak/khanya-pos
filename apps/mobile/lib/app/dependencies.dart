@@ -8,7 +8,10 @@ import 'package:khanya_pos/core/storage/app_database.dart';
 import 'package:khanya_pos/core/sync/sync_service.dart';
 import 'package:khanya_pos/features/auth/data/auth_repository.dart';
 import 'package:khanya_pos/features/catalog/data/product_repository.dart';
+import 'package:khanya_pos/features/documents/data/document_repository.dart';
+import 'package:khanya_pos/features/expenses/data/expense_repository.dart';
 import 'package:khanya_pos/features/pos/data/sales_repository.dart';
+import 'package:khanya_pos/features/purchasing/data/purchasing_repository.dart';
 
 class AppDependencies {
   AppDependencies._({
@@ -19,6 +22,9 @@ class AppDependencies {
     required this.productRepository,
     required this.syncService,
     required this.salesRepository,
+    required this.purchasingRepository,
+    required this.documentRepository,
+    required this.expenseRepository,
     required this.realtimeClient,
   });
 
@@ -56,6 +62,9 @@ class AppDependencies {
       productRepository: productRepository,
       syncService: syncService,
       salesRepository: salesRepository,
+      purchasingRepository: PurchasingRepository(apiClient: apiClient),
+      documentRepository: DocumentRepository(apiClient: apiClient),
+      expenseRepository: ExpenseRepository(apiClient: apiClient),
       realtimeClient: RealtimeClient(),
     );
   }
@@ -67,6 +76,9 @@ class AppDependencies {
   final ProductRepository productRepository;
   final SyncService syncService;
   final SalesRepository salesRepository;
+  final PurchasingRepository purchasingRepository;
+  final DocumentRepository documentRepository;
+  final ExpenseRepository expenseRepository;
   final RealtimeClient realtimeClient;
 
   Future<void> close() async {
