@@ -26,6 +26,10 @@ dev = [
 requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["alembic*"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]

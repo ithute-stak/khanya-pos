@@ -6,7 +6,7 @@ from app.api.deps import TenantContext, require_permissions
 from app.core.database import get_db
 from app.models.identity import Branch, MembershipBranch, TenantMembership, User
 from app.schemas.identity import StaffCreate
-from app.security.permissions import Role
+from app.security.permissions import can_assign_role
 from app.security.tokens import hash_password
 
 router = APIRouter()
@@ -49,9 +49,11 @@ async def create_staff(
     context: TenantContext = Depends(require_permissions("staff.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
-    actor_role = Role(context.membership.role)
-    if payload.role == Role.OWNER and actor_role != Role.OWNER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only an owner can assign owner access")
+    if not can_assign_role(context.membership.role, payload.role):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot assign this role",
+        )
 
     branch_result = await db.execute(
         select(Branch.id).where(

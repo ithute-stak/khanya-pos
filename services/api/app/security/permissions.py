@@ -94,6 +94,15 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
     ),
 }
 
+ROLE_ASSIGNMENTS: dict[Role, frozenset[Role]] = {
+    Role.OWNER: frozenset(Role),
+    Role.ADMIN: frozenset({Role.ADMIN, Role.MANAGER, Role.CASHIER, Role.ACCOUNTANT, Role.STOCK_CLERK}),
+    Role.MANAGER: frozenset({Role.CASHIER, Role.STOCK_CLERK}),
+    Role.CASHIER: frozenset(),
+    Role.ACCOUNTANT: frozenset(),
+    Role.STOCK_CLERK: frozenset(),
+}
+
 
 def role_has_permissions(role: str | Role, required: set[str] | frozenset[str]) -> bool:
     try:
@@ -101,3 +110,12 @@ def role_has_permissions(role: str | Role, required: set[str] | frozenset[str]) 
     except ValueError:
         return False
     return required.issubset(ROLE_PERMISSIONS[normalized])
+
+
+def can_assign_role(actor: str | Role, target: str | Role) -> bool:
+    try:
+        actor_role = actor if isinstance(actor, Role) else Role(actor)
+        target_role = target if isinstance(target, Role) else Role(target)
+    except ValueError:
+        return False
+    return target_role in ROLE_ASSIGNMENTS[actor_role]
