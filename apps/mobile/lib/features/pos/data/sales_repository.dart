@@ -112,7 +112,10 @@ class SalesRepository {
       rethrow;
     }
 
-    await _syncService.flushPendingSales();
+    // Use the complete dependency-ordered pipeline. Pending purchases must
+    // reach the server before a sale that depends on their received stock,
+    // and customer receipts must remain after their credit sale.
+    await _syncService.flushAll();
     final pending = await _database.getPendingSale(clientOperationId);
     if (pending == null) {
       return SaleSubmission(clientOperationId: clientOperationId, status: SaleSubmissionStatus.synced);
