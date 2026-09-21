@@ -10,12 +10,16 @@ The accounting engine is an invariant-driven double-entry ledger underneath oper
 4. Journal accounts belong to the same tenant as the journal entry.
 5. Operational source transactions post at most one journal entry.
 6. Mobile/client retries use stable operation IDs and cannot duplicate financial effects.
-7. Posted journal lines are not edited by application workflows. Corrections use reversal or source-specific correction flows.
-8. Automated sale/purchase/expense journals cannot be reversed directly from the accounting API; their source transaction must be corrected instead so subledgers and the GL remain aligned.
-9. Inventory unit costs are stored at six-decimal precision; GL money is rounded to two decimals only at posting boundaries.
-10. Supporting tax amounts that have not been classified by the tax engine post to Purchase Tax Pending Classification rather than being assumed recoverable.
-11. Stock adjustments post corresponding inventory accounting entries.
-12. Reconciliation must be able to detect trial-balance, inventory, Accounts Payable and supplier-advance differences, and source transactions missing journals.
+7. Simultaneous duplicate sync attempts are serialized with PostgreSQL transaction advisory locks keyed by tenant, operation scope and client operation ID.
+8. Posted journal lines are not edited by application workflows. Corrections use reversal or source-specific correction flows.
+9. Automated sale/purchase/expense journals cannot be reversed directly from the accounting API; their source transaction must be corrected instead so subledgers and the GL remain aligned.
+10. Inventory unit costs are stored at six-decimal precision; GL money is rounded to two decimals only at posting boundaries.
+11. Supporting tax amounts that have not been classified by the tax engine post to Purchase Tax Pending Classification rather than being assumed recoverable.
+12. Stock adjustments post corresponding inventory accounting entries.
+13. Once an accounting period is locked, new journals dated on or before the lock point are rejected. The lock may only advance, never silently move backward.
+14. Operational mutations and their journals are atomic. If accounting posting fails, stock, purchase/payment and other same-transaction effects roll back too.
+15. P&L separates sales revenue from other income; adjustment gains do not inflate gross profit.
+16. Reconciliation must detect trial-balance, inventory, Stock in Transit, Accounts Payable and supplier-advance differences, and source transactions missing journals.
 
 ## Default posting rules
 
@@ -55,12 +59,19 @@ The accounting engine is an invariant-driven double-entry ledger underneath oper
 
 Manual accountant journals may be reversed by creating an equal-and-opposite journal linked to the original. The original remains intact. Automated source journals are corrected only through their domain workflow (for example refunds/returns), preventing a GL-only correction from silently disagreeing with stock, payments or supplier balances.
 
+## Period close
+
+Accounting settings are tenant-scoped. The current defaults use LSL as base currency and a January fiscal-year start. An authorized accounting user can advance `locked_through` to a past or current instant. It cannot be set in the future and cannot move backward.
+
+Because operational data and its journal are written in one PostgreSQL transaction, a backdated purchase, expense, inventory adjustment or other source event that falls inside a locked period is rejected without leaving partial stock, supplier, payment, outbox or journal state.
+
 ## Built-in reconciliation
 
 `GET /accounting/reconciliation` checks:
 
 - trial balance debits versus credits;
 - Inventory GL versus current stock valuation;
+- Stock in Transit GL versus invoiced stock not yet received;
 - Accounts Payable GL versus purchase balances;
 - Supplier Advances GL versus unallocated supplier payments;
 - completed sales missing sale journals;
@@ -68,3 +79,9 @@ Manual accountant journals may be reversed by creating an equal-and-opposite jou
 - expenses missing expense journals.
 
 A production close should not proceed while reconciliation reports `healthy: false`.
+
+## Merge gate
+
+The accounting core is not merge-ready unless the exact pull-request head passes PostgreSQL migrations, Alembic model/schema drift checks, backend unit tests, real financial integration tests, concurrent duplicate-operation testing, closed-period rollback testing, Flutter Drift generation, Flutter static analysis and Flutter tests.
+
+Accounting document generation is deliberately a separate layer. Future financial documents should consume this validated ledger rather than implement a second set of accounting calculations.
