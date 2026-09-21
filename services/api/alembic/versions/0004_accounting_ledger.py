@@ -66,6 +66,29 @@ def upgrade() -> None:
     )
 
     op.create_table(
+        "accounting_settings",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("base_currency", sa.String(length=3), nullable=False, server_default="LSL"),
+        sa.Column("fiscal_year_start_month", sa.Integer(), nullable=False, server_default="1"),
+        sa.Column("locked_through", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("locked_by_user_id", sa.Uuid(), nullable=True),
+        sa.Column("lock_reason", sa.Text(), nullable=True),
+        *_timestamps(),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["locked_by_user_id"], ["users.id"], ondelete="SET NULL"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("tenant_id", name="uq_accounting_settings_tenant"),
+        sa.CheckConstraint(
+            "fiscal_year_start_month BETWEEN 1 AND 12",
+            name="ck_accounting_settings_fiscal_month",
+        ),
+    )
+    op.create_index("ix_accounting_settings_tenant_id", "accounting_settings", ["tenant_id"])
+    op.create_index("ix_accounting_settings_locked_through", "accounting_settings", ["locked_through"])
+    op.create_index("ix_accounting_settings_locked_by_user_id", "accounting_settings", ["locked_by_user_id"])
+
+    op.create_table(
         "accounts",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("tenant_id", sa.Uuid(), nullable=False),
@@ -242,6 +265,7 @@ def downgrade() -> None:
     op.drop_table("journal_lines")
     op.drop_table("journal_entries")
     op.drop_table("accounts")
+    op.drop_table("accounting_settings")
     op.drop_index("ix_supplier_payments_client_operation_id", table_name="supplier_payments")
     op.drop_constraint(
         "uq_supplier_payments_tenant_client_operation",
