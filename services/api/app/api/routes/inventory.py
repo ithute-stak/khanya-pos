@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.models.commerce import BranchProductStock, Product, StockMovement
 from app.schemas.commerce import StockAdjustmentRequest
 from app.services.accounting import PostingLine, post_journal
+from app.services.idempotency import acquire_operation_lock
 from app.services.outbox import enqueue_event
 from app.services.pricing import line_total, quantity, unit_cost
 
@@ -64,6 +65,12 @@ async def adjust_stock(
     if context.branch is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Branch-ID is required")
 
+    await acquire_operation_lock(
+        db,
+        tenant_id=context.tenant.id,
+        scope="inventory_adjustment",
+        operation_id=payload.client_operation_id,
+    )
     replay = await _adjustment_replay(
         db,
         tenant_id=context.tenant.id,
@@ -86,16 +93,6 @@ async def adjust_stock(
     product = product_result.scalar_one_or_none()
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
-
-    replay = await _adjustment_replay(
-        db,
-        tenant_id=context.tenant.id,
-        branch_id=context.branch.id,
-        product_id=payload.product_id,
-        operation_id=payload.client_operation_id,
-    )
-    if replay is not None:
-        return replay
 
     stock_result = await db.execute(
         select(BranchProductStock)
