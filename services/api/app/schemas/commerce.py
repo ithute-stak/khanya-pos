@@ -60,4 +60,11 @@ class PaymentInput(BaseModel):
 class SaleCompleteRequest(BaseModel):
     client_operation_id: UUID
     items: list[SaleItemInput] = Field(min_length=1)
-    payments: list[PaymentInput] = Field(min_length=1)
+    payments: list[PaymentInput] = Field(default_factory=list)
+    customer_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def require_customer_for_explicit_zero_payment_credit(self) -> "SaleCompleteRequest":
+        if not self.payments and self.customer_id is None:
+            raise ValueError("A sale with no immediate payment requires a customer")
+        return self
