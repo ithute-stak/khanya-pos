@@ -6,8 +6,8 @@ abstract final class KhanyaBrand {
   static const String companyDescriptor = 'Management & Consultancy Services';
   static const String tagline = 'People | Process | Profit | A Brighter Tomorrow';
 
-  static const String appIconAsset = 'assets/branding/khanya_resources_vertical.webp';
-  static const String fullLogoAsset = 'assets/branding/khanya_full_logo.jpg';
+  static const String appIconAsset = 'assets/branding/khanya_app_icon_safe.jpg';
+  static const String fullLogoAsset = appIconAsset;
 
   static const Color forest = Color(0xFF006B3C);
   static const Color forestDark = Color(0xFF004B2A);
@@ -33,15 +33,52 @@ class KhanyaLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: Image.asset(
-        KhanyaBrand.fullLogoAsset,
-        height: height,
-        width: double.infinity,
-        fit: fit,
-        filterQuality: FilterQuality.high,
-        semanticLabel: 'Khanya Resources logo',
+    final markSize = (height * 0.56).clamp(58.0, 104.0);
+    return Semantics(
+      label: 'Khanya Resources logo',
+      image: true,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: height),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            KhanyaMark(size: markSize, radius: borderRadius),
+            const SizedBox(width: 18),
+            Flexible(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'KHANYA RESOURCES',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          color: KhanyaBrand.forestDark,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.4,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    KhanyaBrand.companyDescriptor.toUpperCase(),
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: KhanyaBrand.goldDark,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.55,
+                        ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    KhanyaBrand.tagline,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: KhanyaBrand.navy.withValues(alpha: 0.72),
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
