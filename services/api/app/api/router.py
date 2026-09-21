@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    accounting,
     auth,
     devices,
     documents,
@@ -29,4 +30,5 @@ api_router.include_router(suppliers.router, prefix="/suppliers", tags=["supplier
 api_router.include_router(purchases.router, prefix="/purchases", tags=["purchases"])
 api_router.include_router(expenses.router, prefix="/expenses", tags=["expenses"])
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
+api_router.include_router(accounting.router, prefix="/accounting", tags=["accounting"])
 api_router.include_router(realtime.router, prefix="/ws", tags=["realtime"])

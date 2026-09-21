@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -96,6 +96,11 @@ class PurchaseLine(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class SupplierPayment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "supplier_payments"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "client_operation_id", name="uq_supplier_payments_tenant_client_operation"
+        ),
+    )
 
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
     branch_id: Mapped[UUID] = mapped_column(ForeignKey("branches.id", ondelete="CASCADE"), index=True)
@@ -103,6 +108,7 @@ class SupplierPayment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     purchase_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("purchases.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    client_operation_id: Mapped[UUID] = mapped_column(default=uuid4, index=True)
     payment_method: Mapped[str] = mapped_column(String(40), index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     reference: Mapped[str | None] = mapped_column(String(160), nullable=True)

@@ -18,8 +18,15 @@ from app.models.purchasing import (
     SupplierPayment,
 )
 from app.schemas.purchasing import ExpenseCreateRequest, PurchaseReceiveRequest, SupplierPaymentRequest
+from app.services.accounting import (
+    PostingLine,
+    expense_account_code,
+    payment_account_code,
+    post_journal,
+)
+from app.services.idempotency import acquire_operation_lock
 from app.services.outbox import enqueue_event
-from app.services.pricing import line_total, money, quantity
+from app.services.pricing import line_total, money, quantity, unit_cost
 
 
 class PurchasingValidationError(ValueError):
@@ -117,6 +124,18 @@ async def _existing_purchase(
     return result.scalar_one_or_none()
 
 
+async def _existing_supplier_payment(
+    db: AsyncSession, tenant_id: UUID, operation_id: UUID
+) -> SupplierPayment | None:
+    result = await db.execute(
+        select(SupplierPayment).where(
+            SupplierPayment.tenant_id == tenant_id,
+            SupplierPayment.client_operation_id == operation_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 def _purchase_result(purchase: Purchase, *, replay: bool) -> CompletedPurchase:
     return CompletedPurchase(
         id=purchase.id,
@@ -138,6 +157,12 @@ async def complete_purchase(
     user_id: UUID,
     payload: PurchaseReceiveRequest,
 ) -> CompletedPurchase:
+    await acquire_operation_lock(
+        db,
+        tenant_id=tenant_id,
+        scope="purchase",
+        operation_id=payload.client_operation_id,
+    )
     existing = await _existing_purchase(db, tenant_id, payload.client_operation_id)
     if existing is not None:
         return _purchase_result(existing, replay=True)
@@ -228,10 +253,17 @@ async def complete_purchase(
     db.add(purchase)
     await db.flush()
 
+    received_inventory_value = Decimal("0.00")
+    stock_in_transit_value = Decimal("0.00")
+    non_stock_value = Decimal("0.00")
+
     for item in sorted(payload.items, key=lambda value: str(value.product_id)):
         product = locked_products[item.product_id]
         ordered_qty = quantity(item.quantity)
         received_qty = quantity(item.quantity_received if item.quantity_received is not None else item.quantity)
+        purchase_unit_cost = unit_cost(item.unit_cost)
+        ordered_value = line_total(purchase_unit_cost, ordered_qty)
+        received_value = line_total(purchase_unit_cost, received_qty)
         db.add(
             PurchaseLine(
                 purchase_id=purchase.id,
@@ -240,21 +272,27 @@ async def complete_purchase(
                 quantity_received=received_qty,
                 unit_cost=money(item.unit_cost),
                 tax_total=money(item.tax_total),
-                line_total=line_total(item.unit_cost, ordered_qty),
+                line_total=ordered_value,
             )
         )
+
+        if product.track_stock:
+            received_inventory_value += received_value
+            stock_in_transit_value += money(ordered_value - received_value)
+        else:
+            non_stock_value += ordered_value
 
         if product.track_stock and received_qty > 0:
             stock = locked_stocks[product.id]
             old_on_hand = quantity(stock.on_hand)
-            old_cost = money(product.cost_price)
+            old_cost = unit_cost(product.cost_price)
             new_on_hand = quantity(old_on_hand + received_qty)
             if old_on_hand > 0:
-                product.cost_price = money(
-                    ((old_on_hand * old_cost) + (received_qty * money(item.unit_cost))) / new_on_hand
+                product.cost_price = unit_cost(
+                    ((old_on_hand * old_cost) + (received_qty * purchase_unit_cost)) / new_on_hand
                 )
             else:
-                product.cost_price = money(item.unit_cost)
+                product.cost_price = purchase_unit_cost
             stock.on_hand = new_on_hand
             db.add(
                 StockMovement(
@@ -263,7 +301,7 @@ async def complete_purchase(
                     product_id=product.id,
                     movement_type="purchase_receipt",
                     quantity_delta=received_qty,
-                    unit_cost=money(item.unit_cost),
+                    unit_cost=purchase_unit_cost,
                     reference_type="purchase",
                     reference_id=purchase.id,
                     reason=f"Purchase {purchase.purchase_number}",
@@ -292,13 +330,64 @@ async def complete_purchase(
                 branch_id=branch_id,
                 supplier_id=supplier.id,
                 purchase_id=purchase.id,
-                payment_method=payload.payment_method
-                if payload.payment_method != "supplier_credit"
-                else "cash",
+                client_operation_id=uuid4(),
+                payment_method=payload.payment_method,
                 amount=amount_paid,
                 paid_by_user_id=user_id,
             )
         )
+
+    purchase_journal_lines: list[PostingLine] = []
+    received_inventory_value = money(received_inventory_value)
+    stock_in_transit_value = money(stock_in_transit_value)
+    non_stock_value = money(non_stock_value)
+    if received_inventory_value > 0:
+        purchase_journal_lines.append(
+            PostingLine(account_code="1200", debit=received_inventory_value, memo="Stock received")
+        )
+    if stock_in_transit_value > 0:
+        purchase_journal_lines.append(
+            PostingLine(
+                account_code="1210",
+                debit=stock_in_transit_value,
+                memo="Ordered stock not yet received",
+            )
+        )
+    if non_stock_value > 0:
+        purchase_journal_lines.append(
+            PostingLine(account_code="6300", debit=non_stock_value, memo="Non-stock purchase")
+        )
+    if tax_total > 0:
+        purchase_journal_lines.append(
+            PostingLine(
+                account_code="1310",
+                debit=tax_total,
+                memo="Purchase tax pending VAT/tax classification",
+            )
+        )
+    if amount_paid > 0:
+        purchase_journal_lines.append(
+            PostingLine(
+                account_code=payment_account_code(payload.payment_method),
+                credit=amount_paid,
+                memo=f"Immediate {payload.payment_method.replace('_', ' ')} payment",
+            )
+        )
+    if balance_due > 0:
+        purchase_journal_lines.append(
+            PostingLine(account_code="2000", credit=balance_due, memo="Supplier balance due")
+        )
+    await post_journal(
+        db,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        user_id=user_id,
+        source_type="purchase",
+        source_id=purchase.id,
+        description=f"Purchase {purchase.purchase_number}",
+        occurred_at=purchase.purchase_date,
+        lines=purchase_journal_lines,
+    )
 
     enqueue_event(
         db,
@@ -335,6 +424,18 @@ async def record_supplier_payment(
     supplier_id: UUID,
     payload: SupplierPaymentRequest,
 ) -> SupplierPayment:
+    await acquire_operation_lock(
+        db,
+        tenant_id=tenant_id,
+        scope="supplier_payment",
+        operation_id=payload.client_operation_id,
+    )
+    existing = await _existing_supplier_payment(db, tenant_id, payload.client_operation_id)
+    if existing is not None:
+        if existing.supplier_id != supplier_id:
+            raise PurchasePaymentError("The payment operation ID is already used for another supplier")
+        return existing
+
     supplier = await _supplier(db, tenant_id, supplier_id)
     assert supplier is not None
     purchase: Purchase | None = None
@@ -362,6 +463,7 @@ async def record_supplier_payment(
         branch_id=branch_id,
         supplier_id=supplier.id,
         purchase_id=purchase.id if purchase is not None else None,
+        client_operation_id=payload.client_operation_id,
         payment_method=payload.payment_method,
         amount=money(payload.amount),
         reference=payload.reference,
@@ -369,6 +471,28 @@ async def record_supplier_payment(
     )
     db.add(payment)
     await db.flush()
+
+    debit_code = "2000" if purchase is not None else "1400"
+    debit_memo = "Accounts payable settlement" if purchase is not None else "Unallocated supplier advance"
+    await post_journal(
+        db,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        user_id=user_id,
+        source_type="supplier_payment",
+        source_id=payment.id,
+        description=f"Payment to {supplier.name}",
+        occurred_at=payment.paid_at,
+        lines=[
+            PostingLine(account_code=debit_code, debit=money(payload.amount), memo=debit_memo),
+            PostingLine(
+                account_code=payment_account_code(payload.payment_method),
+                credit=money(payload.amount),
+                memo=f"{payload.payment_method.replace('_', ' ').title()} paid",
+            ),
+        ],
+    )
+
     enqueue_event(
         db,
         tenant_id=tenant_id,
@@ -380,20 +504,37 @@ async def record_supplier_payment(
             "payment_id": str(payment.id),
             "purchase_id": str(purchase.id) if purchase is not None else None,
             "amount": str(payment.amount),
+            "client_operation_id": str(payment.client_operation_id),
         },
     )
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        existing = await _existing_supplier_payment(db, tenant_id, payload.client_operation_id)
+        if existing is not None:
+            return existing
+        raise
     return payment
 
 
-async def supplier_outstanding_balance(db: AsyncSession, *, tenant_id: UUID, supplier_id: UUID) -> Decimal:
-    value = await db.scalar(
+async def supplier_outstanding_balance(
+    db: AsyncSession, *, tenant_id: UUID, supplier_id: UUID
+) -> Decimal:
+    purchase_balance = await db.scalar(
         select(func.coalesce(func.sum(Purchase.balance_due), 0)).where(
             Purchase.tenant_id == tenant_id,
             Purchase.supplier_id == supplier_id,
         )
     )
-    return money(Decimal(value or 0))
+    unallocated_advances = await db.scalar(
+        select(func.coalesce(func.sum(SupplierPayment.amount), 0)).where(
+            SupplierPayment.tenant_id == tenant_id,
+            SupplierPayment.supplier_id == supplier_id,
+            SupplierPayment.purchase_id.is_(None),
+        )
+    )
+    return money(Decimal(purchase_balance or 0) - Decimal(unallocated_advances or 0))
 
 
 async def _existing_expense(
@@ -416,6 +557,12 @@ async def record_expense(
     user_id: UUID,
     payload: ExpenseCreateRequest,
 ) -> RecordedExpense:
+    await acquire_operation_lock(
+        db,
+        tenant_id=tenant_id,
+        scope="expense",
+        operation_id=payload.client_operation_id,
+    )
     existing = await _existing_expense(db, tenant_id, payload.client_operation_id)
     if existing is not None:
         return RecordedExpense(
@@ -451,6 +598,30 @@ async def record_expense(
     )
     db.add(expense)
     await db.flush()
+
+    await post_journal(
+        db,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        user_id=user_id,
+        source_type="expense",
+        source_id=expense.id,
+        description=f"Expense {expense.expense_number}: {expense.description}",
+        occurred_at=expense.expense_date,
+        lines=[
+            PostingLine(
+                account_code=expense_account_code(expense.category),
+                debit=expense.amount,
+                memo=expense.description,
+            ),
+            PostingLine(
+                account_code=payment_account_code(expense.payment_method),
+                credit=expense.amount,
+                memo=f"{expense.payment_method.replace('_', ' ').title()} payment",
+            ),
+        ],
+    )
+
     enqueue_event(
         db,
         tenant_id=tenant_id,

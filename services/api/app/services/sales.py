@@ -9,8 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commerce import BranchProductStock, Payment, Product, Sale, SaleLine, StockMovement
 from app.schemas.commerce import SaleCompleteRequest
+from app.services.accounting import PostingLine, payment_account_code, post_journal
+from app.services.idempotency import acquire_operation_lock
 from app.services.outbox import enqueue_event
-from app.services.pricing import line_total, money, quantity
+from app.services.pricing import line_total, money, quantity, unit_cost
 
 
 class SaleValidationError(ValueError):
@@ -74,6 +76,12 @@ async def complete_sale(
     cashier_user_id: UUID,
     payload: SaleCompleteRequest,
 ) -> CompletedSale:
+    await acquire_operation_lock(
+        db,
+        tenant_id=tenant_id,
+        scope="sale",
+        operation_id=payload.client_operation_id,
+    )
     existing = await _existing_sale(db, tenant_id, payload.client_operation_id)
     if existing is not None:
         return _as_result(existing, replay=True)
@@ -135,16 +143,18 @@ async def complete_sale(
     db.add(sale)
     await db.flush()
 
+    cost_of_goods = Decimal("0.00")
     for product_id in sorted(requested, key=str):
         product = locked_products[product_id]
         qty = requested[product_id]
+        current_cost = unit_cost(product.cost_price)
         db.add(
             SaleLine(
                 sale_id=sale.id,
                 product_id=product.id,
                 quantity=qty,
                 unit_price=money(product.selling_price),
-                unit_cost=money(product.cost_price),
+                unit_cost=current_cost,
                 discount_total=Decimal("0.00"),
                 tax_total=Decimal("0.00"),
                 line_total=line_total(product.selling_price, qty),
@@ -152,6 +162,7 @@ async def complete_sale(
         )
 
         if product.track_stock:
+            cost_of_goods += line_total(current_cost, qty)
             stock = locked_stocks[product_id]
             assert stock is not None
             stock.on_hand = quantity(stock.on_hand - qty)
@@ -162,7 +173,7 @@ async def complete_sale(
                     product_id=product.id,
                     movement_type="sale",
                     quantity_delta=-qty,
-                    unit_cost=money(product.cost_price),
+                    unit_cost=current_cost,
                     reference_type="sale",
                     reference_id=sale.id,
                     reason=f"Sale {sale.sale_number}",
@@ -194,6 +205,43 @@ async def complete_sale(
                 reference=payment.reference,
             )
         )
+
+    accounting_lines = [
+        PostingLine(
+            account_code=payment_account_code(payment.method),
+            debit=money(payment.amount),
+            memo=f"{payment.method.replace('_', ' ').title()} receipt",
+        )
+        for payment in payload.payments
+    ]
+    net_revenue = money(sale.total - sale.tax_total)
+    if net_revenue > 0:
+        accounting_lines.append(
+            PostingLine(account_code="4000", credit=net_revenue, memo="Sales revenue")
+        )
+    if money(sale.tax_total) > 0:
+        accounting_lines.append(
+            PostingLine(account_code="2100", credit=money(sale.tax_total), memo="Sales tax payable")
+        )
+    cost_of_goods = money(cost_of_goods)
+    if cost_of_goods > 0:
+        accounting_lines.extend(
+            [
+                PostingLine(account_code="5000", debit=cost_of_goods, memo="Cost of goods sold"),
+                PostingLine(account_code="1200", credit=cost_of_goods, memo="Inventory issued"),
+            ]
+        )
+    await post_journal(
+        db,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        user_id=cashier_user_id,
+        source_type="sale",
+        source_id=sale.id,
+        description=f"Sale {sale.sale_number}",
+        occurred_at=sale.completed_at,
+        lines=accounting_lines,
+    )
 
     enqueue_event(
         db,
