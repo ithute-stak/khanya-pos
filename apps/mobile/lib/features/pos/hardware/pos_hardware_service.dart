@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:khanya_pos/features/pos/domain/cart.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 import 'package:khanya_pos/features/pos/printing/sale_receipt.dart';
 import 'package:windows_printer/windows_printer.dart';
@@ -64,6 +65,7 @@ Uint8List buildEscPosReceiptBytes(
   PosHardwareSettings settings,
 ) {
   final width = settings.paperWidthMm == 58 ? 32 : 48;
+  final divider = List<String>.filled(width, '-').join();
   final bytes = <int>[];
 
   void command(List<int> values) => bytes.addAll(values);
@@ -83,17 +85,23 @@ Uint8List buildEscPosReceiptBytes(
   line('KHANYA POS');
   line('SALES RECEIPT');
   command(const [0x1b, 0x61, 0x00]); // Left.
-  line('-' * width);
-  line('Ref: ${_ascii(receipt.reference)}');
+  line(divider);
+  for (final part in _wrap('Ref: ${_ascii(receipt.reference)}', width)) {
+    line(part);
+  }
   line('Date: ${_formatDate(receipt.issuedAt)}');
   if (receipt.branchId != null && receipt.branchId!.trim().isNotEmpty) {
-    line('Branch: ${_ascii(receipt.branchId!)}');
+    for (final part in _wrap('Branch: ${_ascii(receipt.branchId!)}', width)) {
+      line(part);
+    }
   }
   if (receipt.cashierName != null && receipt.cashierName!.trim().isNotEmpty) {
-    line('Cashier: ${_ascii(receipt.cashierName!)}');
+    for (final part in _wrap('Cashier: ${_ascii(receipt.cashierName!)}', width)) {
+      line(part);
+    }
   }
   line('Payment: ${_ascii(receipt.paymentMethod.label)}');
-  line('-' * width);
+  line(divider);
 
   for (final item in receipt.lines) {
     for (final nameLine in _wrap(_ascii(item.name), width)) {
@@ -102,17 +110,21 @@ Uint8List buildEscPosReceiptBytes(
     final quantityPrice = '${item.quantity} x ${formatMalotiMinor(item.unitPriceMinor)}';
     line(_columns(quantityPrice, formatMalotiMinor(item.lineTotalMinor), width));
     if (item.sku != null && item.sku!.trim().isNotEmpty) {
-      line('SKU: ${_ascii(item.sku!)}');
+      for (final part in _wrap('SKU: ${_ascii(item.sku!)}', width)) {
+        line(part);
+      }
     }
   }
 
-  line('-' * width);
+  line(divider);
   command(const [0x1b, 0x45, 0x01]);
   line(_columns('TOTAL', formatMalotiMinor(receipt.totalMinor), width));
   command(const [0x1b, 0x45, 0x00]);
-  line('-' * width);
+  line(divider);
   command(const [0x1b, 0x61, 0x01]);
-  line('Status: ${_ascii(receipt.syncStatus)}');
+  for (final part in _wrap('Status: ${_ascii(receipt.syncStatus)}', width)) {
+    line(part);
+  }
   line('Thank you for your business.');
   line('People | Process | Profit');
   line('A Brighter Tomorrow');
