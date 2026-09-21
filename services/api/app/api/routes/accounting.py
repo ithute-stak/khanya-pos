@@ -9,11 +9,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import Principal, TenantContext, get_current_principal, require_permissions
 from app.core.database import get_db
 from app.models.accounting import Account, JournalEntry, JournalLine
-from app.schemas.accounting import JournalReversalRequest, ManualJournalCreateRequest
+from app.schemas.accounting import (
+    JournalReversalRequest,
+    ManualJournalCreateRequest,
+    PeriodLockRequest,
+)
 from app.services.accounting import (
     AccountingError,
     PostingLine,
+    advance_period_lock,
     balance_sheet,
+    ensure_accounting_settings,
     ensure_default_chart,
     ledger_health,
     post_manual_journal,
@@ -23,6 +29,48 @@ from app.services.accounting import (
 )
 
 router = APIRouter()
+
+
+@router.get("/settings")
+async def get_accounting_settings(
+    context: TenantContext = Depends(require_permissions("accounting.read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    settings = await ensure_accounting_settings(db, context.tenant.id)
+    await db.commit()
+    return {
+        "base_currency": settings.base_currency,
+        "fiscal_year_start_month": settings.fiscal_year_start_month,
+        "locked_through": settings.locked_through,
+        "locked_by_user_id": settings.locked_by_user_id,
+        "lock_reason": settings.lock_reason,
+    }
+
+
+@router.post("/period-lock")
+async def lock_accounting_period(
+    payload: PeriodLockRequest,
+    context: TenantContext = Depends(require_permissions("accounting.write")),
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    try:
+        settings = await advance_period_lock(
+            db,
+            tenant_id=context.tenant.id,
+            user_id=principal.user.id,
+            locked_through=payload.locked_through,
+            reason=payload.reason,
+        )
+        await db.commit()
+    except AccountingError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return {
+        "locked_through": settings.locked_through,
+        "locked_by_user_id": settings.locked_by_user_id,
+        "lock_reason": settings.lock_reason,
+    }
 
 
 @router.get("/accounts")
