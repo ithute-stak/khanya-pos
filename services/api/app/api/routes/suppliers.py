@@ -96,6 +96,7 @@ async def pay_supplier(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return {
         "id": payment.id,
+        "client_operation_id": payment.client_operation_id,
         "supplier_id": payment.supplier_id,
         "purchase_id": payment.purchase_id,
         "amount": payment.amount,
