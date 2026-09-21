@@ -24,6 +24,7 @@ void main() {
     ],
     paymentMethod: PaymentMethod.cash,
     syncStatus: 'Synced',
+    cashTenderedMinor: 5000,
   );
 
   test('cash drawer command uses ESC/POS pulse sequence', () {
@@ -33,7 +34,7 @@ void main() {
     );
   });
 
-  test('80mm ESC/POS receipt contains sale information and cut command', () {
+  test('80mm ESC/POS receipt contains sale, tender, change and cut command', () {
     const settings = PosHardwareSettings(
       printerName: 'Receipt Printer',
       paperWidthMm: 80,
@@ -53,6 +54,10 @@ void main() {
     expect(printable, contains('Bread'));
     expect(printable, contains('TOTAL'));
     expect(printable, contains('M 30.00'));
+    expect(printable, contains('CASH'));
+    expect(printable, contains('M 50.00'));
+    expect(printable, contains('CHANGE'));
+    expect(printable, contains('M 20.00'));
     expect(bytes.sublist(bytes.length - 3), orderedEquals(const [0x1d, 0x56, 0x01]));
   });
 
