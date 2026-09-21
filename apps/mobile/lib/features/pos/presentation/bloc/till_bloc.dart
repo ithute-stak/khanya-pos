@@ -59,6 +59,7 @@ class TillState extends Equatable {
     this.status = TillLoadStatus.initial,
     this.current,
     this.history = const [],
+    this.pendingCashSalesCount = 0,
     this.errorMessage,
     this.notice,
   });
@@ -66,16 +67,19 @@ class TillState extends Equatable {
   final TillLoadStatus status;
   final TillShiftSummary? current;
   final List<TillShiftSummary> history;
+  final int pendingCashSalesCount;
   final String? errorMessage;
   final String? notice;
 
   bool get busy => status == TillLoadStatus.loading || status == TillLoadStatus.submitting;
+  bool get reconciliationReady => pendingCashSalesCount == 0;
 
   TillState copyWith({
     TillLoadStatus? status,
     TillShiftSummary? current,
     bool clearCurrent = false,
     List<TillShiftSummary>? history,
+    int? pendingCashSalesCount,
     String? errorMessage,
     bool clearError = false,
     String? notice,
@@ -85,13 +89,21 @@ class TillState extends Equatable {
       status: status ?? this.status,
       current: clearCurrent ? null : current ?? this.current,
       history: history ?? this.history,
+      pendingCashSalesCount: pendingCashSalesCount ?? this.pendingCashSalesCount,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
       notice: clearNotice ? null : notice ?? this.notice,
     );
   }
 
   @override
-  List<Object?> get props => [status, current, history, errorMessage, notice];
+  List<Object?> get props => [
+        status,
+        current,
+        history,
+        pendingCashSalesCount,
+        errorMessage,
+        notice,
+      ];
 }
 
 class TillBloc extends Bloc<TillEvent, TillState> {
@@ -116,10 +128,12 @@ class TillBloc extends Bloc<TillEvent, TillState> {
     try {
       final current = await _repository.current();
       final history = await _repository.history();
+      final pendingCashSalesCount = await _repository.pendingCashSalesCount();
       emit(TillState(
         status: TillLoadStatus.ready,
         current: current,
         history: List.unmodifiable(history),
+        pendingCashSalesCount: pendingCashSalesCount,
       ));
     } catch (error) {
       emit(state.copyWith(
@@ -138,6 +152,7 @@ class TillBloc extends Bloc<TillEvent, TillState> {
       clearNotice: true,
     ));
     try {
+      await _ensureCashSalesSynced();
       final shift = await _repository.open(openingFloatMinor: event.openingFloatMinor);
       final history = await _repository.history();
       emit(TillState(
@@ -147,8 +162,10 @@ class TillBloc extends Bloc<TillEvent, TillState> {
         notice: 'Till opened successfully.',
       ));
     } catch (error) {
+      final pending = await _safePendingCount();
       emit(state.copyWith(
         status: TillLoadStatus.failure,
+        pendingCashSalesCount: pending,
         errorMessage: _message(error),
         clearNotice: true,
       ));
@@ -166,6 +183,7 @@ class TillBloc extends Bloc<TillEvent, TillState> {
       clearNotice: true,
     ));
     try {
+      await _ensureCashSalesSynced();
       final shift = await _repository.cashMovement(
         movementType: event.movementType,
         amountMinor: event.amountMinor,
@@ -181,8 +199,10 @@ class TillBloc extends Bloc<TillEvent, TillState> {
             : 'Cash paid out was recorded.',
       ));
     } catch (error) {
+      final pending = await _safePendingCount();
       emit(state.copyWith(
         status: TillLoadStatus.failure,
+        pendingCashSalesCount: pending,
         errorMessage: _message(error),
         clearNotice: true,
       ));
@@ -207,6 +227,7 @@ class TillBloc extends Bloc<TillEvent, TillState> {
       clearNotice: true,
     ));
     try {
+      await _ensureCashSalesSynced();
       await _repository.close(
         shiftId: current.id,
         countedCashMinor: event.countedCashMinor,
@@ -219,11 +240,29 @@ class TillBloc extends Bloc<TillEvent, TillState> {
         notice: 'Till closed and reconciled.',
       ));
     } catch (error) {
+      final pending = await _safePendingCount();
       emit(state.copyWith(
         status: TillLoadStatus.failure,
+        pendingCashSalesCount: pending,
         errorMessage: _message(error),
         clearNotice: true,
       ));
+    }
+  }
+
+  Future<void> _ensureCashSalesSynced() async {
+    final count = await _repository.pendingCashSalesCount();
+    if (count == 0) return;
+    throw StateError(
+      '$count queued cash sale${count == 1 ? '' : 's'} must sync before changing the till. Sync sales, then refresh this page.',
+    );
+  }
+
+  Future<int> _safePendingCount() async {
+    try {
+      return await _repository.pendingCashSalesCount();
+    } catch (_) {
+      return state.pendingCashSalesCount;
     }
   }
 
