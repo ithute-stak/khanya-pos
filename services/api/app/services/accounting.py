@@ -8,6 +8,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.accounting import Account, JournalEntry, JournalLine
+from app.models.commerce import BranchProductStock, Product, Sale
+from app.models.purchasing import Expense, Purchase, SupplierPayment
 from app.services.pricing import money
 
 
@@ -40,7 +42,9 @@ DEFAULT_ACCOUNTS: tuple[tuple[str, str, str, str, str], ...] = (
     ("3100", "Owner Drawings", "equity", "drawings", "debit"),
     ("3200", "Retained Earnings", "equity", "retained_earnings", "credit"),
     ("4000", "Sales Revenue", "income", "revenue", "credit"),
+    ("4010", "Inventory Adjustment Gains", "income", "other_income", "credit"),
     ("5000", "Cost of Goods Sold", "expense", "cost_of_sales", "debit"),
+    ("5010", "Inventory Shrinkage and Adjustments", "expense", "cost_of_sales", "debit"),
     ("6100", "Rent", "expense", "operating_expense", "debit"),
     ("6110", "Utilities", "expense", "operating_expense", "debit"),
     ("6120", "Transport and Fuel", "expense", "operating_expense", "debit"),
@@ -140,6 +144,10 @@ def _entry_number() -> str:
     return f"JE-{datetime.now(timezone.utc):%Y%m%d}-{str(uuid4())[:8].upper()}"
 
 
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
 async def post_journal(
     db: AsyncSession,
     *,
@@ -152,6 +160,8 @@ async def post_journal(
     occurred_at: datetime,
     lines: list[PostingLine],
 ) -> JournalEntry:
+    if not source_type.strip():
+        raise AccountingError("Journal source_type is required")
     existing_result = await db.execute(
         select(JournalEntry).where(
             JournalEntry.tenant_id == tenant_id,
@@ -175,7 +185,7 @@ async def post_journal(
             continue
         normalized.append(
             PostingLine(
-                account_code=line.account_code,
+                account_code=line.account_code.strip(),
                 debit=debit,
                 credit=credit,
                 memo=line.memo,
@@ -194,7 +204,7 @@ async def post_journal(
     accounts = await ensure_default_chart(db, tenant_id)
     missing = sorted({line.account_code for line in normalized if line.account_code not in accounts})
     if missing:
-        raise AccountingError(f"Unknown account code(s): {', '.join(missing)}")
+        raise AccountingError(f"Unknown or inactive account code(s): {', '.join(missing)}")
 
     entry = JournalEntry(
         tenant_id=tenant_id,
@@ -202,8 +212,8 @@ async def post_journal(
         entry_number=_entry_number(),
         source_type=source_type,
         source_id=source_id,
-        description=description[:240],
-        occurred_at=occurred_at,
+        description=description.strip()[:240],
+        occurred_at=_aware(occurred_at),
         posted_by_user_id=user_id,
         status="posted",
     )
@@ -223,6 +233,129 @@ async def post_journal(
     return entry
 
 
+async def post_manual_journal(
+    db: AsyncSession,
+    *,
+    tenant_id: UUID,
+    branch_id: UUID | None,
+    user_id: UUID,
+    client_operation_id: UUID,
+    description: str,
+    occurred_at: datetime | None,
+    lines: list[PostingLine],
+) -> JournalEntry:
+    return await post_journal(
+        db,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        user_id=user_id,
+        source_type="manual_journal",
+        source_id=client_operation_id,
+        description=description,
+        occurred_at=occurred_at or datetime.now(timezone.utc),
+        lines=lines,
+    )
+
+
+async def reverse_manual_journal(
+    db: AsyncSession,
+    *,
+    tenant_id: UUID,
+    branch_id: UUID | None,
+    user_id: UUID,
+    journal_entry_id: UUID,
+    client_operation_id: UUID,
+    reason: str,
+    occurred_at: datetime | None,
+) -> JournalEntry:
+    original_result = await db.execute(
+        select(JournalEntry).where(
+            JournalEntry.id == journal_entry_id,
+            JournalEntry.tenant_id == tenant_id,
+        )
+    )
+    original = original_result.scalar_one_or_none()
+    if original is None:
+        raise AccountingError("Journal entry not found")
+    if branch_id is not None and original.branch_id != branch_id:
+        raise AccountingError("Journal entry belongs to another branch")
+    if original.source_type != "manual_journal":
+        raise AccountingError(
+            "Automated transaction journals cannot be reversed directly; reverse the source transaction instead"
+        )
+
+    prior_result = await db.execute(
+        select(JournalEntry).where(JournalEntry.reversal_of_id == original.id)
+    )
+    prior = prior_result.scalar_one_or_none()
+    if prior is not None:
+        if prior.source_type == "manual_journal_reversal" and prior.source_id == client_operation_id:
+            return prior
+        raise AccountingError("This journal entry has already been reversed")
+
+    line_result = await db.execute(
+        select(JournalLine, Account)
+        .join(Account, Account.id == JournalLine.account_id)
+        .where(JournalLine.journal_entry_id == original.id)
+        .order_by(JournalLine.created_at, JournalLine.id)
+    )
+    opposite = [
+        PostingLine(
+            account_code=account.code,
+            debit=line.credit,
+            credit=line.debit,
+            memo=f"Reversal of {original.entry_number}",
+        )
+        for line, account in line_result.all()
+    ]
+    reversal = await post_journal(
+        db,
+        tenant_id=tenant_id,
+        branch_id=original.branch_id,
+        user_id=user_id,
+        source_type="manual_journal_reversal",
+        source_id=client_operation_id,
+        description=f"Reversal of {original.entry_number}: {reason.strip()}",
+        occurred_at=occurred_at or datetime.now(timezone.utc),
+        lines=opposite,
+    )
+    if reversal.reversal_of_id is None:
+        reversal.reversal_of_id = original.id
+        reversal.reversal_reason = reason.strip()
+        await db.flush()
+    elif reversal.reversal_of_id != original.id:
+        raise AccountingError("Reversal operation ID is already linked to another journal")
+    return reversal
+
+
+def _totals_subquery(
+    *,
+    tenant_id: UUID,
+    branch_id: UUID | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
+):
+    statement = (
+        select(
+            JournalLine.account_id.label("account_id"),
+            func.coalesce(func.sum(JournalLine.debit), 0).label("debits"),
+            func.coalesce(func.sum(JournalLine.credit), 0).label("credits"),
+        )
+        .join(JournalEntry, JournalEntry.id == JournalLine.journal_entry_id)
+        .where(
+            JournalEntry.tenant_id == tenant_id,
+            JournalEntry.status == "posted",
+        )
+    )
+    if branch_id is not None:
+        statement = statement.where(JournalEntry.branch_id == branch_id)
+    if start is not None:
+        statement = statement.where(JournalEntry.occurred_at >= _aware(start))
+    if end is not None:
+        statement = statement.where(JournalEntry.occurred_at <= _aware(end))
+    return statement.group_by(JournalLine.account_id).subquery()
+
+
 async def trial_balance(
     db: AsyncSession,
     *,
@@ -230,24 +363,17 @@ async def trial_balance(
     branch_id: UUID | None = None,
     as_of: datetime | None = None,
 ) -> list[dict[str, object]]:
-    debit_sum = func.coalesce(func.sum(JournalLine.debit), 0)
-    credit_sum = func.coalesce(func.sum(JournalLine.credit), 0)
-    statement = (
-        select(Account, debit_sum.label("debits"), credit_sum.label("credits"))
-        .outerjoin(JournalLine, JournalLine.account_id == Account.id)
-        .outerjoin(JournalEntry, JournalEntry.id == JournalLine.journal_entry_id)
-        .where(Account.tenant_id == tenant_id, Account.is_active.is_(True))
+    totals = _totals_subquery(tenant_id=tenant_id, branch_id=branch_id, end=as_of)
+    result = await db.execute(
+        select(
+            Account,
+            func.coalesce(totals.c.debits, 0),
+            func.coalesce(totals.c.credits, 0),
+        )
+        .outerjoin(totals, totals.c.account_id == Account.id)
+        .where(Account.tenant_id == tenant_id)
+        .order_by(Account.code)
     )
-    if branch_id is not None:
-        statement = statement.where(
-            (JournalEntry.branch_id == branch_id) | (JournalEntry.id.is_(None))
-        )
-    if as_of is not None:
-        statement = statement.where(
-            (JournalEntry.occurred_at <= as_of) | (JournalEntry.id.is_(None))
-        )
-    statement = statement.group_by(Account.id).order_by(Account.code)
-    result = await db.execute(statement)
     rows: list[dict[str, object]] = []
     for account, debits, credits in result.all():
         debit = money(Decimal(debits or 0))
@@ -277,26 +403,21 @@ async def profit_and_loss(
     start: datetime | None = None,
     end: datetime | None = None,
 ) -> dict[str, object]:
-    debit_sum = func.coalesce(func.sum(JournalLine.debit), 0)
-    credit_sum = func.coalesce(func.sum(JournalLine.credit), 0)
-    statement = (
-        select(Account, debit_sum.label("debits"), credit_sum.label("credits"))
-        .join(JournalLine, JournalLine.account_id == Account.id)
-        .join(JournalEntry, JournalEntry.id == JournalLine.journal_entry_id)
+    totals = _totals_subquery(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        start=start,
+        end=end,
+    )
+    result = await db.execute(
+        select(Account, totals.c.debits, totals.c.credits)
+        .join(totals, totals.c.account_id == Account.id)
         .where(
             Account.tenant_id == tenant_id,
             Account.account_type.in_(["income", "expense"]),
-            JournalEntry.status == "posted",
         )
+        .order_by(Account.code)
     )
-    if branch_id is not None:
-        statement = statement.where(JournalEntry.branch_id == branch_id)
-    if start is not None:
-        statement = statement.where(JournalEntry.occurred_at >= start)
-    if end is not None:
-        statement = statement.where(JournalEntry.occurred_at <= end)
-    statement = statement.group_by(Account.id).order_by(Account.code)
-    result = await db.execute(statement)
 
     revenue = Decimal("0.00")
     cost_of_sales = Decimal("0.00")
@@ -343,13 +464,13 @@ async def balance_sheet(
         as_of=as_of,
     )
     assets = money(
-        sum((row["balance"] for row in rows if row["account_type"] == "asset"), Decimal("0.00"))
+        sum((Decimal(row["balance"]) for row in rows if row["account_type"] == "asset"), Decimal("0.00"))
     )
     liabilities = money(
-        sum((row["balance"] for row in rows if row["account_type"] == "liability"), Decimal("0.00"))
+        sum((Decimal(row["balance"]) for row in rows if row["account_type"] == "liability"), Decimal("0.00"))
     )
     equity = money(
-        sum((row["balance"] for row in rows if row["account_type"] == "equity"), Decimal("0.00"))
+        sum((Decimal(row["balance"]) for row in rows if row["account_type"] == "equity"), Decimal("0.00"))
     )
     pnl = await profit_and_loss(
         db,
@@ -367,4 +488,89 @@ async def balance_sheet(
         "equity_including_current_earnings": equity_with_earnings,
         "liabilities_and_equity": money(liabilities + equity_with_earnings),
         "difference": money(assets - liabilities - equity_with_earnings),
+    }
+
+
+async def ledger_health(
+    db: AsyncSession,
+    *,
+    tenant_id: UUID,
+    branch_id: UUID | None = None,
+) -> dict[str, object]:
+    rows = await trial_balance(db, tenant_id=tenant_id, branch_id=branch_id)
+    debits = money(sum((Decimal(row["debits"]) for row in rows), Decimal("0.00")))
+    credits = money(sum((Decimal(row["credits"]) for row in rows), Decimal("0.00")))
+    by_code = {str(row["code"]): Decimal(row["balance"]) for row in rows}
+
+    inventory_stmt = (
+        select(func.coalesce(func.sum(BranchProductStock.on_hand * Product.cost_price), 0))
+        .join(Product, Product.id == BranchProductStock.product_id)
+        .where(
+            BranchProductStock.tenant_id == tenant_id,
+            Product.tenant_id == tenant_id,
+        )
+    )
+    ap_stmt = select(func.coalesce(func.sum(Purchase.balance_due), 0)).where(
+        Purchase.tenant_id == tenant_id
+    )
+    advance_stmt = select(func.coalesce(func.sum(SupplierPayment.amount), 0)).where(
+        SupplierPayment.tenant_id == tenant_id,
+        SupplierPayment.purchase_id.is_(None),
+    )
+    if branch_id is not None:
+        inventory_stmt = inventory_stmt.where(BranchProductStock.branch_id == branch_id)
+        ap_stmt = ap_stmt.where(Purchase.branch_id == branch_id)
+        advance_stmt = advance_stmt.where(SupplierPayment.branch_id == branch_id)
+
+    inventory_subledger = money(Decimal(await db.scalar(inventory_stmt) or 0))
+    payable_subledger = money(Decimal(await db.scalar(ap_stmt) or 0))
+    advances_subledger = money(Decimal(await db.scalar(advance_stmt) or 0))
+
+    async def missing_source_count(model, source_type: str) -> int:
+        statement = (
+            select(func.count(model.id))
+            .outerjoin(
+                JournalEntry,
+                (JournalEntry.tenant_id == model.tenant_id)
+                & (JournalEntry.source_type == source_type)
+                & (JournalEntry.source_id == model.id),
+            )
+            .where(model.tenant_id == tenant_id, JournalEntry.id.is_(None))
+        )
+        if branch_id is not None:
+            statement = statement.where(model.branch_id == branch_id)
+        return int(await db.scalar(statement) or 0)
+
+    missing_sales = await missing_source_count(Sale, "sale")
+    missing_purchases = await missing_source_count(Purchase, "purchase")
+    missing_expenses = await missing_source_count(Expense, "expense")
+
+    trial_difference = money(debits - credits)
+    inventory_difference = money(by_code.get("1200", Decimal("0.00")) - inventory_subledger)
+    payable_difference = money(by_code.get("2000", Decimal("0.00")) - payable_subledger)
+    advance_difference = money(by_code.get("1400", Decimal("0.00")) - advances_subledger)
+    healthy = (
+        trial_difference == 0
+        and inventory_difference == 0
+        and payable_difference == 0
+        and advance_difference == 0
+        and missing_sales == 0
+        and missing_purchases == 0
+        and missing_expenses == 0
+    )
+    return {
+        "healthy": healthy,
+        "trial_balance_difference": trial_difference,
+        "inventory_gl": money(by_code.get("1200", Decimal("0.00"))),
+        "inventory_subledger": inventory_subledger,
+        "inventory_difference": inventory_difference,
+        "accounts_payable_gl": money(by_code.get("2000", Decimal("0.00"))),
+        "accounts_payable_subledger": payable_subledger,
+        "accounts_payable_difference": payable_difference,
+        "supplier_advances_gl": money(by_code.get("1400", Decimal("0.00"))),
+        "supplier_advances_subledger": advances_subledger,
+        "supplier_advances_difference": advance_difference,
+        "missing_sale_journals": missing_sales,
+        "missing_purchase_journals": missing_purchases,
+        "missing_expense_journals": missing_expenses,
     }
