@@ -24,6 +24,7 @@ from app.services.accounting import (
     payment_account_code,
     post_journal,
 )
+from app.services.idempotency import acquire_operation_lock
 from app.services.outbox import enqueue_event
 from app.services.pricing import line_total, money, quantity, unit_cost
 
@@ -156,6 +157,12 @@ async def complete_purchase(
     user_id: UUID,
     payload: PurchaseReceiveRequest,
 ) -> CompletedPurchase:
+    await acquire_operation_lock(
+        db,
+        tenant_id=tenant_id,
+        scope="purchase",
+        operation_id=payload.client_operation_id,
+    )
     existing = await _existing_purchase(db, tenant_id, payload.client_operation_id)
     if existing is not None:
         return _purchase_result(existing, replay=True)
@@ -417,6 +424,12 @@ async def record_supplier_payment(
     supplier_id: UUID,
     payload: SupplierPaymentRequest,
 ) -> SupplierPayment:
+    await acquire_operation_lock(
+        db,
+        tenant_id=tenant_id,
+        scope="supplier_payment",
+        operation_id=payload.client_operation_id,
+    )
     existing = await _existing_supplier_payment(db, tenant_id, payload.client_operation_id)
     if existing is not None:
         if existing.supplier_id != supplier_id:
@@ -544,6 +557,12 @@ async def record_expense(
     user_id: UUID,
     payload: ExpenseCreateRequest,
 ) -> RecordedExpense:
+    await acquire_operation_lock(
+        db,
+        tenant_id=tenant_id,
+        scope="expense",
+        operation_id=payload.client_operation_id,
+    )
     existing = await _existing_expense(db, tenant_id, payload.client_operation_id)
     if existing is not None:
         return RecordedExpense(
