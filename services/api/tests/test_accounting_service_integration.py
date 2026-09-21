@@ -1,9 +1,10 @@
 import os
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError
 
 from app.core.database import SessionLocal
@@ -12,10 +13,13 @@ from app.models.commerce import BranchProductStock, Product
 from app.models.identity import Branch, Tenant, User
 from app.services.accounting import (
     AccountingError,
+    AccountingPeriodLockedError,
     PostingLine,
+    advance_period_lock,
     ensure_default_chart,
     ledger_health,
     post_manual_journal,
+    profit_and_loss,
     reverse_manual_journal,
     trial_balance,
 )
@@ -205,3 +209,97 @@ async def test_ledger_health_reconciles_inventory_to_gl() -> None:
         assert health["inventory_gl"] == Decimal("401.23")
         assert health["inventory_subledger"] == Decimal("401.23")
         assert health["inventory_difference"] == Decimal("0.00")
+
+
+@pytest.mark.asyncio
+async def test_period_lock_blocks_backdated_posting_but_allows_later_posting() -> None:
+    async with SessionLocal() as db:
+        user, tenant, branch = await _identity(db)
+        lock_point = datetime.now(timezone.utc) - timedelta(days=1)
+        settings = await advance_period_lock(
+            db,
+            tenant_id=tenant.id,
+            user_id=user.id,
+            locked_through=lock_point,
+            reason="Month-end close integration test",
+        )
+        await db.commit()
+        assert settings.locked_through == lock_point
+
+        rejected_operation = uuid4()
+        with pytest.raises(AccountingPeriodLockedError, match="locked through"):
+            await post_manual_journal(
+                db,
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                user_id=user.id,
+                client_operation_id=rejected_operation,
+                description="Backdated entry must be rejected",
+                occurred_at=lock_point - timedelta(seconds=1),
+                lines=[
+                    PostingLine(account_code="1000", debit=Decimal("25.00")),
+                    PostingLine(account_code="3000", credit=Decimal("25.00")),
+                ],
+            )
+        await db.rollback()
+        rejected_count = await db.scalar(
+            select(func.count(JournalEntry.id)).where(
+                JournalEntry.tenant_id == tenant.id,
+                JournalEntry.source_type == "manual_journal",
+                JournalEntry.source_id == rejected_operation,
+            )
+        )
+        assert rejected_count == 0
+
+        allowed_operation = uuid4()
+        allowed = await post_manual_journal(
+            db,
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            user_id=user.id,
+            client_operation_id=allowed_operation,
+            description="Entry after close boundary",
+            occurred_at=lock_point + timedelta(seconds=1),
+            lines=[
+                PostingLine(account_code="1000", debit=Decimal("25.00")),
+                PostingLine(account_code="3000", credit=Decimal("25.00")),
+            ],
+        )
+        await db.commit()
+        assert allowed.source_id == allowed_operation
+
+        with pytest.raises(AccountingError, match="only move forward"):
+            await advance_period_lock(
+                db,
+                tenant_id=tenant.id,
+                user_id=user.id,
+                locked_through=lock_point - timedelta(days=1),
+                reason="A closed period must not be silently reopened",
+            )
+        await db.rollback()
+
+
+@pytest.mark.asyncio
+async def test_profit_and_loss_keeps_other_income_out_of_gross_profit() -> None:
+    async with SessionLocal() as db:
+        user, tenant, branch = await _identity(db)
+        await post_manual_journal(
+            db,
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            user_id=user.id,
+            client_operation_id=uuid4(),
+            description="Inventory count gain",
+            occurred_at=None,
+            lines=[
+                PostingLine(account_code="1200", debit=Decimal("30.00")),
+                PostingLine(account_code="4010", credit=Decimal("30.00")),
+            ],
+        )
+        await db.commit()
+
+        report = await profit_and_loss(db, tenant_id=tenant.id, branch_id=branch.id)
+        assert report["sales_revenue"] == Decimal("0.00")
+        assert report["other_income"] == Decimal("30.00")
+        assert report["gross_profit"] == Decimal("0.00")
+        assert report["net_profit"] == Decimal("30.00")
