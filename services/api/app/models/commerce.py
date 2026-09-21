@@ -20,8 +20,8 @@ class ProductCategory(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class Product(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "products"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "sku"),
-        UniqueConstraint("tenant_id", "barcode"),
+        UniqueConstraint("tenant_id", "sku", name="uq_products_tenant_sku"),
+        UniqueConstraint("tenant_id", "barcode", name="uq_products_tenant_barcode"),
     )
 
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
@@ -73,8 +73,10 @@ class StockMovement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class Sale(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "sales"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "client_operation_id"),
-        UniqueConstraint("tenant_id", "sale_number"),
+        UniqueConstraint(
+            "tenant_id", "client_operation_id", name="uq_sales_tenant_client_operation"
+        ),
+        UniqueConstraint("tenant_id", "sale_number", name="uq_sales_tenant_sale_number"),
     )
 
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
