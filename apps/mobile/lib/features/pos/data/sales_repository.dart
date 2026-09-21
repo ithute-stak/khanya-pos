@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:drift/drift.dart';
 import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/core/session/session_context.dart';
 import 'package:khanya_pos/core/storage/app_database.dart';

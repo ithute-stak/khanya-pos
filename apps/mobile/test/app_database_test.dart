@@ -50,7 +50,10 @@ void main() {
 
     final products = await database.getProducts(tenantId: 'tenant-1', branchId: 'branch-1');
     expect(products.single.onHandMilli, 8000);
-    expect(await database.getPendingSale('00000000-0000-4000-8000-000000000001'), isNotNull);
+    expect(
+      await database.getPendingSale('00000000-0000-4000-8000-000000000001'),
+      isA<PendingSale>(),
+    );
   });
 
   test('replaying the same local operation does not deduct stock twice', () async {

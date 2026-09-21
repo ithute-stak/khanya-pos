@@ -5,3 +5,5 @@ linter:
     always_use_package_imports: true
     avoid_print: true
     prefer_final_locals: true
+    prefer_initializing_formals: false
+    unnecessary_underscores: false

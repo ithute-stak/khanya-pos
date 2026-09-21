@@ -18,7 +18,7 @@ class ApiClient {
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           if (_requestHeadersProvider != null) {
-            options.headers.addAll(await _requestHeadersProvider!());
+            options.headers.addAll(await _requestHeadersProvider());
           }
           handler.next(options);
         },
@@ -43,7 +43,7 @@ class ApiClient {
           final request = error.requestOptions;
           request.extra['khanyaAuthRetried'] = true;
           if (_requestHeadersProvider != null) {
-            request.headers.addAll(await _requestHeadersProvider!());
+            request.headers.addAll(await _requestHeadersProvider());
           }
           try {
             final response = await dio.fetch<dynamic>(request);

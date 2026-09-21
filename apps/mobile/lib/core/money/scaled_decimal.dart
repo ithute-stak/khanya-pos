@@ -61,7 +61,7 @@ class Loti {
     final value = ScaledDecimal.fromMinor(minor);
     final parts = value.split('.');
     final negative = parts.first.startsWith('-');
-    var whole = negative ? parts.first.substring(1) : parts.first;
+    final whole = negative ? parts.first.substring(1) : parts.first;
     final buffer = StringBuffer();
     for (var index = 0; index < whole.length; index++) {
       if (index > 0 && (whole.length - index) % 3 == 0) buffer.write(',');
