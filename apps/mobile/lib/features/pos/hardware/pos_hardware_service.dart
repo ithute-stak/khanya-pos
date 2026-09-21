@@ -50,6 +50,7 @@ class PosHardwareService {
       paymentMethod: PaymentMethod.cash,
       syncStatus: 'Hardware test',
       cashierName: 'Khanya POS',
+      cashTenderedMinor: 200,
     );
     return printRawReceipt(testReceipt, settings);
   }
@@ -120,6 +121,10 @@ Uint8List buildEscPosReceiptBytes(
   command(const [0x1b, 0x45, 0x01]);
   line(_columns('TOTAL', formatMalotiMinor(receipt.totalMinor), width));
   command(const [0x1b, 0x45, 0x00]);
+  if (receipt.cashTenderedMinor != null) {
+    line(_columns('CASH', formatMalotiMinor(receipt.cashTenderedMinor!), width));
+    line(_columns('CHANGE', formatMalotiMinor(receipt.cashChangeMinor ?? 0), width));
+  }
   line(divider);
   command(const [0x1b, 0x61, 0x01]);
   for (final part in _wrap('Status: ${_ascii(receipt.syncStatus)}', width)) {

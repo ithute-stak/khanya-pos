@@ -38,6 +38,7 @@ class SaleReceipt {
     required this.syncStatus,
     this.branchId,
     this.cashierName,
+    this.cashTenderedMinor,
   });
 
   final String businessName;
@@ -48,8 +49,14 @@ class SaleReceipt {
   final String syncStatus;
   final String? branchId;
   final String? cashierName;
+  final int? cashTenderedMinor;
 
   int get totalMinor => lines.fold(0, (total, line) => total + line.lineTotalMinor);
+  int? get cashChangeMinor {
+    final tendered = cashTenderedMinor;
+    if (paymentMethod != PaymentMethod.cash || tendered == null) return null;
+    return tendered > totalMinor ? tendered - totalMinor : 0;
+  }
 }
 
 String formatMalotiMinor(int minor) {
@@ -67,7 +74,8 @@ PdfPageFormat saleReceiptPageFormat(
   final widthMm = paperWidthMm == 58 ? 58 : 80;
   final lineCount = receipt.lines.isEmpty ? 1 : receipt.lines.length;
   final perLineMm = widthMm == 58 ? 20 : 15;
-  final heightMm = (115 + (lineCount * perLineMm)).clamp(140, 2000).toDouble();
+  final cashExtraMm = receipt.cashTenderedMinor == null ? 0 : 12;
+  final heightMm = (115 + cashExtraMm + (lineCount * perLineMm)).clamp(140, 2000).toDouble();
   final margin = 4 * PdfPageFormat.mm;
   return PdfPageFormat(
     widthMm * PdfPageFormat.mm,
@@ -160,6 +168,11 @@ Future<Uint8List> buildSaleReceiptPdf(
               ),
             ],
           ),
+          if (receipt.cashTenderedMinor != null) ...[
+            pw.SizedBox(height: 2 * PdfPageFormat.mm),
+            _receiptPair('Cash received', formatMalotiMinor(receipt.cashTenderedMinor!)),
+            _receiptPair('Change', formatMalotiMinor(receipt.cashChangeMinor ?? 0)),
+          ],
           pw.SizedBox(height: 3 * PdfPageFormat.mm),
           pw.Text(
             'Sync status: ${receipt.syncStatus}',

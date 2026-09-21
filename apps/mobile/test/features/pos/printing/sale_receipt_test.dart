@@ -3,7 +3,7 @@ import 'package:khanya_pos/features/pos/domain/cart.dart';
 import 'package:khanya_pos/features/pos/printing/sale_receipt.dart';
 
 void main() {
-  test('buildSaleReceiptPdf creates a valid PDF document', () async {
+  test('buildSaleReceiptPdf creates a valid cash receipt document', () async {
     final receipt = SaleReceipt(
       businessName: 'Test Retailer',
       reference: 'sale-operation-1234567890',
@@ -12,6 +12,7 @@ void main() {
       cashierName: 'Cashier One',
       paymentMethod: PaymentMethod.cash,
       syncStatus: 'Synced',
+      cashTenderedMinor: 5000,
       lines: const [
         SaleReceiptLine(
           name: 'Bread',
@@ -35,6 +36,8 @@ void main() {
     expect(bytes.length, greaterThan(500));
     expect(String.fromCharCodes(bytes.take(4)), '%PDF');
     expect(receipt.totalMinor, 4800);
+    expect(receipt.cashChangeMinor, 200);
     expect(formatMalotiMinor(receipt.totalMinor), 'M 48.00');
+    expect(formatMalotiMinor(receipt.cashChangeMinor!), 'M 2.00');
   });
 }
