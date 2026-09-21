@@ -10,11 +10,18 @@ sealed class CheckoutEvent extends Equatable {
 }
 
 final class CheckoutSaleRequested extends CheckoutEvent {
-  const CheckoutSaleRequested({required this.lines, required this.paymentMethod});
+  const CheckoutSaleRequested({
+    required this.lines,
+    required this.paymentMethod,
+    this.cashTenderedMinor,
+  });
+
   final List<CartLine> lines;
   final PaymentMethod paymentMethod;
+  final int? cashTenderedMinor;
+
   @override
-  List<Object?> get props => [lines, paymentMethod];
+  List<Object?> get props => [lines, paymentMethod, cashTenderedMinor];
 }
 
 final class CheckoutReset extends CheckoutEvent {
@@ -30,6 +37,7 @@ class CheckoutState extends Equatable {
     this.errorMessage,
     this.lines = const [],
     this.paymentMethod,
+    this.cashTenderedMinor,
   });
 
   final CheckoutStatus status;
@@ -37,9 +45,24 @@ class CheckoutState extends Equatable {
   final String? errorMessage;
   final List<CartLine> lines;
   final PaymentMethod? paymentMethod;
+  final int? cashTenderedMinor;
+
+  int get totalMinor => lines.fold(0, (total, line) => total + line.lineTotalMinor);
+  int? get cashChangeMinor {
+    final tendered = cashTenderedMinor;
+    if (paymentMethod != PaymentMethod.cash || tendered == null) return null;
+    return tendered > totalMinor ? tendered - totalMinor : 0;
+  }
 
   @override
-  List<Object?> get props => [status, submission, errorMessage, lines, paymentMethod];
+  List<Object?> get props => [
+        status,
+        submission,
+        errorMessage,
+        lines,
+        paymentMethod,
+        cashTenderedMinor,
+      ];
 }
 
 class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
@@ -56,10 +79,24 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
   ) async {
     if (state.status == CheckoutStatus.submitting || event.lines.isEmpty) return;
     final lines = List<CartLine>.unmodifiable(event.lines);
+    final totalMinor = lines.fold<int>(0, (total, line) => total + line.lineTotalMinor);
+    if (event.paymentMethod == PaymentMethod.cash &&
+        (event.cashTenderedMinor == null || event.cashTenderedMinor! < totalMinor)) {
+      emit(CheckoutState(
+        status: CheckoutStatus.failed,
+        errorMessage: 'Cash received cannot be less than the amount due.',
+        lines: lines,
+        paymentMethod: event.paymentMethod,
+        cashTenderedMinor: event.cashTenderedMinor,
+      ));
+      return;
+    }
+
     emit(CheckoutState(
       status: CheckoutStatus.submitting,
       lines: lines,
       paymentMethod: event.paymentMethod,
+      cashTenderedMinor: event.cashTenderedMinor,
     ));
     try {
       final submission = await _repository.submitSale(
@@ -71,6 +108,7 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         submission: submission,
         lines: lines,
         paymentMethod: event.paymentMethod,
+        cashTenderedMinor: event.cashTenderedMinor,
       ));
     } catch (error) {
       emit(CheckoutState(
@@ -78,6 +116,7 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         errorMessage: error is StateError ? error.message.toString() : 'The sale could not be saved.',
         lines: lines,
         paymentMethod: event.paymentMethod,
+        cashTenderedMinor: event.cashTenderedMinor,
       ));
     }
   }
