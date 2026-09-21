@@ -17,7 +17,6 @@ AppId={{4D90A0A7-CCF0-4AE6-B74F-F27DEBB8312A}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher=Khanya Resources Pty Ltd
-AppPublisherURL=https://khanya.example
 DefaultDirName={localappdata}\Programs\Khanya POS
 DefaultGroupName=Khanya POS
 DisableProgramGroupPage=yes
