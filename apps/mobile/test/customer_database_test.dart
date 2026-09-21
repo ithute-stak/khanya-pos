@@ -71,8 +71,8 @@ void main() {
       creditMinor: 5000,
     );
 
-    expect(
-      () => database.reserveCredit(
+    await expectLater(
+      database.reserveCredit(
         clientOperationId: 'sale-2',
         tenantId: 'tenant-1',
         branchId: 'branch-1',
