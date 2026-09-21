@@ -42,6 +42,16 @@ final class CartPaymentMethodChanged extends CartEvent {
   List<Object?> get props => [paymentMethod];
 }
 
+final class CartReplaced extends CartEvent {
+  const CartReplaced({required this.lines, required this.paymentMethod});
+
+  final List<CartLine> lines;
+  final PaymentMethod paymentMethod;
+
+  @override
+  List<Object?> get props => [lines, paymentMethod];
+}
+
 final class CartCleared extends CartEvent {
   const CartCleared();
 }
@@ -105,6 +115,13 @@ class CartBloc extends Bloc<CartEvent, CartState> {
 
     on<CartPaymentMethodChanged>((event, emit) {
       emit(state.copyWith(paymentMethod: event.paymentMethod));
+    });
+
+    on<CartReplaced>((event, emit) {
+      emit(CartState(
+        lines: List<CartLine>.unmodifiable(event.lines),
+        paymentMethod: event.paymentMethod,
+      ));
     });
 
     on<CartCleared>((event, emit) => emit(CartState(paymentMethod: state.paymentMethod)));
