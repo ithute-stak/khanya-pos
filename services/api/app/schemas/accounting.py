@@ -29,3 +29,8 @@ class JournalReversalRequest(BaseModel):
     client_operation_id: UUID
     reason: str = Field(min_length=3, max_length=2000)
     occurred_at: datetime | None = None
+
+
+class PeriodLockRequest(BaseModel):
+    locked_through: datetime
+    reason: str = Field(min_length=3, max_length=2000)
