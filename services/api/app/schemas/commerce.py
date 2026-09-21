@@ -1,0 +1,51 @@
+from decimal import Decimal
+from uuid import UUID
+
+from pydantic import BaseModel, Field, field_validator
+
+
+class ProductCategoryCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+
+
+class ProductCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=200)
+    sku: str = Field(min_length=1, max_length=80)
+    barcode: str | None = Field(default=None, max_length=120)
+    category_id: UUID | None = None
+    unit: str = Field(default="unit", min_length=1, max_length=40)
+    selling_price: Decimal = Field(ge=0)
+    cost_price: Decimal = Field(default=Decimal("0.00"), ge=0)
+    reorder_level: Decimal = Field(default=Decimal("0.000"), ge=0)
+    track_stock: bool = True
+
+
+class StockAdjustmentRequest(BaseModel):
+    client_operation_id: UUID
+    product_id: UUID
+    quantity_delta: Decimal
+    reason: str = Field(min_length=2, max_length=240)
+
+    @field_validator("quantity_delta")
+    @classmethod
+    def quantity_cannot_be_zero(cls, value: Decimal) -> Decimal:
+        if value == 0:
+            raise ValueError("quantity_delta cannot be zero")
+        return value
+
+
+class SaleItemInput(BaseModel):
+    product_id: UUID
+    quantity: Decimal = Field(gt=0)
+
+
+class PaymentInput(BaseModel):
+    method: str = Field(pattern=r"^(cash|card|mobile_money|bank_transfer)$")
+    amount: Decimal = Field(gt=0)
+    reference: str | None = Field(default=None, max_length=160)
+
+
+class SaleCompleteRequest(BaseModel):
+    client_operation_id: UUID
+    items: list[SaleItemInput] = Field(min_length=1)
+    payments: list[PaymentInput] = Field(min_length=1)

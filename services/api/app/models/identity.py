@@ -10,8 +10,9 @@ from app.security.permissions import Role
 
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("email"),)
 
-    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    email: Mapped[str] = mapped_column(String(320), index=True)
     phone: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True)
     display_name: Mapped[str] = mapped_column(String(160))
     password_hash: Mapped[str] = mapped_column(String(512))
@@ -20,9 +21,10 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class Tenant(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "tenants"
+    __table_args__ = (UniqueConstraint("slug"),)
 
     name: Mapped[str] = mapped_column(String(200))
-    slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    slug: Mapped[str] = mapped_column(String(80), index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
@@ -56,7 +58,6 @@ class TenantMembership(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class MembershipBranch(Base):
     __tablename__ = "membership_branches"
-    __table_args__ = (UniqueConstraint("membership_id", "branch_id"),)
 
     membership_id: Mapped[UUID] = mapped_column(
         ForeignKey("tenant_memberships.id", ondelete="CASCADE"), primary_key=True
