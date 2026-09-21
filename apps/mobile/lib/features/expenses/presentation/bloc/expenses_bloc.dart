@@ -81,16 +81,24 @@ class ExpensesBloc extends Bloc<ExpensesEvent, ExpensesState> {
     }
     emit(ExpensesState(items: state.items, saving: true));
     try {
-      await _repository.createExpense(
+      final queued = await _repository.createExpense(
         category: event.category,
         description: event.description,
         amountMinor: amountMinor,
         paymentMethod: event.paymentMethod,
         receiptDocumentId: event.receiptDocumentId,
       );
-      emit(ExpensesState(items: state.items, saved: true, message: 'Expense saved.'));
+      emit(
+        ExpensesState(
+          items: state.items,
+          saved: true,
+          message: queued
+              ? 'Expense saved on this device and queued for sync.'
+              : 'Expense saved and synced.',
+        ),
+      );
     } catch (_) {
-      emit(ExpensesState(items: state.items, message: 'Could not save expense. Check connectivity and try again.'));
+      emit(ExpensesState(items: state.items, message: 'Could not save expense. Review the values and try again.'));
     }
   }
 }
