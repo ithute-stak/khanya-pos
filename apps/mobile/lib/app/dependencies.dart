@@ -62,7 +62,11 @@ class AppDependencies {
       syncService: syncService,
     );
     final heldSalesRepository = HeldSalesRepository(sessionContext: sessionContext);
-    final tillRepository = TillRepository(apiClient: apiClient, database: database);
+    final tillRepository = TillRepository(
+      apiClient: apiClient,
+      database: database,
+      sessionContext: sessionContext,
+    );
     final purchasingRepository = PurchasingRepository(
       apiClient: apiClient,
       database: database,
