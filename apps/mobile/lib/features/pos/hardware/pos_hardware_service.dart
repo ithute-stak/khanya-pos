@@ -17,7 +17,7 @@ class PosHardwareService {
   ) async {
     if (!supportsWindowsRawPrinting || !settings.hasPrinter) return false;
     return WindowsPrinter.printRawData(
-      printerName: settings.printerName,
+      printerName: settings.printerName!,
       data: buildEscPosReceiptBytes(receipt, settings),
       useRawDatatype: true,
     );
@@ -26,7 +26,7 @@ class PosHardwareService {
   static Future<bool> openCashDrawer(PosHardwareSettings settings) async {
     if (!supportsWindowsRawPrinting || !settings.hasPrinter) return false;
     return WindowsPrinter.printRawData(
-      printerName: settings.printerName,
+      printerName: settings.printerName!,
       data: buildCashDrawerPulseBytes(),
       useRawDatatype: true,
     );
