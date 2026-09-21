@@ -35,108 +35,212 @@ class _LoginPageState extends State<LoginPage> {
     final state = context.watch<SessionBloc>().state;
     final loading = state is SessionAuthenticating;
     final error = state is SessionFailure ? state.message : null;
+
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: AutofillGroup(
-                child: Form(
-                  key: _formKey,
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(28),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primaryContainer,
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              child: const Padding(
-                                padding: EdgeInsets.all(14),
-                                child: Icon(Icons.storefront_rounded, size: 34),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text('Welcome back', style: Theme.of(context).textTheme.headlineMedium),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Sign in to Khanya Resources Small Business POS.',
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.black54),
-                          ),
-                          if (error != null) ...[
-                            const SizedBox(height: 18),
-                            _ErrorBanner(message: error),
-                          ],
-                          const SizedBox(height: 24),
-                          TextFormField(
-                            controller: _identifierController,
-                            enabled: !loading,
-                            keyboardType: TextInputType.emailAddress,
-                            autofillHints: const [AutofillHints.username, AutofillHints.email],
-                            decoration: const InputDecoration(
-                              labelText: 'Email or phone',
-                              prefixIcon: Icon(Icons.person_outline),
-                            ),
-                            validator: (value) => value == null || value.trim().isEmpty
-                                ? 'Enter your email or phone number'
-                                : null,
-                            onFieldSubmitted: (_) => _submit(),
-                          ),
-                          const SizedBox(height: 14),
-                          TextFormField(
-                            controller: _passwordController,
-                            enabled: !loading,
-                            obscureText: _obscurePassword,
-                            autofillHints: const [AutofillHints.password],
-                            decoration: InputDecoration(
-                              labelText: 'Password',
-                              prefixIcon: const Icon(Icons.lock_outline),
-                              suffixIcon: IconButton(
-                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                                icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                              ),
-                            ),
-                            validator: (value) => value == null || value.isEmpty ? 'Enter your password' : null,
-                            onFieldSubmitted: (_) => _submit(),
-                          ),
-                          const SizedBox(height: 22),
-                          FilledButton.icon(
-                            onPressed: loading ? null : _submit,
-                            icon: loading
-                                ? const SizedBox.square(
-                                    dimension: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : const Icon(Icons.login),
-                            label: Text(loading ? 'Signing in…' : 'Sign in'),
-                          ),
-                          const SizedBox(height: 18),
-                          const Row(
-                            children: [
-                              Icon(Icons.offline_bolt_outlined, size: 18),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'After your first successful sign-in, saved products and queued sales remain available offline.',
-                                  style: TextStyle(fontSize: 12.5),
-                                ),
-                              ),
-                            ],
-                          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final desktop = constraints.maxWidth >= 900;
+            if (!desktop) {
+              return Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: _buildLoginCard(
+                      context,
+                      loading: loading,
+                      error: error,
+                      showCompactBrand: true,
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(
+                  flex: 6,
+                  child: Container(
+                    height: double.infinity,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFFFCFDFC),
+                          Color(0xFFEAF4E8),
                         ],
+                      ),
+                    ),
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          left: -110,
+                          bottom: -130,
+                          child: Container(
+                            width: 360,
+                            height: 360,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.06),
+                            ),
+                          ),
+                        ),
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 36),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 560, maxHeight: 760),
+                              child: Image.asset(
+                                'assets/branding/khanya_resources_vertical.webp',
+                                fit: BoxFit.contain,
+                                semanticLabel: 'Khanya Resources Management and Consultancy Services',
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 5,
+                  child: Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 36),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 440),
+                        child: _buildLoginCard(
+                          context,
+                          loading: loading,
+                          error: error,
+                          showCompactBrand: false,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoginCard(
+    BuildContext context, {
+    required bool loading,
+    required String? error,
+    required bool showCompactBrand,
+  }) {
+    return AutofillGroup(
+      child: Form(
+        key: _formKey,
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (showCompactBrand) ...[
+                  Image.asset(
+                    'assets/branding/khanya_resources_horizontal.webp',
+                    height: 92,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.centerLeft,
+                    semanticLabel: 'Khanya Resources',
+                  ),
+                  const SizedBox(height: 22),
+                ] else ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Icon(
+                          Icons.point_of_sale_rounded,
+                          size: 34,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+                Text('Welcome back', style: Theme.of(context).textTheme.headlineMedium),
+                const SizedBox(height: 6),
+                Text(
+                  'Sign in to Khanya Resources POS.',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.black54),
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 18),
+                  _ErrorBanner(message: error),
+                ],
+                const SizedBox(height: 24),
+                TextFormField(
+                  controller: _identifierController,
+                  enabled: !loading,
+                  keyboardType: TextInputType.emailAddress,
+                  autofillHints: const [AutofillHints.username, AutofillHints.email],
+                  decoration: const InputDecoration(
+                    labelText: 'Email or phone',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? 'Enter your email or phone number'
+                      : null,
+                  onFieldSubmitted: (_) => _submit(),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _passwordController,
+                  enabled: !loading,
+                  obscureText: _obscurePassword,
+                  autofillHints: const [AutofillHints.password],
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                    ),
+                  ),
+                  validator: (value) => value == null || value.isEmpty ? 'Enter your password' : null,
+                  onFieldSubmitted: (_) => _submit(),
+                ),
+                const SizedBox(height: 22),
+                FilledButton.icon(
+                  onPressed: loading ? null : _submit,
+                  icon: loading
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.login),
+                  label: Text(loading ? 'Signing in…' : 'Sign in'),
+                ),
+                const SizedBox(height: 18),
+                const Row(
+                  children: [
+                    Icon(Icons.offline_bolt_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'After your first successful sign-in, saved products and queued sales remain available offline.',
+                        style: TextStyle(fontSize: 12.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
