@@ -12,6 +12,7 @@ import 'package:khanya_pos/core/sync/sync_bloc.dart';
 import 'package:khanya_pos/features/auth/presentation/bloc/session_bloc.dart';
 import 'package:khanya_pos/features/auth/presentation/business_context_page.dart';
 import 'package:khanya_pos/features/auth/presentation/login_page.dart';
+import 'package:khanya_pos/features/customers/data/customer_repository.dart';
 import 'package:khanya_pos/features/pos/data/held_sales_repository.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 
@@ -36,6 +37,7 @@ class _KhanyaPosAppState extends State<KhanyaPosApp> {
     return MultiRepositoryProvider(
       providers: [
         RepositoryProvider.value(value: dependencies.productRepository),
+        RepositoryProvider<CustomerRepository>.value(value: dependencies.customerRepository),
         RepositoryProvider.value(value: dependencies.salesRepository),
         RepositoryProvider<HeldSalesRepository>.value(value: dependencies.heldSalesRepository),
         RepositoryProvider.value(value: dependencies.purchasingRepository),
@@ -57,8 +59,10 @@ class _KhanyaPosAppState extends State<KhanyaPosApp> {
           BlocProvider(
             create: (_) => SyncBloc(
               database: dependencies.database,
+              customerDatabase: dependencies.customerDatabase,
               syncService: dependencies.syncService,
               productRepository: dependencies.productRepository,
+              customerRepository: dependencies.customerRepository,
             )..add(const SyncStarted()),
           ),
           BlocProvider(
