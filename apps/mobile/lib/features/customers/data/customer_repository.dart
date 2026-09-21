@@ -206,7 +206,10 @@ class CustomerRepository {
       ),
     );
 
-    await _syncService.flushPendingCustomerPayments();
+    // Always use the complete dependency-ordered pipeline here. A customer
+    // receipt recorded while a credit sale is still queued must never reach
+    // the server before that sale (and any purchase that supplies its stock).
+    await _syncService.flushAll();
     final pending = await _customerDatabase.getPendingPayment(clientOperationId);
     if (pending == null) {
       try {
