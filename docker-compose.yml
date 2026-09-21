@@ -44,6 +44,20 @@ services:
       - ./services/api:/app
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
 
+  outbox-worker:
+    build:
+      context: ./services/api
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./services/api:/app
+    command: ["sh", "-c", "alembic upgrade head && python -m app.workers.outbox"]
+
 volumes:
   khanya_postgres:
   khanya_redis:

@@ -1,4 +1,5 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,17 +7,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.redis import redis_client
+from app.realtime.subscriber import run_realtime_subscriber
 
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    yield
-    await redis_client.aclose()
+    realtime_task = asyncio.create_task(run_realtime_subscriber())
+    try:
+        yield
+    finally:
+        realtime_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await realtime_task
+        await redis_client.aclose()
 
 
-app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version="0.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
