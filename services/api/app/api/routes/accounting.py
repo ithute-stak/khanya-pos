@@ -16,6 +16,7 @@ from app.schemas.accounting import (
 )
 from app.services.accounting import (
     AccountingError,
+    AccountingPeriodLockedError,
     PostingLine,
     advance_period_lock,
     balance_sheet,
@@ -179,6 +180,9 @@ async def create_manual_journal(
             "source_id": entry.source_id,
             "occurred_at": entry.occurred_at,
         }
+    except AccountingPeriodLockedError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except AccountingError as exc:
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -211,6 +215,9 @@ async def reverse_journal(
             "reversal_reason": entry.reversal_reason,
             "occurred_at": entry.occurred_at,
         }
+    except AccountingPeriodLockedError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except AccountingError as exc:
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
