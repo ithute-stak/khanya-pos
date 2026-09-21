@@ -55,7 +55,7 @@ class DashboardPage extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _DashboardHero(
-                        firstName: session == null ? null : session.displayName.split(' ').first,
+                        firstName: session?.displayName.split(' ').first,
                         businessName: membership?.tenantName,
                       ),
                       const SizedBox(height: 16),
