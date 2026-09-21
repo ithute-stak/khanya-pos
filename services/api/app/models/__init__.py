@@ -28,6 +28,7 @@ from app.models.purchasing import (
     Supplier,
     SupplierPayment,
 )
+from app.models.till import TillCashMovement, TillShift
 
 __all__ = [
     "Account",
@@ -57,6 +58,8 @@ __all__ = [
     "SupplierPayment",
     "Tenant",
     "TenantMembership",
+    "TillCashMovement",
+    "TillShift",
     "User",
     "UserSession",
 ]

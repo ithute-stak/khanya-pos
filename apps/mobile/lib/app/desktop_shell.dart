@@ -239,6 +239,7 @@ class _DesktopNavItem {
 const _items = <_DesktopNavItem>[
   _DesktopNavItem(label: 'Dashboard', path: '/', icon: Icons.dashboard_outlined, shortcut: 'F1'),
   _DesktopNavItem(label: 'New Sale', path: '/pos', icon: Icons.point_of_sale_outlined, shortcut: 'F2'),
+  _DesktopNavItem(label: 'Till & Shift', path: '/till', icon: Icons.price_check_outlined),
   _DesktopNavItem(label: 'Products', path: '/products', icon: Icons.inventory_2_outlined, shortcut: 'F3'),
   _DesktopNavItem(label: 'Inventory', path: '/inventory', icon: Icons.warehouse_outlined, shortcut: 'F5'),
   _DesktopNavItem(

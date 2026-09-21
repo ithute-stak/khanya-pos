@@ -13,6 +13,7 @@ import 'package:khanya_pos/features/documents/data/receipt_file_store.dart';
 import 'package:khanya_pos/features/expenses/data/expense_repository.dart';
 import 'package:khanya_pos/features/pos/data/held_sales_repository.dart';
 import 'package:khanya_pos/features/pos/data/sales_repository.dart';
+import 'package:khanya_pos/features/pos/data/till_repository.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 import 'package:khanya_pos/features/purchasing/data/purchasing_repository.dart';
 
@@ -26,6 +27,7 @@ class AppDependencies {
     required this.syncService,
     required this.salesRepository,
     required this.heldSalesRepository,
+    required this.tillRepository,
     required this.purchasingRepository,
     required this.documentRepository,
     required this.expenseRepository,
@@ -60,6 +62,11 @@ class AppDependencies {
       syncService: syncService,
     );
     final heldSalesRepository = HeldSalesRepository(sessionContext: sessionContext);
+    final tillRepository = TillRepository(
+      apiClient: apiClient,
+      database: database,
+      sessionContext: sessionContext,
+    );
     final purchasingRepository = PurchasingRepository(
       apiClient: apiClient,
       database: database,
@@ -89,6 +96,7 @@ class AppDependencies {
       syncService: syncService,
       salesRepository: salesRepository,
       heldSalesRepository: heldSalesRepository,
+      tillRepository: tillRepository,
       purchasingRepository: purchasingRepository,
       documentRepository: documentRepository,
       expenseRepository: expenseRepository,
@@ -105,6 +113,7 @@ class AppDependencies {
   final SyncService syncService;
   final SalesRepository salesRepository;
   final HeldSalesRepository heldSalesRepository;
+  final TillRepository tillRepository;
   final PurchasingRepository purchasingRepository;
   final DocumentRepository documentRepository;
   final ExpenseRepository expenseRepository;
