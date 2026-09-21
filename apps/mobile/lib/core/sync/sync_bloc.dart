@@ -103,11 +103,11 @@ class SyncBloc extends Bloc<SyncEvent, SyncStatusState> {
     emit(state.copyWith(isSyncing: true));
     try {
       final result = await _syncService.flushPendingSales();
-      if (result.synced > 0) {
+      if (result.synced > 0 || result.conflicts > 0) {
         try {
           await _productRepository.refresh();
         } catch (_) {
-          // The local sale remains valid even if the reconciliation refresh cannot run yet.
+          // Local state remains available; reconciliation will retry later.
         }
       }
       final message = result.networkUnavailable

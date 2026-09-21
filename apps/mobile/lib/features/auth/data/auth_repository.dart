@@ -44,10 +44,11 @@ class AuthRepository {
       await _sessionStore.writeProfile(session);
       return session;
     } on DioException catch (error) {
-      if (error.response != null) rethrow;
+      if (error.response?.statusCode == 401) rethrow;
+      final currentPair = await _tokenStore.read() ?? pair;
       final cached = await _sessionStore.readProfile(
-        accessToken: pair.accessToken,
-        refreshToken: pair.refreshToken,
+        accessToken: currentPair.accessToken,
+        refreshToken: currentPair.refreshToken,
       );
       if (cached != null) return cached;
       rethrow;
@@ -97,27 +98,56 @@ class AuthRepository {
     _sessionContext.clear();
   }
 
-  Future<AuthSession> _loadSession(TokenPair pair) async {
+  Future<AuthSession> _loadSession(TokenPair requestedPair) async {
     final response = await _apiClient.dio.get<Map<String, dynamic>>(
       '/auth/me',
-      options: Options(headers: {'Authorization': 'Bearer ${pair.accessToken}'}),
+      options: Options(headers: {'Authorization': 'Bearer ${requestedPair.accessToken}'}),
     );
     final data = response.data!;
     final memberships = (data['memberships'] as List<dynamic>? ?? const [])
         .map((value) => BusinessMembership.fromJson(value as Map<String, dynamic>))
         .toList(growable: false);
-    final firstMembership = memberships.isEmpty ? null : memberships.first;
+
+    // The 401 interceptor may have rotated the token pair while /auth/me was
+    // in flight. Always build the restored session from the latest secure pair.
+    final currentPair = await _tokenStore.read() ?? requestedPair;
+    final userId = data['user_id'].toString();
+    final cached = await _sessionStore.readProfile(
+      accessToken: currentPair.accessToken,
+      refreshToken: currentPair.refreshToken,
+    );
+    final previous = cached?.userId == userId ? cached : null;
+
+    BusinessMembership? selectedMembership;
+    final previousTenantId = previous?.selectedTenantId;
+    if (previousTenantId != null) {
+      for (final membership in memberships) {
+        if (membership.tenantId == previousTenantId) {
+          selectedMembership = membership;
+          break;
+        }
+      }
+    }
+    selectedMembership ??= memberships.isEmpty ? null : memberships.first;
+
+    final previousBranchId = previous?.selectedBranchId;
+    final selectedBranchId = previousBranchId != null &&
+            selectedMembership != null &&
+            selectedMembership.branchIds.contains(previousBranchId)
+        ? previousBranchId
+        : selectedMembership != null && selectedMembership.branchIds.isNotEmpty
+            ? selectedMembership.branchIds.first
+            : null;
+
     return AuthSession(
-      userId: data['user_id'].toString(),
+      userId: userId,
       displayName: data['display_name'].toString(),
       email: data['email'].toString(),
-      accessToken: pair.accessToken,
-      refreshToken: pair.refreshToken,
+      accessToken: currentPair.accessToken,
+      refreshToken: currentPair.refreshToken,
       memberships: memberships,
-      selectedTenantId: firstMembership?.tenantId,
-      selectedBranchId: firstMembership != null && firstMembership.branchIds.isNotEmpty
-          ? firstMembership.branchIds.first
-          : null,
+      selectedTenantId: selectedMembership?.tenantId,
+      selectedBranchId: selectedBranchId,
     );
   }
 
