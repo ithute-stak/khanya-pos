@@ -34,20 +34,37 @@ final class CartProductRemoved extends CartEvent {
   List<Object?> get props => [productId];
 }
 
+final class CartPaymentMethodChanged extends CartEvent {
+  const CartPaymentMethodChanged(this.paymentMethod);
+  final PaymentMethod paymentMethod;
+
+  @override
+  List<Object?> get props => [paymentMethod];
+}
+
 final class CartCleared extends CartEvent {
   const CartCleared();
 }
 
 class CartState extends Equatable {
-  const CartState({this.lines = const []});
+  const CartState({
+    this.lines = const [],
+    this.paymentMethod = PaymentMethod.cash,
+  });
 
   final List<CartLine> lines;
+  final PaymentMethod paymentMethod;
 
   int get totalMinor => lines.fold(0, (total, line) => total + line.lineTotalMinor);
   int get itemCount => lines.fold(0, (total, line) => total + line.quantity);
 
+  CartState copyWith({List<CartLine>? lines, PaymentMethod? paymentMethod}) => CartState(
+        lines: lines ?? this.lines,
+        paymentMethod: paymentMethod ?? this.paymentMethod,
+      );
+
   @override
-  List<Object?> get props => [lines];
+  List<Object?> get props => [lines, paymentMethod];
 }
 
 class CartBloc extends Bloc<CartEvent, CartState> {
@@ -56,15 +73,14 @@ class CartBloc extends Bloc<CartEvent, CartState> {
       final lines = [...state.lines];
       final index = lines.indexWhere((line) => line.product.id == event.product.id);
       if (index == -1) {
+        if (event.product.availableQuantity != null && event.product.availableQuantity! <= 0) return;
         lines.add(CartLine(product: event.product, quantity: 1));
       } else {
         final nextQuantity = lines[index].quantity + 1;
-        if (event.product.availableQuantity != null && nextQuantity > event.product.availableQuantity!) {
-          return;
-        }
+        if (event.product.availableQuantity != null && nextQuantity > event.product.availableQuantity!) return;
         lines[index] = lines[index].copyWith(quantity: nextQuantity);
       }
-      emit(CartState(lines: List.unmodifiable(lines)));
+      emit(state.copyWith(lines: List.unmodifiable(lines)));
     });
 
     on<CartQuantityChanged>((event, emit) {
@@ -78,13 +94,19 @@ class CartBloc extends Bloc<CartEvent, CartState> {
         if (available != null && event.quantity > available) return;
         lines[index] = lines[index].copyWith(quantity: event.quantity);
       }
-      emit(CartState(lines: List.unmodifiable(lines)));
+      emit(state.copyWith(lines: List.unmodifiable(lines)));
     });
 
     on<CartProductRemoved>((event, emit) {
-      emit(CartState(lines: state.lines.where((line) => line.product.id != event.productId).toList(growable: false)));
+      emit(state.copyWith(
+        lines: state.lines.where((line) => line.product.id != event.productId).toList(growable: false),
+      ));
     });
 
-    on<CartCleared>((event, emit) => emit(const CartState()));
+    on<CartPaymentMethodChanged>((event, emit) {
+      emit(state.copyWith(paymentMethod: event.paymentMethod));
+    });
+
+    on<CartCleared>((event, emit) => emit(CartState(paymentMethod: state.paymentMethod)));
   }
 }

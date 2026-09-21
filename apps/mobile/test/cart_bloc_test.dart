@@ -32,4 +32,12 @@ void main() {
     expect(bloc.state.itemCount, 1);
     await bloc.close();
   });
+
+  test('payment method is event driven state', () async {
+    final bloc = CartBloc();
+    bloc.add(const CartPaymentMethodChanged(PaymentMethod.mobileMoney));
+    await Future<void>.delayed(Duration.zero);
+    expect(bloc.state.paymentMethod, PaymentMethod.mobileMoney);
+    await bloc.close();
+  });
 }
