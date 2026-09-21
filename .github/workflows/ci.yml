@@ -71,6 +71,7 @@ jobs:
           tests/test_accounting_service_integration.py
           tests/test_customer_credit_integration.py
           tests/test_receivables_reconciliation_integration.py
+          tests/test_till_service_integration.py
 
   mobile:
     name: Flutter
