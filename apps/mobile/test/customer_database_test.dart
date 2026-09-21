@@ -103,6 +103,29 @@ void main() {
     expect(projected.availableCreditMinor, 8000);
   });
 
+  test('orphaned reservation is released when no pending sale survived', () async {
+    await database.replaceCustomers(tenantId: 'tenant-1', customers: [customer()]);
+    await database.reserveCredit(
+      clientOperationId: 'crashed-sale',
+      tenantId: 'tenant-1',
+      branchId: 'branch-1',
+      customerId: 'customer-1',
+      creditMinor: 3000,
+    );
+
+    await database.reconcileCreditReservations(
+      tenantId: 'tenant-1',
+      activeSaleOperationIds: const <String>{},
+    );
+
+    final projected = await database.getCustomer(
+      tenantId: 'tenant-1',
+      customerId: 'customer-1',
+    );
+    expect(projected!.outstandingMinor, 2000);
+    expect(projected.availableCreditMinor, 8000);
+  });
+
   test('queued customer payment projects receivable reduction and conflict rolls it back', () async {
     await database.replaceCustomers(tenantId: 'tenant-1', customers: [customer()]);
     final now = DateTime.utc(2026, 9, 21, 12);
