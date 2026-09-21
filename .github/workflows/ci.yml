@@ -69,6 +69,7 @@ jobs:
           tests/test_purchase_service_integration.py
           tests/test_supplier_payment_integration.py
           tests/test_accounting_service_integration.py
+          tests/test_customer_credit_integration.py
 
   mobile:
     name: Flutter
