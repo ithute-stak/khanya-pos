@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/core/network/api_client.dart';
+import 'package:khanya_pos/core/session/session_context.dart';
 import 'package:khanya_pos/core/storage/app_database.dart';
 import 'package:khanya_pos/features/pos/domain/till_shift.dart';
 import 'package:uuid/uuid.dart';
@@ -11,13 +12,16 @@ class TillRepository {
   TillRepository({
     required ApiClient apiClient,
     required AppDatabase database,
+    required SessionContext sessionContext,
     Uuid? uuid,
   })  : _apiClient = apiClient,
         _database = database,
+        _sessionContext = sessionContext,
         _uuid = uuid ?? const Uuid();
 
   final ApiClient _apiClient;
   final AppDatabase _database;
+  final SessionContext _sessionContext;
   final Uuid _uuid;
 
   Future<TillShiftSummary?> current() async {
@@ -46,9 +50,14 @@ class TillRepository {
   }
 
   Future<int> pendingCashSalesCount() async {
+    final tenantId = _sessionContext.tenantId;
+    final branchId = _sessionContext.branchId;
+    if (tenantId == null || branchId == null) return 0;
+
     final pending = await _database.getSyncablePendingSales();
     var count = 0;
     for (final sale in pending) {
+      if (sale.tenantId != tenantId || sale.branchId != branchId) continue;
       try {
         final payload = jsonDecode(sale.payloadJson);
         if (payload is! Map) continue;
