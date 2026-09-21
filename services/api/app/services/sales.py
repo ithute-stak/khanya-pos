@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.commerce import BranchProductStock, Payment, Product, Sale, SaleLine, StockMovement
 from app.schemas.commerce import SaleCompleteRequest
 from app.services.accounting import PostingLine, payment_account_code, post_journal
+from app.services.idempotency import acquire_operation_lock
 from app.services.outbox import enqueue_event
 from app.services.pricing import line_total, money, quantity, unit_cost
 
@@ -75,6 +76,12 @@ async def complete_sale(
     cashier_user_id: UUID,
     payload: SaleCompleteRequest,
 ) -> CompletedSale:
+    await acquire_operation_lock(
+        db,
+        tenant_id=tenant_id,
+        scope="sale",
+        operation_id=payload.client_operation_id,
+    )
     existing = await _existing_sale(db, tenant_id, payload.client_operation_id)
     if existing is not None:
         return _as_result(existing, replay=True)
