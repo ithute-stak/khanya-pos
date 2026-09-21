@@ -39,13 +39,22 @@ class PendingSales extends Table {
   Set<Column<Object>> get primaryKey => {clientOperationId};
 }
 
+class PendingSaleLines extends Table {
+  TextColumn get clientOperationId => text()();
+  TextColumn get productId => text()();
+  IntColumn get quantityMilli => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {clientOperationId, productId};
+}
+
 class LocalSaleStockChange {
   const LocalSaleStockChange({required this.productId, required this.quantityMilli});
   final String productId;
   final int quantityMilli;
 }
 
-@DriftDatabase(tables: [CachedProducts, PendingSales])
+@DriftDatabase(tables: [CachedProducts, PendingSales, PendingSaleLines])
 final class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? implementation])
       : super(implementation ?? driftDatabase(name: 'khanya_pos'));
@@ -78,13 +87,17 @@ final class AppDatabase extends _$AppDatabase {
     required String branchId,
     required Iterable<CachedProductsCompanion> products,
   }) {
+    final replacementRows = products.toList(growable: false);
     return transaction(() async {
       await (delete(cachedProducts)
             ..where((row) => row.tenantId.equals(tenantId) & row.branchId.equals(branchId)))
           .go();
-      await batch((batch) {
-        batch.insertAll(cachedProducts, products, mode: InsertMode.insertOrReplace);
-      });
+      if (replacementRows.isNotEmpty) {
+        await batch((batch) {
+          batch.insertAll(cachedProducts, replacementRows, mode: InsertMode.insertOrReplace);
+        });
+      }
+      await _applyPendingSaleDeductions(tenantId: tenantId, branchId: branchId);
     });
   }
 
@@ -101,43 +114,40 @@ final class AppDatabase extends _$AppDatabase {
           .getSingleOrNull();
       if (exists != null) return;
 
+      await into(pendingSales).insert(sale);
       for (final change in stockChanges) {
-        final row = await (select(cachedProducts)
-              ..where((product) =>
-                  product.productId.equals(change.productId) &
-                  product.tenantId.equals(tenantId) &
-                  product.branchId.equals(branchId)))
-            .getSingleOrNull();
+        await into(pendingSaleLines).insert(
+          PendingSaleLinesCompanion.insert(
+            clientOperationId: operationId,
+            productId: change.productId,
+            quantityMilli: change.quantityMilli,
+          ),
+        );
+
+        final row = await _cachedProduct(
+          tenantId: tenantId,
+          branchId: branchId,
+          productId: change.productId,
+        );
         if (row == null || row.onHandMilli == null || !row.tracksStock) continue;
         final next = row.onHandMilli! - change.quantityMilli;
         if (next < 0) {
           throw StateError('Insufficient cached stock for ${row.name}');
         }
-        await (update(cachedProducts)
-              ..where((product) =>
-                  product.productId.equals(change.productId) &
-                  product.tenantId.equals(tenantId) &
-                  product.branchId.equals(branchId)))
-            .write(CachedProductsCompanion(
-          onHandMilli: Value(next),
-          isLowStock: Value(next <= row.reorderLevelMilli),
-          updatedAt: Value(DateTime.now().toUtc()),
-        ));
+        await _writeProjectedStock(row: row, onHandMilli: next);
       }
-      await into(pendingSales).insert(sale);
     });
   }
 
   Stream<int> watchPendingCount() {
-    return select(pendingSales).watch().map(
-          (rows) => rows.where((row) => row.status != 'synced').length,
-        );
+    final query = select(pendingSales)
+      ..where((row) => row.status.equals('pending') | row.status.equals('syncing'));
+    return query.watch().map((rows) => rows.length);
   }
 
   Stream<int> watchConflictCount() {
-    return select(pendingSales).watch().map(
-          (rows) => rows.where((row) => row.status == 'conflict').length,
-        );
+    final query = select(pendingSales)..where((row) => row.status.equals('conflict'));
+    return query.watch().map((rows) => rows.length);
   }
 
   Future<List<PendingSale>> getSyncablePendingSales() {
@@ -158,22 +168,116 @@ final class AppDatabase extends _$AppDatabase {
     required String status,
     String? lastError,
     bool incrementAttempts = false,
-  }) async {
-    final current = await getPendingSale(clientOperationId);
-    if (current == null) return;
-    await (update(pendingSales)
-          ..where((row) => row.clientOperationId.equals(clientOperationId)))
-        .write(PendingSalesCompanion(
-      status: Value(status),
-      attempts: Value(current.attempts + (incrementAttempts ? 1 : 0)),
-      lastError: Value(lastError),
-      updatedAt: Value(DateTime.now().toUtc()),
-    ));
+  }) {
+    return transaction(() async {
+      final current = await getPendingSale(clientOperationId);
+      if (current == null) return;
+
+      if (status == 'conflict' && current.status != 'conflict') {
+        final lines = await (select(pendingSaleLines)
+              ..where((row) => row.clientOperationId.equals(clientOperationId)))
+            .get();
+        for (final line in lines) {
+          final product = await _cachedProduct(
+            tenantId: current.tenantId,
+            branchId: current.branchId,
+            productId: line.productId,
+          );
+          if (product == null || product.onHandMilli == null || !product.tracksStock) continue;
+          await _writeProjectedStock(
+            row: product,
+            onHandMilli: product.onHandMilli! + line.quantityMilli,
+          );
+        }
+      }
+
+      await (update(pendingSales)
+            ..where((row) => row.clientOperationId.equals(clientOperationId)))
+          .write(PendingSalesCompanion(
+        status: Value(status),
+        attempts: Value(current.attempts + (incrementAttempts ? 1 : 0)),
+        lastError: Value(lastError),
+        updatedAt: Value(DateTime.now().toUtc()),
+      ));
+    });
   }
 
   Future<void> deletePendingSale(String clientOperationId) {
-    return (delete(pendingSales)
-          ..where((row) => row.clientOperationId.equals(clientOperationId)))
-        .go();
+    return transaction(() async {
+      await (delete(pendingSaleLines)
+            ..where((row) => row.clientOperationId.equals(clientOperationId)))
+          .go();
+      await (delete(pendingSales)
+            ..where((row) => row.clientOperationId.equals(clientOperationId)))
+          .go();
+    });
+  }
+
+  Future<void> _applyPendingSaleDeductions({
+    required String tenantId,
+    required String branchId,
+  }) async {
+    final activeSales = await (select(pendingSales)
+          ..where((row) =>
+              row.tenantId.equals(tenantId) &
+              row.branchId.equals(branchId) &
+              (row.status.equals('pending') | row.status.equals('syncing'))))
+        .get();
+    if (activeSales.isEmpty) return;
+
+    final operationIds = activeSales.map((sale) => sale.clientOperationId).toList(growable: false);
+    final lines = await (select(pendingSaleLines)
+          ..where((row) => row.clientOperationId.isIn(operationIds)))
+        .get();
+    final quantityByProduct = <String, int>{};
+    for (final line in lines) {
+      quantityByProduct.update(
+        line.productId,
+        (quantity) => quantity + line.quantityMilli,
+        ifAbsent: () => line.quantityMilli,
+      );
+    }
+
+    for (final entry in quantityByProduct.entries) {
+      final product = await _cachedProduct(
+        tenantId: tenantId,
+        branchId: branchId,
+        productId: entry.key,
+      );
+      if (product == null || product.onHandMilli == null || !product.tracksStock) continue;
+      await _writeProjectedStock(
+        row: product,
+        onHandMilli: product.onHandMilli! - entry.value,
+      );
+    }
+  }
+
+  Future<CachedProduct?> _cachedProduct({
+    required String tenantId,
+    required String branchId,
+    required String productId,
+  }) {
+    return (select(cachedProducts)
+          ..where((product) =>
+              product.productId.equals(productId) &
+              product.tenantId.equals(tenantId) &
+              product.branchId.equals(branchId)))
+        .getSingleOrNull();
+  }
+
+  Future<void> _writeProjectedStock({
+    required CachedProduct row,
+    required int onHandMilli,
+  }) {
+    return (update(cachedProducts)
+          ..where((product) =>
+              product.productId.equals(row.productId) &
+              product.tenantId.equals(row.tenantId) &
+              product.branchId.equals(row.branchId)))
+        .write(CachedProductsCompanion(
+      onHandMilli: Value(onHandMilli),
+      isLowStock: Value(onHandMilli <= row.reorderLevelMilli),
+      updatedAt: Value(DateTime.now().toUtc()),
+    ));
   }
 }
