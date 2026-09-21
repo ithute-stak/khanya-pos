@@ -14,7 +14,7 @@ class PosCreditState extends Equatable {
   int paidMinorFor(int totalMinor) {
     final configured = immediatePaymentMinor;
     if (configured == null) return totalMinor;
-    return configured.clamp(0, totalMinor);
+    return configured.clamp(0, totalMinor).toInt();
   }
 
   int creditMinorFor(int totalMinor) => totalMinor - paidMinorFor(totalMinor);
