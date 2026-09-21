@@ -1,6 +1,7 @@
 import 'dart:async';
 
 class SessionContext {
+  final StreamController<void> _invalidations = StreamController<void>.broadcast();
   String? _accessToken;
   String? _tenantId;
   String? _branchId;
@@ -11,6 +12,7 @@ class SessionContext {
   String? get tenantId => _tenantId;
   String? get branchId => _branchId;
   bool get hasBusinessContext => _tenantId != null && _branchId != null;
+  Stream<void> get invalidations => _invalidations.stream;
 
   void apply({
     required String accessToken,
@@ -60,9 +62,16 @@ class SessionContext {
     return headers;
   }
 
+  void invalidate() {
+    clear();
+    if (!_invalidations.isClosed) _invalidations.add(null);
+  }
+
   void clear() {
     _accessToken = null;
     _tenantId = null;
     _branchId = null;
   }
+
+  Future<void> close() => _invalidations.close();
 }

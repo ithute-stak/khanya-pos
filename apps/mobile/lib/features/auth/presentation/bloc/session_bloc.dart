@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -44,6 +46,10 @@ final class SessionBusinessSelected extends SessionEvent {
 
 final class SessionSignedOut extends SessionEvent {
   const SessionSignedOut();
+}
+
+final class SessionInvalidated extends SessionEvent {
+  const SessionInvalidated();
 }
 
 sealed class SessionState extends Equatable {
@@ -95,10 +101,15 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
     on<SessionSignedIn>(_onSignedIn);
     on<SessionBusinessSelected>(_onBusinessSelected);
     on<SessionSignedOut>(_onSignedOut);
+    on<SessionInvalidated>((event, emit) => emit(const SessionUnauthenticated()));
+    _invalidationSubscription = sessionContext?.invalidations.listen(
+      (_) => add(const SessionInvalidated()),
+    );
   }
 
   final AuthRepository? _authRepository;
   final SessionContext? _sessionContext;
+  StreamSubscription<void>? _invalidationSubscription;
 
   Future<void> _onStarted(SessionStarted event, Emitter<SessionState> emit) async {
     final repository = _authRepository;
@@ -194,6 +205,12 @@ class SessionBloc extends Bloc<SessionEvent, SessionState> {
       }
     }
     return 'Sign in failed. Please check your details and try again.';
+  }
+
+  @override
+  Future<void> close() async {
+    await _invalidationSubscription?.cancel();
+    return super.close();
   }
 }
 

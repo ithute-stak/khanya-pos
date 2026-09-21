@@ -75,7 +75,7 @@ class AuthRepository {
       return true;
     } on DioException catch (error) {
       if (error.response?.statusCode == 401) {
-        await clearLocalSession();
+        await clearLocalSession(notifyInvalidation: true);
       }
       return false;
     }
@@ -92,10 +92,14 @@ class AuthRepository {
     await clearLocalSession();
   }
 
-  Future<void> clearLocalSession() async {
+  Future<void> clearLocalSession({bool notifyInvalidation = false}) async {
     await _tokenStore.clear();
     await _sessionStore.clear();
-    _sessionContext.clear();
+    if (notifyInvalidation) {
+      _sessionContext.invalidate();
+    } else {
+      _sessionContext.clear();
+    }
   }
 
   Future<AuthSession> _loadSession(TokenPair requestedPair) async {

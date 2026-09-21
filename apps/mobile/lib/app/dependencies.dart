@@ -71,6 +71,7 @@ class AppDependencies {
 
   Future<void> close() async {
     await realtimeClient.close();
+    await sessionContext.close();
     await database.close();
     apiClient.dio.close(force: true);
   }
