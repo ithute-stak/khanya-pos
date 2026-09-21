@@ -6,6 +6,7 @@ import pytest
 
 from app.core.database import SessionLocal
 from app.models.commerce import Payment, Sale
+from app.models.customers import Customer
 from app.models.identity import Branch, Tenant, User
 from app.schemas.till import TillCashMovementRequest
 from app.services.till import (
@@ -164,6 +165,91 @@ async def test_till_shift_reconciles_cash_sales_movements_and_variance() -> None
         )
         assert history[0].id == opened.id
         assert history[0].status == "closed"
+
+
+@pytest.mark.asyncio
+async def test_partial_credit_sale_adds_only_cash_payment_to_expected_till() -> None:
+    suffix = uuid4().hex[:12]
+
+    async with SessionLocal() as db:
+        user = User(
+            email=f"till-credit-{suffix}@example.test",
+            display_name="Credit Cashier",
+            password_hash="not-used-by-this-test",
+        )
+        tenant = Tenant(name=f"Till Credit Shop {suffix}", slug=f"till-credit-{suffix}")
+        db.add_all([user, tenant])
+        await db.flush()
+        branch = Branch(
+            tenant_id=tenant.id,
+            name="Main Branch",
+            code=f"C{suffix[:6]}",
+            location="Maseru",
+            is_main=True,
+        )
+        customer = Customer(
+            tenant_id=tenant.id,
+            code=f"CUS-{suffix[:6]}",
+            name="Credit Customer",
+            credit_limit=Decimal("500.00"),
+            payment_terms_days=30,
+        )
+        db.add_all([branch, customer])
+        await db.commit()
+
+        tenant_id = tenant.id
+        branch_id = branch.id
+        user_id = user.id
+        customer_id = customer.id
+
+        opened = await open_shift(
+            db,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            cashier_user_id=user_id,
+            client_operation_id=uuid4(),
+            opening_float=Decimal("100.00"),
+        )
+
+        sale = Sale(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            cashier_user_id=user_id,
+            customer_id=customer_id,
+            client_operation_id=uuid4(),
+            sale_number=f"CREDIT-{suffix}",
+            status="completed",
+            subtotal=Decimal("100.00"),
+            discount_total=Decimal("0.00"),
+            tax_total=Decimal("0.00"),
+            total=Decimal("100.00"),
+            balance_due=Decimal("60.00"),
+            payment_status="partial",
+            completed_at=opened.opened_at,
+        )
+        db.add(sale)
+        await db.flush()
+        db.add(
+            Payment(
+                tenant_id=tenant_id,
+                branch_id=branch_id,
+                sale_id=sale.id,
+                method="cash",
+                amount=Decimal("40.00"),
+            )
+        )
+        await db.commit()
+
+        snapshot = await current_shift(
+            db,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            cashier_user_id=user_id,
+        )
+        assert snapshot is not None
+        assert snapshot.cash_sales == Decimal("40.00")
+        assert snapshot.cash_sale_count == 1
+        assert snapshot.expected_cash == Decimal("140.00")
 
 
 @pytest.mark.asyncio
