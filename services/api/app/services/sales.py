@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commerce import BranchProductStock, Payment, Product, Sale, SaleLine, StockMovement
 from app.schemas.commerce import SaleCompleteRequest
+from app.services.accounting import PostingLine, payment_account_code, post_journal
 from app.services.outbox import enqueue_event
 from app.services.pricing import line_total, money, quantity
 
@@ -135,6 +136,7 @@ async def complete_sale(
     db.add(sale)
     await db.flush()
 
+    cost_of_goods = Decimal("0.00")
     for product_id in sorted(requested, key=str):
         product = locked_products[product_id]
         qty = requested[product_id]
@@ -152,6 +154,7 @@ async def complete_sale(
         )
 
         if product.track_stock:
+            cost_of_goods += line_total(product.cost_price, qty)
             stock = locked_stocks[product_id]
             assert stock is not None
             stock.on_hand = quantity(stock.on_hand - qty)
@@ -194,6 +197,43 @@ async def complete_sale(
                 reference=payment.reference,
             )
         )
+
+    accounting_lines = [
+        PostingLine(
+            account_code=payment_account_code(payment.method),
+            debit=money(payment.amount),
+            memo=f"{payment.method.replace('_', ' ').title()} receipt",
+        )
+        for payment in payload.payments
+    ]
+    net_revenue = money(sale.total - sale.tax_total)
+    if net_revenue > 0:
+        accounting_lines.append(
+            PostingLine(account_code="4000", credit=net_revenue, memo="Sales revenue")
+        )
+    if money(sale.tax_total) > 0:
+        accounting_lines.append(
+            PostingLine(account_code="2100", credit=money(sale.tax_total), memo="Sales tax payable")
+        )
+    cost_of_goods = money(cost_of_goods)
+    if cost_of_goods > 0:
+        accounting_lines.extend(
+            [
+                PostingLine(account_code="5000", debit=cost_of_goods, memo="Cost of goods sold"),
+                PostingLine(account_code="1200", credit=cost_of_goods, memo="Inventory issued"),
+            ]
+        )
+    await post_journal(
+        db,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        user_id=cashier_user_id,
+        source_type="sale",
+        source_id=sale.id,
+        description=f"Sale {sale.sale_number}",
+        occurred_at=sale.completed_at,
+        lines=accounting_lines,
+    )
 
     enqueue_event(
         db,
