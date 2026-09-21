@@ -4,6 +4,10 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 
+class ProductCategoryCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+
+
 class ProductCreate(BaseModel):
     name: str = Field(min_length=2, max_length=200)
     sku: str = Field(min_length=1, max_length=80)
