@@ -58,6 +58,14 @@ class CustomerRepository {
     return rows.map(_summaryFromCached).toList(growable: false);
   }
 
+  /// Repairs local credit reservations after an interrupted write sequence.
+  /// Pending sales in the primary outbox are authoritative: any reservation
+  /// with no corresponding queued sale is an orphan and must be released.
+  Future<void> reconcileOfflineProjections() async {
+    final tenantId = _requireTenant();
+    await _reconcileCreditReservations(tenantId);
+  }
+
   Future<void> refresh() async {
     final tenantId = _requireTenant();
     await _reconcileCreditReservations(tenantId);
