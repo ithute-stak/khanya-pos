@@ -126,7 +126,9 @@ async def test_purchase_receipt_updates_stock_cost_supplier_balance_and_is_idemp
                 Purchase.client_operation_id == operation_id,
             )
         )
-        line_count = await db.scalar(select(func.count(PurchaseLine.id)).where(PurchaseLine.purchase_id == first.id))
+        line_count = await db.scalar(
+            select(func.count(PurchaseLine.id)).where(PurchaseLine.purchase_id == first.id)
+        )
         payment_count = await db.scalar(
             select(func.count(SupplierPayment.id)).where(SupplierPayment.purchase_id == first.id)
         )
@@ -218,13 +220,22 @@ async def test_backdated_purchase_in_closed_period_rolls_back_all_operational_ef
                 reserved=Decimal("0.000"),
             )
         )
+
+        # Cache scalar identifiers before any rollback. SQLAlchemy expires ORM
+        # instances on rollback, and the assertions below intentionally run
+        # after a failed transaction.
+        tenant_id = tenant.id
+        branch_id = branch.id
+        user_id = user.id
+        supplier_id = supplier.id
+        product_id = product.id
         await db.commit()
 
         lock_point = datetime.now(timezone.utc) - timedelta(days=1)
         await advance_period_lock(
             db,
-            tenant_id=tenant.id,
-            user_id=user.id,
+            tenant_id=tenant_id,
+            user_id=user_id,
             locked_through=lock_point,
             reason="Closed-period purchase rollback integration test",
         )
@@ -232,14 +243,14 @@ async def test_backdated_purchase_in_closed_period_rolls_back_all_operational_ef
 
         request = PurchaseReceiveRequest(
             client_operation_id=operation_id,
-            supplier_id=supplier.id,
+            supplier_id=supplier_id,
             supplier_invoice_number="CLOSED-001",
             purchase_date=lock_point - timedelta(hours=1),
             payment_method="cash",
             amount_paid=Decimal("42.00"),
             items=[
                 PurchaseLineInput(
-                    product_id=product.id,
+                    product_id=product_id,
                     quantity=Decimal("1"),
                     unit_cost=Decimal("42.00"),
                 )
@@ -249,9 +260,9 @@ async def test_backdated_purchase_in_closed_period_rolls_back_all_operational_ef
         with pytest.raises(AccountingPeriodLockedError, match="locked through"):
             await complete_purchase(
                 db,
-                tenant_id=tenant.id,
-                branch_id=branch.id,
-                user_id=user.id,
+                tenant_id=tenant_id,
+                branch_id=branch_id,
+                user_id=user_id,
                 payload=request,
             )
         await db.rollback()
@@ -259,37 +270,37 @@ async def test_backdated_purchase_in_closed_period_rolls_back_all_operational_ef
         stock = (
             await db.execute(
                 select(BranchProductStock).where(
-                    BranchProductStock.branch_id == branch.id,
-                    BranchProductStock.product_id == product.id,
+                    BranchProductStock.branch_id == branch_id,
+                    BranchProductStock.product_id == product_id,
                 )
             )
         ).scalar_one()
         refreshed_product = (
-            await db.execute(select(Product).where(Product.id == product.id))
+            await db.execute(select(Product).where(Product.id == product_id))
         ).scalar_one()
         purchase_count = await db.scalar(
             select(func.count(Purchase.id)).where(
-                Purchase.tenant_id == tenant.id,
+                Purchase.tenant_id == tenant_id,
                 Purchase.client_operation_id == operation_id,
             )
         )
         movement_count = await db.scalar(
             select(func.count(StockMovement.id)).where(
-                StockMovement.tenant_id == tenant.id,
+                StockMovement.tenant_id == tenant_id,
                 StockMovement.movement_type == "purchase_receipt",
             )
         )
         payment_count = await db.scalar(
-            select(func.count(SupplierPayment.id)).where(SupplierPayment.tenant_id == tenant.id)
+            select(func.count(SupplierPayment.id)).where(SupplierPayment.tenant_id == tenant_id)
         )
         journal_count = await db.scalar(
             select(func.count(JournalEntry.id)).where(
-                JournalEntry.tenant_id == tenant.id,
+                JournalEntry.tenant_id == tenant_id,
                 JournalEntry.source_type == "purchase",
             )
         )
         outbox_count = await db.scalar(
-            select(func.count(OutboxEvent.id)).where(OutboxEvent.tenant_id == tenant.id)
+            select(func.count(OutboxEvent.id)).where(OutboxEvent.tenant_id == tenant_id)
         )
 
         assert stock.on_hand == Decimal("10.000")
