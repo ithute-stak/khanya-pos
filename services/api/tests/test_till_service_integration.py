@@ -47,11 +47,15 @@ async def test_till_shift_reconciles_cash_sales_movements_and_variance() -> None
         db.add(branch)
         await db.commit()
 
+        tenant_id = tenant.id
+        branch_id = branch.id
+        user_id = user.id
+
         opened = await open_shift(
             db,
-            tenant_id=tenant.id,
-            branch_id=branch.id,
-            cashier_user_id=user.id,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            cashier_user_id=user_id,
             client_operation_id=uuid4(),
             opening_float=Decimal("100.00"),
         )
@@ -59,9 +63,9 @@ async def test_till_shift_reconciles_cash_sales_movements_and_variance() -> None
         assert opened.expected_cash == Decimal("100.00")
 
         sale = Sale(
-            tenant_id=tenant.id,
-            branch_id=branch.id,
-            cashier_user_id=user.id,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            cashier_user_id=user_id,
             client_operation_id=uuid4(),
             sale_number=f"TILL-{suffix}",
             status="completed",
@@ -77,8 +81,8 @@ async def test_till_shift_reconciles_cash_sales_movements_and_variance() -> None
         await db.flush()
         db.add(
             Payment(
-                tenant_id=tenant.id,
-                branch_id=branch.id,
+                tenant_id=tenant_id,
+                branch_id=branch_id,
                 sale_id=sale.id,
                 method="cash",
                 amount=Decimal("50.00"),
@@ -88,9 +92,9 @@ async def test_till_shift_reconciles_cash_sales_movements_and_variance() -> None
 
         after_in = await record_cash_movement(
             db,
-            tenant_id=tenant.id,
-            branch_id=branch.id,
-            cashier_user_id=user.id,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            cashier_user_id=user_id,
             payload=TillCashMovementRequest(
                 client_operation_id=uuid4(),
                 movement_type="paid_in",
@@ -102,9 +106,9 @@ async def test_till_shift_reconciles_cash_sales_movements_and_variance() -> None
 
         after_out = await record_cash_movement(
             db,
-            tenant_id=tenant.id,
-            branch_id=branch.id,
-            cashier_user_id=user.id,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            cashier_user_id=user_id,
             payload=TillCashMovementRequest(
                 client_operation_id=uuid4(),
                 movement_type="paid_out",
@@ -121,9 +125,9 @@ async def test_till_shift_reconciles_cash_sales_movements_and_variance() -> None
         with pytest.raises(TillInsufficientCashError):
             await record_cash_movement(
                 db,
-                tenant_id=tenant.id,
-                branch_id=branch.id,
-                cashier_user_id=user.id,
+                tenant_id=tenant_id,
+                branch_id=branch_id,
+                cashier_user_id=user_id,
                 payload=TillCashMovementRequest(
                     client_operation_id=uuid4(),
                     movement_type="paid_out",
@@ -135,9 +139,9 @@ async def test_till_shift_reconciles_cash_sales_movements_and_variance() -> None
 
         closed = await close_shift(
             db,
-            tenant_id=tenant.id,
-            branch_id=branch.id,
-            cashier_user_id=user.id,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            cashier_user_id=user_id,
             shift_id=opened.id,
             counted_cash=Decimal("155.00"),
             note="Five maloti short",
@@ -148,16 +152,16 @@ async def test_till_shift_reconciles_cash_sales_movements_and_variance() -> None
         assert closed.variance == Decimal("-5.00")
         assert await current_shift(
             db,
-            tenant_id=tenant.id,
-            branch_id=branch.id,
-            cashier_user_id=user.id,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            cashier_user_id=user_id,
         ) is None
 
         history = await shift_history(
             db,
-            tenant_id=tenant.id,
-            branch_id=branch.id,
-            cashier_user_id=user.id,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            cashier_user_id=user_id,
         )
         assert history[0].id == opened.id
         assert history[0].status == "closed"
@@ -187,19 +191,23 @@ async def test_open_shift_is_idempotent_for_same_client_operation() -> None:
         db.add(branch)
         await db.commit()
 
+        tenant_id = tenant.id
+        branch_id = branch.id
+        user_id = user.id
+
         first = await open_shift(
             db,
-            tenant_id=tenant.id,
-            branch_id=branch.id,
-            cashier_user_id=user.id,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            cashier_user_id=user_id,
             client_operation_id=operation_id,
             opening_float=Decimal("200.00"),
         )
         replay = await open_shift(
             db,
-            tenant_id=tenant.id,
-            branch_id=branch.id,
-            cashier_user_id=user.id,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            cashier_user_id=user_id,
             client_operation_id=operation_id,
             opening_float=Decimal("200.00"),
         )
