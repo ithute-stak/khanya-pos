@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:khanya_pos/core/storage/app_database.dart';
@@ -25,6 +26,7 @@ void main() {
           sku: 'SUG-2KG',
           sellingPriceMinor: 3200,
           costPriceMinor: 2500,
+          onHandMilli: const Value(0),
           updatedAt: now,
         ),
       ],
