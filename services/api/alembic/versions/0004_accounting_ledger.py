@@ -22,6 +22,29 @@ def _timestamps() -> list[sa.Column]:
 
 
 def upgrade() -> None:
+    # Preserve weighted-average inventory unit costs beyond two decimal places.
+    op.alter_column(
+        "products",
+        "cost_price",
+        existing_type=sa.Numeric(18, 2),
+        type_=sa.Numeric(18, 6),
+        postgresql_using="cost_price::numeric(18,6)",
+    )
+    op.alter_column(
+        "stock_movements",
+        "unit_cost",
+        existing_type=sa.Numeric(18, 2),
+        type_=sa.Numeric(18, 6),
+        postgresql_using="unit_cost::numeric(18,6)",
+    )
+    op.alter_column(
+        "sale_lines",
+        "unit_cost",
+        existing_type=sa.Numeric(18, 2),
+        type_=sa.Numeric(18, 6),
+        postgresql_using="unit_cost::numeric(18,6)",
+    )
+
     op.add_column(
         "supplier_payments",
         sa.Column("client_operation_id", sa.Uuid(), nullable=True),
@@ -57,6 +80,14 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("tenant_id", "code", name="uq_accounts_tenant_code"),
+        sa.CheckConstraint(
+            "account_type IN ('asset','liability','equity','income','expense')",
+            name="ck_accounts_type",
+        ),
+        sa.CheckConstraint(
+            "normal_balance IN ('debit','credit')",
+            name="ck_accounts_normal_balance",
+        ),
     )
     op.create_index("ix_accounts_tenant_id", "accounts", ["tenant_id"])
     op.create_index("ix_accounts_code", "accounts", ["code"])
@@ -89,6 +120,11 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "tenant_id", "entry_number", name="uq_journal_entries_tenant_number"
         ),
+        sa.UniqueConstraint("reversal_of_id", name="uq_journal_entries_reversal_of"),
+        sa.CheckConstraint(
+            "reversal_of_id IS NULL OR reversal_of_id <> id",
+            name="ck_journal_entries_not_self_reversal",
+        ),
     )
     op.create_index("ix_journal_entries_tenant_id", "journal_entries", ["tenant_id"])
     op.create_index("ix_journal_entries_branch_id", "journal_entries", ["branch_id"])
@@ -112,12 +148,97 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["journal_entry_id"], ["journal_entries.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["account_id"], ["accounts.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
+        sa.CheckConstraint("debit >= 0", name="ck_journal_lines_debit_nonnegative"),
+        sa.CheckConstraint("credit >= 0", name="ck_journal_lines_credit_nonnegative"),
+        sa.CheckConstraint(
+            "(debit > 0 AND credit = 0) OR (credit > 0 AND debit = 0)",
+            name="ck_journal_lines_exactly_one_side",
+        ),
     )
     op.create_index("ix_journal_lines_journal_entry_id", "journal_lines", ["journal_entry_id"])
     op.create_index("ix_journal_lines_account_id", "journal_lines", ["account_id"])
 
+    # A deferred database guard verifies the complete journal after all lines are written.
+    op.execute(
+        r"""
+        CREATE OR REPLACE FUNCTION khanya_assert_journal_integrity(target_entry uuid)
+        RETURNS void AS $$
+        DECLARE
+            entry_tenant uuid;
+            line_count integer;
+            debit_total numeric(18,2);
+            credit_total numeric(18,2);
+            cross_tenant_count integer;
+        BEGIN
+            SELECT tenant_id INTO entry_tenant
+            FROM journal_entries
+            WHERE id = target_entry;
+
+            IF entry_tenant IS NULL THEN
+                RETURN;
+            END IF;
+
+            SELECT
+                count(*),
+                coalesce(sum(jl.debit), 0),
+                coalesce(sum(jl.credit), 0),
+                count(*) FILTER (WHERE a.tenant_id <> entry_tenant)
+            INTO line_count, debit_total, credit_total, cross_tenant_count
+            FROM journal_lines jl
+            JOIN accounts a ON a.id = jl.account_id
+            WHERE jl.journal_entry_id = target_entry;
+
+            IF line_count < 2 THEN
+                RAISE EXCEPTION 'Journal entry % requires at least two lines', target_entry;
+            END IF;
+            IF debit_total <> credit_total THEN
+                RAISE EXCEPTION 'Journal entry % is unbalanced: debits %, credits %',
+                    target_entry, debit_total, credit_total;
+            END IF;
+            IF cross_tenant_count > 0 THEN
+                RAISE EXCEPTION 'Journal entry % contains an account from another tenant', target_entry;
+            END IF;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        r"""
+        CREATE OR REPLACE FUNCTION khanya_journal_lines_integrity_trigger()
+        RETURNS trigger AS $$
+        BEGIN
+            IF TG_OP = 'DELETE' THEN
+                PERFORM khanya_assert_journal_integrity(OLD.journal_entry_id);
+                RETURN OLD;
+            ELSIF TG_OP = 'UPDATE' THEN
+                PERFORM khanya_assert_journal_integrity(OLD.journal_entry_id);
+                IF NEW.journal_entry_id IS DISTINCT FROM OLD.journal_entry_id THEN
+                    PERFORM khanya_assert_journal_integrity(NEW.journal_entry_id);
+                END IF;
+                RETURN NEW;
+            ELSE
+                PERFORM khanya_assert_journal_integrity(NEW.journal_entry_id);
+                RETURN NEW;
+            END IF;
+        END;
+        $$ LANGUAGE plpgsql;
+        """
+    )
+    op.execute(
+        """
+        CREATE CONSTRAINT TRIGGER trg_journal_lines_integrity
+        AFTER INSERT OR UPDATE OR DELETE ON journal_lines
+        DEFERRABLE INITIALLY DEFERRED
+        FOR EACH ROW
+        EXECUTE FUNCTION khanya_journal_lines_integrity_trigger()
+        """
+    )
+
 
 def downgrade() -> None:
+    op.execute("DROP TRIGGER IF EXISTS trg_journal_lines_integrity ON journal_lines")
+    op.execute("DROP FUNCTION IF EXISTS khanya_journal_lines_integrity_trigger()")
+    op.execute("DROP FUNCTION IF EXISTS khanya_assert_journal_integrity(uuid)")
     op.drop_table("journal_lines")
     op.drop_table("journal_entries")
     op.drop_table("accounts")
@@ -128,3 +249,24 @@ def downgrade() -> None:
         type_="unique",
     )
     op.drop_column("supplier_payments", "client_operation_id")
+    op.alter_column(
+        "sale_lines",
+        "unit_cost",
+        existing_type=sa.Numeric(18, 6),
+        type_=sa.Numeric(18, 2),
+        postgresql_using="unit_cost::numeric(18,2)",
+    )
+    op.alter_column(
+        "stock_movements",
+        "unit_cost",
+        existing_type=sa.Numeric(18, 6),
+        type_=sa.Numeric(18, 2),
+        postgresql_using="unit_cost::numeric(18,2)",
+    )
+    op.alter_column(
+        "products",
+        "cost_price",
+        existing_type=sa.Numeric(18, 6),
+        type_=sa.Numeric(18, 2),
+        postgresql_using="cost_price::numeric(18,2)",
+    )
