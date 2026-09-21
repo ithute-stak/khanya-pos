@@ -28,14 +28,18 @@ class CheckoutState extends Equatable {
     this.status = CheckoutStatus.idle,
     this.submission,
     this.errorMessage,
+    this.lines = const [],
+    this.paymentMethod,
   });
 
   final CheckoutStatus status;
   final SaleSubmission? submission;
   final String? errorMessage;
+  final List<CartLine> lines;
+  final PaymentMethod? paymentMethod;
 
   @override
-  List<Object?> get props => [status, submission, errorMessage];
+  List<Object?> get props => [status, submission, errorMessage, lines, paymentMethod];
 }
 
 class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
@@ -51,17 +55,29 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
     Emitter<CheckoutState> emit,
   ) async {
     if (state.status == CheckoutStatus.submitting || event.lines.isEmpty) return;
-    emit(const CheckoutState(status: CheckoutStatus.submitting));
+    final lines = List<CartLine>.unmodifiable(event.lines);
+    emit(CheckoutState(
+      status: CheckoutStatus.submitting,
+      lines: lines,
+      paymentMethod: event.paymentMethod,
+    ));
     try {
       final submission = await _repository.submitSale(
-        lines: event.lines,
+        lines: lines,
         paymentMethod: event.paymentMethod,
       );
-      emit(CheckoutState(status: CheckoutStatus.completed, submission: submission));
+      emit(CheckoutState(
+        status: CheckoutStatus.completed,
+        submission: submission,
+        lines: lines,
+        paymentMethod: event.paymentMethod,
+      ));
     } catch (error) {
       emit(CheckoutState(
         status: CheckoutStatus.failed,
         errorMessage: error is StateError ? error.message.toString() : 'The sale could not be saved.',
+        lines: lines,
+        paymentMethod: event.paymentMethod,
       ));
     }
   }
