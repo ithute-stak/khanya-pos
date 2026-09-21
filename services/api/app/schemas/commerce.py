@@ -1,7 +1,7 @@
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ProductCategoryCreate(BaseModel):
@@ -24,6 +24,10 @@ class StockAdjustmentRequest(BaseModel):
     client_operation_id: UUID
     product_id: UUID
     quantity_delta: Decimal
+    adjustment_type: str = Field(
+        default="correction",
+        pattern=r"^(opening_balance|correction|count_gain|count_loss|damage|expiry)$",
+    )
     reason: str = Field(min_length=2, max_length=240)
 
     @field_validator("quantity_delta")
@@ -32,6 +36,14 @@ class StockAdjustmentRequest(BaseModel):
         if value == 0:
             raise ValueError("quantity_delta cannot be zero")
         return value
+
+    @model_validator(mode="after")
+    def validate_adjustment_direction(self) -> "StockAdjustmentRequest":
+        if self.adjustment_type in {"opening_balance", "count_gain"} and self.quantity_delta < 0:
+            raise ValueError(f"{self.adjustment_type} requires a positive quantity_delta")
+        if self.adjustment_type in {"count_loss", "damage", "expiry"} and self.quantity_delta > 0:
+            raise ValueError(f"{self.adjustment_type} requires a negative quantity_delta")
+        return self
 
 
 class SaleItemInput(BaseModel):
