@@ -15,8 +15,28 @@ import 'package:khanya_pos/features/pos/hardware/pos_hardware_service.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 import 'package:khanya_pos/features/pos/presentation/bloc/cart_bloc.dart';
 import 'package:khanya_pos/features/pos/presentation/bloc/checkout_bloc.dart';
+import 'package:khanya_pos/features/pos/presentation/cash_tender_dialog.dart';
 import 'package:khanya_pos/features/pos/printing/receipt_printer.dart';
 import 'package:khanya_pos/features/pos/printing/sale_receipt.dart';
+
+Future<void> _submitCheckout(BuildContext context, CartState cart) async {
+  final checkout = context.read<CheckoutBloc>().state;
+  if (cart.lines.isEmpty || checkout.status == CheckoutStatus.submitting) return;
+
+  int? cashTenderedMinor;
+  if (cart.paymentMethod == PaymentMethod.cash) {
+    cashTenderedMinor = await showCashTenderDialog(context, totalMinor: cart.totalMinor);
+    if (cashTenderedMinor == null || !context.mounted) return;
+  }
+
+  context.read<CheckoutBloc>().add(
+        CheckoutSaleRequested(
+          lines: List<CartLine>.unmodifiable(cart.lines),
+          paymentMethod: cart.paymentMethod,
+          cashTenderedMinor: cashTenderedMinor,
+        ),
+      );
+}
 
 class PosPage extends StatelessWidget {
   const PosPage({super.key});
@@ -70,16 +90,9 @@ class _PosViewState extends State<_PosView> {
     _searchFocusNode.requestFocus();
   }
 
-  void _requestCheckout(BuildContext context) {
+  Future<void> _requestCheckout(BuildContext context) async {
     final cart = context.read<CartBloc>().state;
-    final checkout = context.read<CheckoutBloc>().state;
-    if (cart.lines.isEmpty || checkout.status == CheckoutStatus.submitting) return;
-    context.read<CheckoutBloc>().add(
-          CheckoutSaleRequested(
-            lines: List<CartLine>.unmodifiable(cart.lines),
-            paymentMethod: cart.paymentMethod,
-          ),
-        );
+    await _submitCheckout(context, cart);
   }
 
   Future<PosHardwareSettings> _readHardwareSettings() async {
@@ -124,6 +137,7 @@ class _PosViewState extends State<_PosView> {
       lines: state.lines.map(SaleReceiptLine.fromCartLine).toList(growable: false),
       paymentMethod: state.paymentMethod ?? PaymentMethod.cash,
       syncStatus: syncStatus,
+      cashTenderedMinor: state.cashTenderedMinor,
     );
   }
 
@@ -268,6 +282,15 @@ class _PosViewState extends State<_PosView> {
               Text('Total: ${Loti.formatMinor(receipt.totalMinor)}'),
               const SizedBox(height: 6),
               Text('Payment: ${receipt.paymentMethod.label}'),
+              if (receipt.cashTenderedMinor != null) ...[
+                const SizedBox(height: 6),
+                Text('Cash received: ${Loti.formatMinor(receipt.cashTenderedMinor!)}'),
+                const SizedBox(height: 6),
+                Text(
+                  'Change due: ${Loti.formatMinor(receipt.cashChangeMinor ?? 0)}',
+                  style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ],
               const SizedBox(height: 6),
               Text('Reference: ${receipt.reference}'),
               const SizedBox(height: 6),
@@ -298,7 +321,9 @@ class _PosViewState extends State<_PosView> {
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         const SingleActivator(LogicalKeyboardKey.f4): _focusSearch,
-        const SingleActivator(LogicalKeyboardKey.f9): () => _requestCheckout(context),
+        const SingleActivator(LogicalKeyboardKey.f9): () {
+          _requestCheckout(context);
+        },
         const SingleActivator(LogicalKeyboardKey.f11): _openDrawer,
         const SingleActivator(LogicalKeyboardKey.f12): _printLastReceipt,
         const SingleActivator(LogicalKeyboardKey.keyP, control: true): _printLastReceipt,
@@ -699,14 +724,7 @@ class _CartPanel extends StatelessWidget {
                 builder: (context, checkout) {
                   final submitting = checkout.status == CheckoutStatus.submitting;
                   return FilledButton.icon(
-                    onPressed: cart.lines.isEmpty || submitting
-                        ? null
-                        : () => context.read<CheckoutBloc>().add(
-                              CheckoutSaleRequested(
-                                lines: List<CartLine>.unmodifiable(cart.lines),
-                                paymentMethod: cart.paymentMethod,
-                              ),
-                            ),
+                    onPressed: cart.lines.isEmpty || submitting ? null : () => _submitCheckout(context, cart),
                     icon: submitting
                         ? const SizedBox.square(
                             dimension: 18,
