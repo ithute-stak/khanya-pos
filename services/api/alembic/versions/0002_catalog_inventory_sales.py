@@ -53,8 +53,8 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["category_id"], ["product_categories.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("tenant_id", "sku"),
-        sa.UniqueConstraint("tenant_id", "barcode"),
+        sa.UniqueConstraint("tenant_id", "sku", name="uq_products_tenant_sku"),
+        sa.UniqueConstraint("tenant_id", "barcode", name="uq_products_tenant_barcode"),
     )
     op.create_index("ix_products_tenant_id", "products", ["tenant_id"])
     op.create_index("ix_products_category_id", "products", ["category_id"])
@@ -99,8 +99,10 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["branch_id"], ["branches.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["cashier_user_id"], ["users.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("tenant_id", "client_operation_id"),
-        sa.UniqueConstraint("tenant_id", "sale_number"),
+        sa.UniqueConstraint(
+            "tenant_id", "client_operation_id", name="uq_sales_tenant_client_operation"
+        ),
+        sa.UniqueConstraint("tenant_id", "sale_number", name="uq_sales_tenant_sale_number"),
     )
     op.create_index("ix_sales_tenant_id", "sales", ["tenant_id"])
     op.create_index("ix_sales_branch_id", "sales", ["branch_id"])
