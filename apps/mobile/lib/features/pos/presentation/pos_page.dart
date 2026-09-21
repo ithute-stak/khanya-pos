@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/core/sync/sync_bloc.dart';
@@ -29,65 +30,136 @@ class PosPage extends StatelessWidget {
   }
 }
 
-class _PosView extends StatelessWidget {
+class _PosView extends StatefulWidget {
   const _PosView();
 
   @override
+  State<_PosView> createState() => _PosViewState();
+}
+
+class _PosViewState extends State<_PosView> {
+  final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode(debugLabel: 'POS search');
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _focusSearch() {
+    _searchFocusNode.requestFocus();
+    _searchController.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: _searchController.text.length,
+    );
+  }
+
+  void _clearSearch(BuildContext context) {
+    _searchController.clear();
+    context.read<ProductCatalogBloc>().add(const ProductCatalogQueryChanged(''));
+    _searchFocusNode.requestFocus();
+  }
+
+  void _requestCheckout(BuildContext context) {
+    final cart = context.read<CartBloc>().state;
+    final checkout = context.read<CheckoutBloc>().state;
+    if (cart.lines.isEmpty || checkout.status == CheckoutStatus.submitting) return;
+
+    context.read<CheckoutBloc>().add(
+          CheckoutSaleRequested(
+            lines: List<CartLine>.unmodifiable(cart.lines),
+            paymentMethod: cart.paymentMethod,
+          ),
+        );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return BlocListener<CheckoutBloc, CheckoutState>(
-      listener: (context, state) {
-        if (state.status == CheckoutStatus.completed && state.submission != null) {
-          context.read<CartBloc>().add(const CartCleared());
-          context.read<SyncBloc>().add(const SyncRequested());
-          final status = state.submission!.status;
-          final message = switch (status) {
-            SaleSubmissionStatus.synced => 'Sale completed and synced.',
-            SaleSubmissionStatus.queued => 'Sale saved offline and queued for sync.',
-            SaleSubmissionStatus.conflict => 'Sale saved locally but needs sync review.',
-          };
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-        } else if (state.status == CheckoutStatus.failed) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.errorMessage ?? 'Sale failed.')),
-          );
-        }
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.f4): _focusSearch,
+        const SingleActivator(LogicalKeyboardKey.f9): () => _requestCheckout(context),
+        const SingleActivator(LogicalKeyboardKey.escape): () => _clearSearch(context),
       },
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('New Sale'),
-          actions: [
-            BlocBuilder<SyncBloc, SyncStatusState>(
-              builder: (context, state) => Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Center(
-                  child: Badge(
-                    isLabelVisible: state.pendingCount > 0,
-                    label: Text(state.pendingCount.toString()),
-                    child: Icon(state.isSyncing ? Icons.sync : Icons.cloud_sync_outlined),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth >= 900) {
-              return Row(
-                children: [
-                  const Expanded(flex: 3, child: _ProductBrowser()),
-                  const VerticalDivider(width: 1),
-                  SizedBox(width: 400, child: _CartPanel(closeOnComplete: false)),
-                ],
+      child: Focus(
+        autofocus: true,
+        child: BlocListener<CheckoutBloc, CheckoutState>(
+          listener: (context, state) {
+            if (state.status == CheckoutStatus.completed && state.submission != null) {
+              context.read<CartBloc>().add(const CartCleared());
+              context.read<SyncBloc>().add(const SyncRequested());
+              _clearSearch(context);
+              final status = state.submission!.status;
+              final message = switch (status) {
+                SaleSubmissionStatus.synced => 'Sale completed and synced.',
+                SaleSubmissionStatus.queued => 'Sale saved offline and queued for sync.',
+                SaleSubmissionStatus.conflict => 'Sale saved locally but needs sync review.',
+              };
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+            } else if (state.status == CheckoutStatus.failed) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(state.errorMessage ?? 'Sale failed.')),
               );
             }
-            return const Column(
-              children: [
-                Expanded(child: _ProductBrowser()),
-                _MobileCartBar(),
-              ],
-            );
           },
+          child: Scaffold(
+            appBar: AppBar(
+              title: const Text('New Sale'),
+              actions: [
+                if (MediaQuery.sizeOf(context).width >= 1100)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 16),
+                    child: Center(
+                      child: Text('F4 Search   •   F9 Pay   •   Esc Clear'),
+                    ),
+                  ),
+                BlocBuilder<SyncBloc, SyncStatusState>(
+                  builder: (context, state) => Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Center(
+                      child: Badge(
+                        isLabelVisible: state.pendingCount > 0,
+                        label: Text(state.pendingCount.toString()),
+                        child: Icon(state.isSyncing ? Icons.sync : Icons.cloud_sync_outlined),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            body: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth >= 900) {
+                  return Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: _ProductBrowser(
+                          searchController: _searchController,
+                          searchFocusNode: _searchFocusNode,
+                        ),
+                      ),
+                      const VerticalDivider(width: 1),
+                      SizedBox(width: 400, child: _CartPanel(closeOnComplete: false)),
+                    ],
+                  );
+                }
+                return Column(
+                  children: [
+                    Expanded(
+                      child: _ProductBrowser(
+                        searchController: _searchController,
+                        searchFocusNode: _searchFocusNode,
+                      ),
+                    ),
+                    const _MobileCartBar(),
+                  ],
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
@@ -95,7 +167,13 @@ class _PosView extends StatelessWidget {
 }
 
 class _ProductBrowser extends StatelessWidget {
-  const _ProductBrowser();
+  const _ProductBrowser({
+    required this.searchController,
+    required this.searchFocusNode,
+  });
+
+  final TextEditingController searchController;
+  final FocusNode searchFocusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -106,14 +184,41 @@ class _ProductBrowser extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(14),
               child: TextField(
+                controller: searchController,
+                focusNode: searchFocusNode,
+                textInputAction: TextInputAction.search,
                 onChanged: (value) => context.read<ProductCatalogBloc>().add(ProductCatalogQueryChanged(value)),
-                decoration: const InputDecoration(
+                onSubmitted: (value) => _handleSubmitted(context, state, value),
+                decoration: InputDecoration(
                   hintText: 'Scan barcode or search product',
-                  prefixIcon: Icon(Icons.qr_code_scanner),
-                  suffixIcon: Icon(Icons.search),
+                  prefixIcon: const Icon(Icons.qr_code_scanner),
+                  suffixIcon: searchController.text.isEmpty
+                      ? const Icon(Icons.search)
+                      : IconButton(
+                          tooltip: 'Clear search (Esc)',
+                          onPressed: () {
+                            searchController.clear();
+                            context.read<ProductCatalogBloc>().add(const ProductCatalogQueryChanged(''));
+                            searchFocusNode.requestFocus();
+                          },
+                          icon: const Icon(Icons.close),
+                        ),
                 ),
               ),
             ),
+            if (MediaQuery.sizeOf(context).width >= 900)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'USB barcode scanners work as keyboard input: scan a barcode and the item is added when Enter is received.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ),
+              ),
             if (state.lastError != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -149,6 +254,36 @@ class _ProductBrowser extends StatelessWidget {
         );
       },
     );
+  }
+
+  void _handleSubmitted(BuildContext context, ProductCatalogState state, String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) return;
+
+    ProductSummary? exactMatch;
+    for (final product in state.products) {
+      final barcode = product.barcode?.trim().toLowerCase();
+      if (product.sku.trim().toLowerCase() == normalized || (barcode != null && barcode == normalized)) {
+        exactMatch = product;
+        break;
+      }
+    }
+
+    if (exactMatch == null) return;
+
+    final available = exactMatch.tracksStock ? exactMatch.availableWholeUnits : null;
+    if (available != null && available <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${exactMatch.name} is out of stock.')),
+      );
+      searchFocusNode.requestFocus();
+      return;
+    }
+
+    context.read<CartBloc>().add(CartProductAdded(exactMatch.toPosProduct()));
+    searchController.clear();
+    context.read<ProductCatalogBloc>().add(const ProductCatalogQueryChanged(''));
+    searchFocusNode.requestFocus();
   }
 }
 
@@ -358,7 +493,7 @@ class _CartPanel extends StatelessWidget {
                     icon: submitting
                         ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.check_circle_outline),
-                    label: Text(submitting ? 'Saving sale…' : 'Pay ${Loti.formatMinor(cart.totalMinor)}'),
+                    label: Text(submitting ? 'Saving sale…' : 'Pay ${Loti.formatMinor(cart.totalMinor)}  [F9]'),
                   );
                 },
               ),
