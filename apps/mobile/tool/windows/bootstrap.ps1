@@ -34,6 +34,10 @@ try {
     flutter pub get
     if ($LASTEXITCODE -ne 0) { throw 'flutter pub get failed.' }
 
+    Write-Host '==> Applying Khanya launcher icon to generated desktop runner'
+    dart run flutter_launcher_icons
+    if ($LASTEXITCODE -ne 0) { throw 'Khanya launcher icon generation failed.' }
+
     Write-Host '==> Generating Drift sources'
     dart run build_runner build
     if ($LASTEXITCODE -ne 0) { throw 'Drift/build_runner generation failed.' }
