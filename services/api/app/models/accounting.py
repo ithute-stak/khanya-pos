@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -12,6 +12,14 @@ class Account(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "accounts"
     __table_args__ = (
         UniqueConstraint("tenant_id", "code", name="uq_accounts_tenant_code"),
+        CheckConstraint(
+            "account_type IN ('asset','liability','equity','income','expense')",
+            name="ck_accounts_type",
+        ),
+        CheckConstraint(
+            "normal_balance IN ('debit','credit')",
+            name="ck_accounts_normal_balance",
+        ),
     )
 
     tenant_id: Mapped[UUID] = mapped_column(
@@ -38,6 +46,11 @@ class JournalEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint(
             "tenant_id", "entry_number", name="uq_journal_entries_tenant_number"
         ),
+        UniqueConstraint("reversal_of_id", name="uq_journal_entries_reversal_of"),
+        CheckConstraint(
+            "reversal_of_id IS NULL OR reversal_of_id <> id",
+            name="ck_journal_entries_not_self_reversal",
+        ),
     )
 
     tenant_id: Mapped[UUID] = mapped_column(
@@ -63,6 +76,14 @@ class JournalEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class JournalLine(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "journal_lines"
+    __table_args__ = (
+        CheckConstraint("debit >= 0", name="ck_journal_lines_debit_nonnegative"),
+        CheckConstraint("credit >= 0", name="ck_journal_lines_credit_nonnegative"),
+        CheckConstraint(
+            "(debit > 0 AND credit = 0) OR (credit > 0 AND debit = 0)",
+            name="ck_journal_lines_exactly_one_side",
+        ),
+    )
 
     journal_entry_id: Mapped[UUID] = mapped_column(
         ForeignKey("journal_entries.id", ondelete="CASCADE"), index=True
