@@ -3,10 +3,10 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.database import SessionLocal
-from app.models.accounting import JournalEntry
+from app.models.accounting import JournalEntry, JournalLine
 from app.models.commerce import BranchProductStock, Product, StockMovement
 from app.models.identity import Branch, Tenant, User
 from app.models.inventory_controls import StocktakeLine, StockTransferLine
@@ -189,6 +189,27 @@ async def test_transfer_rejects_reserved_stock_from_being_moved() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stocktake_rejects_count_below_reserved_stock() -> None:
+    db, tenant_id, source_id, _destination_id, user_id, product_id = await _fixture()
+    try:
+        with pytest.raises(InventoryControlError):
+            await post_stocktake(
+                db,
+                tenant_id=tenant_id,
+                branch_id=source_id,
+                user_id=user_id,
+                payload=StocktakePostRequest(
+                    client_operation_id=uuid4(),
+                    reason="Invalid physical count",
+                    lines=[StocktakeLineInput(product_id=product_id, counted_quantity=Decimal("0"))],
+                ),
+            )
+        await db.rollback()
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_stocktake_posts_variance_stock_and_balanced_journal() -> None:
     db, tenant_id, source_id, _destination_id, user_id, product_id = await _fixture()
     try:
@@ -241,7 +262,14 @@ async def test_stocktake_posts_variance_stock_and_balanced_journal() -> None:
                 )
             )
         ).scalar_one()
-        assert journal.total_debit == Decimal("30.00")
-        assert journal.total_credit == Decimal("30.00")
+        debit, credit = (
+            await db.execute(
+                select(func.sum(JournalLine.debit), func.sum(JournalLine.credit)).where(
+                    JournalLine.journal_entry_id == journal.id
+                )
+            )
+        ).one()
+        assert debit == Decimal("30.00")
+        assert credit == Decimal("30.00")
     finally:
         await db.close()
