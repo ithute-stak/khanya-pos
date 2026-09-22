@@ -208,6 +208,7 @@ class TrialBalanceReport {
 
 class ProfitLossAccountRow {
   const ProfitLossAccountRow({required this.code, required this.name, required this.amountMinor});
+
   final String code;
   final String name;
   final int amountMinor;
@@ -368,13 +369,14 @@ class AccountingRepository {
     DateTime? start,
     DateTime? end,
   }) async {
+    final query = <String, dynamic>{};
+    final normalizedCode = _blankToNull(accountCode);
+    if (normalizedCode != null) query['account_code'] = normalizedCode;
+    if (start != null) query['start'] = start.toUtc().toIso8601String();
+    if (end != null) query['end'] = end.toUtc().toIso8601String();
     final response = await _apiClient.dio.get<List<dynamic>>(
       '/accounting/ledger',
-      queryParameters: {
-        ?'account_code': _blankToNull(accountCode),
-        ?'start': start?.toUtc().toIso8601String(),
-        ?'end': end?.toUtc().toIso8601String(),
-      },
+      queryParameters: query,
     );
     return (response.data ?? const [])
         .map((row) => LedgerRow.fromJson((row as Map).cast<String, dynamic>()))
@@ -382,28 +384,32 @@ class AccountingRepository {
   }
 
   Future<TrialBalanceReport> trialBalance({DateTime? asOf}) async {
+    final query = <String, dynamic>{};
+    if (asOf != null) query['as_of'] = asOf.toUtc().toIso8601String();
     final response = await _apiClient.dio.get<Map<String, dynamic>>(
       '/accounting/trial-balance',
-      queryParameters: {?if (asOf != null) 'as_of': asOf.toUtc().toIso8601String()},
+      queryParameters: query,
     );
     return TrialBalanceReport.fromJson(response.data ?? const {});
   }
 
   Future<ProfitLossReport> profitLoss({DateTime? start, DateTime? end}) async {
+    final query = <String, dynamic>{};
+    if (start != null) query['start'] = start.toUtc().toIso8601String();
+    if (end != null) query['end'] = end.toUtc().toIso8601String();
     final response = await _apiClient.dio.get<Map<String, dynamic>>(
       '/accounting/profit-loss',
-      queryParameters: {
-        ?if (start != null) 'start': start.toUtc().toIso8601String(),
-        ?if (end != null) 'end': end.toUtc().toIso8601String(),
-      },
+      queryParameters: query,
     );
     return ProfitLossReport.fromJson(response.data ?? const {});
   }
 
   Future<BalanceSheetReport> balanceSheet({DateTime? asOf}) async {
+    final query = <String, dynamic>{};
+    if (asOf != null) query['as_of'] = asOf.toUtc().toIso8601String();
     final response = await _apiClient.dio.get<Map<String, dynamic>>(
       '/accounting/balance-sheet',
-      queryParameters: {?if (asOf != null) 'as_of': asOf.toUtc().toIso8601String()},
+      queryParameters: query,
     );
     return BalanceSheetReport.fromJson(response.data ?? const {});
   }
@@ -428,23 +434,13 @@ class AccountingRepository {
     required List<ManualJournalLineDraft> lines,
     DateTime? occurredAt,
   }) async {
-    await _apiClient.dio.post<Map<String, dynamic>>(
-      '/accounting/journals/manual',
-      data: {
-        'client_operation_id': _uuid.v4(),
-        'description': description.trim(),
-        ?if (occurredAt != null) 'occurred_at': occurredAt.toUtc().toIso8601String(),
-        'lines': [
-          for (final line in lines)
-            {
-              'account_code': line.accountCode,
-              'debit': ScaledDecimal.fromMinor(line.debitMinor),
-              'credit': ScaledDecimal.fromMinor(line.creditMinor),
-              ?'memo': _blankToNull(line.memo),
-            },
-        ],
-      },
-    );
+    final data = <String, dynamic>{
+      'client_operation_id': _uuid.v4(),
+      'description': description.trim(),
+      'lines': lines.map(_linePayload).toList(growable: false),
+    };
+    if (occurredAt != null) data['occurred_at'] = occurredAt.toUtc().toIso8601String();
+    await _apiClient.dio.post<Map<String, dynamic>>('/accounting/journals/manual', data: data);
   }
 
   Future<void> reverseManualJournal({required String journalId, required String reason}) async {
@@ -455,6 +451,17 @@ class AccountingRepository {
         'reason': reason.trim(),
       },
     );
+  }
+
+  Map<String, dynamic> _linePayload(ManualJournalLineDraft line) {
+    final data = <String, dynamic>{
+      'account_code': line.accountCode,
+      'debit': ScaledDecimal.fromMinor(line.debitMinor),
+      'credit': ScaledDecimal.fromMinor(line.creditMinor),
+    };
+    final memo = _blankToNull(line.memo);
+    if (memo != null) data['memo'] = memo;
+    return data;
   }
 }
 
