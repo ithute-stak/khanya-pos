@@ -1,0 +1,47 @@
+name: Deployment Config
+
+on:
+  push:
+    branches: [main, "feature/**", "chore/**"]
+    paths:
+      - ".env.production.example"
+      - "compose.images.yaml"
+      - "deploy/**"
+      - "scripts/deploy-images.sh"
+      - "services/api/Dockerfile"
+      - ".github/workflows/deployment-config.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".env.production.example"
+      - "compose.images.yaml"
+      - "deploy/**"
+      - "scripts/deploy-images.sh"
+      - "services/api/Dockerfile"
+      - ".github/workflows/deployment-config.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Production deployment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate deployment script syntax
+        run: bash -n scripts/deploy-images.sh
+
+      - name: Validate production Compose
+        run: docker compose --env-file .env.production.example -f compose.images.yaml config >/dev/null
+
+      - name: Build production API image
+        run: docker build -t khanya-pos-api:deploy-check services/api
+
+      - name: Validate Caddy route syntax
+        run: >-
+          docker run --rm
+          -v "$PWD/deploy/caddy/khanya.Caddyfile:/etc/caddy/Caddyfile:ro"
+          caddy:2-alpine
+          caddy validate --config /etc/caddy/Caddyfile
