@@ -58,10 +58,11 @@ class _BusinessSettingsPageState extends State<BusinessSettingsPage> {
   Future<void> _editBusinessName() async {
     final current = _business;
     if (current == null) return;
+    final repo = context.read<BusinessSettingsRepository>();
     final controller = TextEditingController(text: current.name);
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Business name'),
         content: TextField(
           controller: controller,
@@ -69,9 +70,9 @@ class _BusinessSettingsPageState extends State<BusinessSettingsPage> {
           decoration: const InputDecoration(labelText: 'Business name'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
           FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
             child: const Text('Save'),
           ),
         ],
@@ -80,7 +81,7 @@ class _BusinessSettingsPageState extends State<BusinessSettingsPage> {
     controller.dispose();
     if (name == null || name.length < 2) return;
     try {
-      final updated = await context.read<BusinessSettingsRepository>().updateBusinessName(name);
+      final updated = await repo.updateBusinessName(name);
       if (!mounted) return;
       setState(() => _business = updated);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Business name updated')));
@@ -91,13 +92,13 @@ class _BusinessSettingsPageState extends State<BusinessSettingsPage> {
   }
 
   Future<void> _editBranch([ManagedBranch? branch]) async {
+    final repo = context.read<BusinessSettingsRepository>();
     final result = await showDialog<_BranchFormResult>(
       context: context,
-      builder: (context) => _BranchDialog(branch: branch),
+      builder: (dialogContext) => _BranchDialog(branch: branch),
     );
     if (result == null) return;
     try {
-      final repo = context.read<BusinessSettingsRepository>();
       if (branch == null) {
         await repo.createBranch(
           name: result.name,
@@ -239,7 +240,8 @@ class _BranchCard extends StatelessWidget {
           children: [
             Expanded(child: Text(branch.name)),
             if (branch.isMain) const Chip(label: Text('Main')),
-            if (!branch.isActive) const Padding(padding: EdgeInsets.only(left: 6), child: Chip(label: Text('Inactive'))),
+            if (!branch.isActive)
+              const Padding(padding: EdgeInsets.only(left: 6), child: Chip(label: Text('Inactive'))),
           ],
         ),
         subtitle: Text('${branch.code}${branch.location == null ? '' : ' • ${branch.location}'}'),
