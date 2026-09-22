@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 import 'package:khanya_pos/app/desktop_shell.dart';
 import 'package:khanya_pos/features/accounting/presentation/accounting_page.dart';
+import 'package:khanya_pos/features/accounting/presentation/financial_statements_page.dart';
 import 'package:khanya_pos/features/catalog/presentation/products_page.dart';
 import 'package:khanya_pos/features/customers/presentation/customer_detail_page.dart';
 import 'package:khanya_pos/features/customers/presentation/customer_statement_page.dart';
@@ -42,6 +43,10 @@ final GoRouter appRouter = GoRouter(
         GoRoute(path: '/till', builder: (context, state) => const TillPage()),
         GoRoute(path: '/reports', builder: (context, state) => const ReportsPage()),
         GoRoute(path: '/accounting', builder: (context, state) => const AccountingPage()),
+        GoRoute(
+          path: '/accounting/statements',
+          builder: (context, state) => const FinancialStatementsPage(),
+        ),
         GoRoute(path: '/staff', builder: (context, state) => const StaffPage()),
         GoRoute(path: '/products', builder: (context, state) => const ProductsPage()),
         GoRoute(path: '/customers', builder: (context, state) => const CustomersPage()),
