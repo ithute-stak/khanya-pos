@@ -139,16 +139,16 @@ async def create_branch(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Branch code already exists") from exc
 
 
-@router.patch("/current/branches/{branch_id}", response_model=BranchSummary)
+@router.patch("/current/branches/{managed_branch_id}", response_model=BranchSummary)
 async def update_branch(
-    branch_id: UUID,
+    managed_branch_id: UUID,
     payload: BranchUpdate,
     context: TenantContext = Depends(require_permissions("branches.manage")),
     db: AsyncSession = Depends(get_db),
 ) -> Branch:
     result = await db.execute(
         select(Branch).where(
-            Branch.id == branch_id,
+            Branch.id == managed_branch_id,
             Branch.tenant_id == context.tenant.id,
         )
     )
