@@ -60,7 +60,7 @@ jobs:
         run: |
           $apiBaseUrl = "${{ github.event.inputs.api_base_url }}"
           if ([string]::IsNullOrWhiteSpace($apiBaseUrl)) {
-            $apiBaseUrl = "http://127.0.0.1:8009/api/v1"
+            $apiBaseUrl = "https://api.khanya.ithute.co.ls/api/v1"
           }
           ./tool/windows/build_installer.ps1 -ApiBaseUrl $apiBaseUrl
 
