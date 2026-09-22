@@ -46,7 +46,7 @@ services:
     env_file:
       - .env
     ports:
-      - "8000:8000"
+      - "8009:8009"
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,7 +56,7 @@ services:
         condition: service_started
     volumes:
       - ./services/api:/app
-    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8009 --reload"]
 
   outbox-worker:
     build:

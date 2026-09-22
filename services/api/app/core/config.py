@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_name: str = "Khanya POS API"
     api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    api_port: int = 8009
     database_url: str = "postgresql+psycopg://khanya:khanya@localhost:5432/khanya"
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: str = "http://localhost:3000,http://localhost:8080"
