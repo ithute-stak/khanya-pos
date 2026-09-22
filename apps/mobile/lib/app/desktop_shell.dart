@@ -246,7 +246,7 @@ class _DesktopNavItem {
   final Set<String>? allowedRoles;
 
   bool matches(String location) {
-    if (path == '/') return location == '/';
+    if (path == '/' || path == '/accounting') return location == path;
     return location == path || location.startsWith('$path/');
   }
 
@@ -277,6 +277,18 @@ const _items = <_DesktopNavItem>[
     label: 'Accounting',
     path: '/accounting',
     icon: Icons.account_balance_outlined,
+    allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
+  ),
+  _DesktopNavItem(
+    label: 'Management Reports',
+    path: '/accounting/management',
+    icon: Icons.insights_outlined,
+    allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
+  ),
+  _DesktopNavItem(
+    label: 'Cash Flow',
+    path: '/accounting/cash-flow',
+    icon: Icons.waterfall_chart_outlined,
     allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
   ),
   _DesktopNavItem(

@@ -353,6 +353,75 @@ class LedgerLine extends Equatable {
   List<Object?> get props => [entryNumber, occurredAt, sourceType, description, accountCode, accountName, debitMinor, creditMinor];
 }
 
+class ManagementSummary extends Equatable {
+  const ManagementSummary({
+    required this.cashOnHandMinor,
+    required this.bankMinor,
+    required this.cashEquivalentsMinor,
+    required this.liquidFundsMinor,
+    required this.accountsReceivableMinor,
+    required this.inventoryMinor,
+    required this.accountsPayableMinor,
+    required this.supplierAdvancesMinor,
+    required this.currentAssetsMinor,
+    required this.workingCapitalMinor,
+    required this.salesRevenueMinor,
+    required this.grossProfitMinor,
+    required this.netProfitMinor,
+    required this.ledgerHealthy,
+  });
+
+  factory ManagementSummary.fromJson(Map<String, dynamic> json) => ManagementSummary(
+        cashOnHandMinor: ScaledDecimal.toMinor(json['cash_on_hand']),
+        bankMinor: ScaledDecimal.toMinor(json['bank']),
+        cashEquivalentsMinor: ScaledDecimal.toMinor(json['cash_equivalents']),
+        liquidFundsMinor: ScaledDecimal.toMinor(json['liquid_funds']),
+        accountsReceivableMinor: ScaledDecimal.toMinor(json['accounts_receivable']),
+        inventoryMinor: ScaledDecimal.toMinor(json['inventory']),
+        accountsPayableMinor: ScaledDecimal.toMinor(json['accounts_payable']),
+        supplierAdvancesMinor: ScaledDecimal.toMinor(json['supplier_advances']),
+        currentAssetsMinor: ScaledDecimal.toMinor(json['current_assets']),
+        workingCapitalMinor: ScaledDecimal.toMinor(json['working_capital']),
+        salesRevenueMinor: ScaledDecimal.toMinor(json['sales_revenue']),
+        grossProfitMinor: ScaledDecimal.toMinor(json['gross_profit']),
+        netProfitMinor: ScaledDecimal.toMinor(json['net_profit']),
+        ledgerHealthy: json['ledger_healthy'] as bool? ?? false,
+      );
+
+  final int cashOnHandMinor;
+  final int bankMinor;
+  final int cashEquivalentsMinor;
+  final int liquidFundsMinor;
+  final int accountsReceivableMinor;
+  final int inventoryMinor;
+  final int accountsPayableMinor;
+  final int supplierAdvancesMinor;
+  final int currentAssetsMinor;
+  final int workingCapitalMinor;
+  final int salesRevenueMinor;
+  final int grossProfitMinor;
+  final int netProfitMinor;
+  final bool ledgerHealthy;
+
+  @override
+  List<Object?> get props => [
+        cashOnHandMinor,
+        bankMinor,
+        cashEquivalentsMinor,
+        liquidFundsMinor,
+        accountsReceivableMinor,
+        inventoryMinor,
+        accountsPayableMinor,
+        supplierAdvancesMinor,
+        currentAssetsMinor,
+        workingCapitalMinor,
+        salesRevenueMinor,
+        grossProfitMinor,
+        netProfitMinor,
+        ledgerHealthy,
+      ];
+}
+
 class AccountingWorkspaceData extends Equatable {
   const AccountingWorkspaceData({
     required this.settings,
@@ -360,6 +429,7 @@ class AccountingWorkspaceData extends Equatable {
     required this.profitLoss,
     required this.balanceSheet,
     required this.reconciliation,
+    required this.managementSummary,
     required this.journals,
     required this.ledger,
   });
@@ -369,9 +439,19 @@ class AccountingWorkspaceData extends Equatable {
   final ProfitLossReport profitLoss;
   final BalanceSheetReport balanceSheet;
   final ReconciliationReport reconciliation;
+  final ManagementSummary managementSummary;
   final List<JournalEntrySummary> journals;
   final List<LedgerLine> ledger;
 
   @override
-  List<Object?> get props => [settings, trialBalance, profitLoss, balanceSheet, reconciliation, journals, ledger];
+  List<Object?> get props => [
+        settings,
+        trialBalance,
+        profitLoss,
+        balanceSheet,
+        reconciliation,
+        managementSummary,
+        journals,
+        ledger,
+      ];
 }

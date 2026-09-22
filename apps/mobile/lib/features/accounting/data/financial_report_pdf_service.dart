@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/features/accounting/domain/accounting_models.dart';
+import 'package:khanya_pos/features/accounting/domain/cash_flow_report.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -90,6 +91,45 @@ class FinancialReportPdfService {
           Loti.formatMinor(report.differenceMinor),
           bold: true,
         ),
+      ],
+    );
+    await _print(document);
+  }
+
+  static Future<void> printCashFlow({
+    required CashFlowReport report,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final document = _document(
+      title: 'Cash Flow Statement',
+      subtitle: '${_date(start)} to ${_date(end)}',
+      body: [
+        _moneyRow('Opening cash and cash equivalents', report.openingCashMinor),
+        pw.SizedBox(height: 8),
+        _moneyRow('Net cash from operating activities', report.operatingCashFlowMinor),
+        _moneyRow('Net cash from investing activities', report.investingCashFlowMinor),
+        _moneyRow('Net cash from financing activities', report.financingCashFlowMinor),
+        _rule(),
+        _moneyRow('Net change in cash', report.netChangeInCashMinor, bold: true),
+        _moneyRow('Closing cash and cash equivalents', report.closingCashMinor, bold: true),
+        pw.SizedBox(height: 8),
+        _moneyRow('Cash-flow reconciliation difference', report.differenceMinor),
+        pw.SizedBox(height: 14),
+        pw.Text(
+          report.reconciles ? 'Status: RECONCILED' : 'Status: RECONCILIATION REQUIRED',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+        ),
+        if (report.activities.isNotEmpty) ...[
+          pw.SizedBox(height: 18),
+          pw.Text('Cash movement detail', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11)),
+          pw.SizedBox(height: 6),
+          for (final activity in report.activities)
+            _detailRow(
+              '${_date(activity.occurredAt)}  ${activity.category.toUpperCase()}  ${activity.description}',
+              Loti.formatMinor(activity.amountMinor),
+            ),
+        ],
       ],
     );
     await _print(document);

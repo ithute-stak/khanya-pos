@@ -73,6 +73,7 @@ jobs:
           tests/test_purchase_service_integration.py
           tests/test_supplier_payment_integration.py
           tests/test_accounting_service_integration.py
+          tests/test_cash_flow_integration.py
           tests/test_customer_credit_integration.py
           tests/test_receivables_reconciliation_integration.py
           tests/test_till_service_integration.py
