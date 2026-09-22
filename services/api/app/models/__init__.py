@@ -19,6 +19,7 @@ from app.models.identity import (
     User,
     UserSession,
 )
+from app.models.inventory_controls import Stocktake, StocktakeLine, StockTransfer, StockTransferLine
 from app.models.outbox import OutboxEvent
 from app.models.purchasing import (
     BusinessDocument,
@@ -57,6 +58,10 @@ __all__ = [
     "SaleReturn",
     "SaleReturnLine",
     "StockMovement",
+    "Stocktake",
+    "StocktakeLine",
+    "StockTransfer",
+    "StockTransferLine",
     "Supplier",
     "SupplierPayment",
     "Tenant",
