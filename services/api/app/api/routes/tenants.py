@@ -17,6 +17,7 @@ from app.schemas.identity import (
     TenantUpdate,
 )
 from app.security.permissions import Role
+from app.services.audit import record_audit_event
 
 router = APIRouter()
 
@@ -59,9 +60,25 @@ async def get_current_tenant(
 async def update_current_tenant(
     payload: TenantUpdate,
     context: TenantContext = Depends(require_permissions("tenant.manage")),
+    principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ) -> Tenant:
+    previous_name = context.tenant.name
     context.tenant.name = payload.name.strip()
+    record_audit_event(
+        db,
+        tenant_id=context.tenant.id,
+        branch_id=context.branch.id if context.branch is not None else None,
+        actor_user_id=principal.user.id,
+        actor_name=principal.user.display_name,
+        actor_email=principal.user.email,
+        actor_role=context.membership.role,
+        action="business.updated",
+        entity_type="business",
+        entity_id=str(context.tenant.id),
+        summary=f"Updated business name to {context.tenant.name}",
+        details={"before": {"name": previous_name}, "after": {"name": context.tenant.name}},
+    )
     await db.commit()
     await db.refresh(context.tenant)
     return context.tenant
@@ -102,6 +119,7 @@ async def list_managed_branches(
 async def create_branch(
     payload: BranchCreate,
     context: TenantContext = Depends(require_permissions("branches.manage")),
+    principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ) -> Branch:
     count_result = await db.execute(
@@ -131,6 +149,25 @@ async def create_branch(
         db.add(branch)
         await db.flush()
         db.add(MembershipBranch(membership_id=context.membership.id, branch_id=branch.id))
+        record_audit_event(
+            db,
+            tenant_id=context.tenant.id,
+            branch_id=branch.id,
+            actor_user_id=principal.user.id,
+            actor_name=principal.user.display_name,
+            actor_email=principal.user.email,
+            actor_role=context.membership.role,
+            action="branch.created",
+            entity_type="branch",
+            entity_id=str(branch.id),
+            summary=f"Created branch {branch.name}",
+            details={
+                "name": branch.name,
+                "code": branch.code,
+                "location": branch.location,
+                "is_main": branch.is_main,
+            },
+        )
         await db.commit()
         await db.refresh(branch)
         return branch
@@ -144,6 +181,7 @@ async def update_branch(
     managed_branch_id: UUID,
     payload: BranchUpdate,
     context: TenantContext = Depends(require_permissions("branches.manage")),
+    principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ) -> Branch:
     result = await db.execute(
@@ -187,6 +225,13 @@ async def update_branch(
             .values(is_main=False)
         )
 
+    before = {
+        "name": branch.name,
+        "code": branch.code,
+        "location": branch.location,
+        "is_main": branch.is_main,
+        "is_active": branch.is_active,
+    }
     branch.name = payload.name.strip()
     branch.code = payload.code.strip().upper()
     branch.location = payload.location.strip() if payload.location else None
@@ -194,6 +239,29 @@ async def update_branch(
     branch.is_active = payload.is_active
 
     try:
+        record_audit_event(
+            db,
+            tenant_id=context.tenant.id,
+            branch_id=branch.id,
+            actor_user_id=principal.user.id,
+            actor_name=principal.user.display_name,
+            actor_email=principal.user.email,
+            actor_role=context.membership.role,
+            action="branch.updated",
+            entity_type="branch",
+            entity_id=str(branch.id),
+            summary=f"Updated branch {branch.name}",
+            details={
+                "before": before,
+                "after": {
+                    "name": branch.name,
+                    "code": branch.code,
+                    "location": branch.location,
+                    "is_main": branch.is_main,
+                    "is_active": branch.is_active,
+                },
+            },
+        )
         await db.commit()
         await db.refresh(branch)
         return branch
