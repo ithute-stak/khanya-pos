@@ -1,5 +1,6 @@
 import 'package:khanya_pos/core/network/api_client.dart';
 import 'package:khanya_pos/features/accounting/domain/accounting_models.dart';
+import 'package:khanya_pos/features/accounting/domain/cash_flow_report.dart';
 
 class AccountingRepository {
   AccountingRepository({required ApiClient apiClient}) : _apiClient = apiClient;
@@ -80,5 +81,19 @@ class AccountingRepository {
           .map((item) => LedgerLine.fromJson(item as Map<String, dynamic>))
           .toList(growable: false),
     );
+  }
+
+  Future<CashFlowReport> cashFlow({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final response = await _apiClient.dio.get<Map<String, dynamic>>(
+      '/accounting/cash-flow',
+      queryParameters: {
+        'start': start.toUtc().toIso8601String(),
+        'end': end.toUtc().toIso8601String(),
+      },
+    );
+    return CashFlowReport.fromJson(response.data ?? const <String, dynamic>{});
   }
 }
