@@ -39,7 +39,7 @@ services:
   api:
     image: ghcr.io/ithute-stak/khanya-pos-api:${KHANYA_IMAGE_TAG:-latest}
     restart: unless-stopped
-    env_file: .env
+    env_file: ${KHANYA_ENV_FILE:-.env}
     environment:
       APP_ENV: production
       API_HOST: 0.0.0.0
@@ -76,7 +76,7 @@ services:
   outbox-worker:
     image: ghcr.io/ithute-stak/khanya-pos-api:${KHANYA_IMAGE_TAG:-latest}
     restart: unless-stopped
-    env_file: .env
+    env_file: ${KHANYA_ENV_FILE:-.env}
     environment:
       APP_ENV: production
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://khanya:${POSTGRES_PASSWORD}@db:5432/khanya}
