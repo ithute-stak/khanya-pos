@@ -286,6 +286,12 @@ const _items = <_DesktopNavItem>[
     allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
   ),
   _DesktopNavItem(
+    label: 'Cash Flow',
+    path: '/accounting/cash-flow',
+    icon: Icons.waterfall_chart_outlined,
+    allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
+  ),
+  _DesktopNavItem(
     label: 'Financial Statements',
     path: '/accounting/statements',
     icon: Icons.description_outlined,
