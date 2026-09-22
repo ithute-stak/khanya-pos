@@ -280,6 +280,12 @@ const _items = <_DesktopNavItem>[
     allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
   ),
   _DesktopNavItem(
+    label: 'Financial Statements',
+    path: '/accounting/statements',
+    icon: Icons.description_outlined,
+    allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
+  ),
+  _DesktopNavItem(
     label: 'Staff & Roles',
     path: '/staff',
     icon: Icons.manage_accounts_outlined,
