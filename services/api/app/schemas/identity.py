@@ -39,8 +39,22 @@ class BranchSummary(BaseModel):
     code: str
     location: str | None
     is_main: bool
+    is_active: bool
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TenantSettings(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TenantUpdate(BaseModel):
+    name: str = Field(min_length=2, max_length=200)
 
 
 class MembershipSummary(BaseModel):
@@ -64,6 +78,14 @@ class BranchCreate(BaseModel):
     code: str = Field(min_length=1, max_length=40)
     location: str | None = Field(default=None, max_length=240)
     is_main: bool = False
+
+
+class BranchUpdate(BaseModel):
+    name: str = Field(min_length=2, max_length=200)
+    code: str = Field(min_length=1, max_length=40)
+    location: str | None = Field(default=None, max_length=240)
+    is_main: bool
+    is_active: bool
 
 
 class StaffCreate(BaseModel):
