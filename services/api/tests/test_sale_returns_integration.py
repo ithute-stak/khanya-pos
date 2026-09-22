@@ -13,6 +13,7 @@ from app.schemas.commerce import PaymentInput, SaleCompleteRequest, SaleItemInpu
 from app.schemas.returns import SaleReturnItemInput, SaleReturnRequest
 from app.services.sales import complete_sale
 from app.services.sales_returns import SaleReturnError, process_sale_return, sale_detail
+from app.services.till import open_shift
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_INTEGRATION_TESTS") != "1",
@@ -68,6 +69,15 @@ async def test_partial_return_restores_stock_posts_refund_and_is_idempotent() ->
         branch_id = branch.id
         user_id = user.id
         product_id = product.id
+
+        await open_shift(
+            db,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            cashier_user_id=user_id,
+            client_operation_id=uuid4(),
+            opening_float=Decimal("100.00"),
+        )
 
         completed = await complete_sale(
             db,
@@ -217,15 +227,21 @@ async def test_credit_return_reduces_receivable_before_refund() -> None:
         )
         await db.commit()
 
+        tenant_id = tenant.id
+        branch_id = branch.id
+        user_id = user.id
+        customer_id = customer.id
+        product_id = product.id
+
         completed = await complete_sale(
             db,
-            tenant_id=tenant.id,
-            branch_id=branch.id,
-            cashier_user_id=user.id,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            cashier_user_id=user_id,
             payload=SaleCompleteRequest(
                 client_operation_id=uuid4(),
-                customer_id=customer.id,
-                items=[SaleItemInput(product_id=product.id, quantity=Decimal("1.000"))],
+                customer_id=customer_id,
+                items=[SaleItemInput(product_id=product_id, quantity=Decimal("1.000"))],
                 payments=[PaymentInput(method="cash", amount=Decimal("50.00"))],
             ),
         )
@@ -233,23 +249,23 @@ async def test_credit_return_reduces_receivable_before_refund() -> None:
 
         detail = await sale_detail(
             db,
-            tenant_id=tenant.id,
-            branch_id=branch.id,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
             sale_id=completed.id,
         )
         line_id = detail["lines"][0]["id"]
         returned = await process_sale_return(
             db,
-            tenant_id=tenant.id,
-            branch_id=branch.id,
-            user_id=user.id,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            user_id=user_id,
             sale_id=completed.id,
             payload=SaleReturnRequest(
                 client_operation_id=uuid4(),
                 kind="return",
                 items=[SaleReturnItemInput(sale_line_id=line_id, quantity=Decimal("1.000"))],
                 reason="Full item return against partially outstanding sale",
-                refund_method="cash",
+                refund_method="bank_transfer",
             ),
         )
         assert returned["total"] == Decimal("80.00")
@@ -257,8 +273,8 @@ async def test_credit_return_reduces_receivable_before_refund() -> None:
         assert returned["refunded_amount"] == Decimal("50.00")
         refreshed_detail = await sale_detail(
             db,
-            tenant_id=tenant.id,
-            branch_id=branch.id,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
             sale_id=completed.id,
         )
         assert refreshed_detail["balance_due"] == Decimal("0.00")
