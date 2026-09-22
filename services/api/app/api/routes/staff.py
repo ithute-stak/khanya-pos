@@ -169,8 +169,9 @@ async def update_staff(
 
     membership, user = row
     current_branch_ids = await _branch_ids_for_membership(db, membership.id)
+    editing_self = membership.id == context.membership.id
 
-    if membership.id == context.membership.id:
+    if editing_self:
         protected_change = (
             payload.role.value != membership.role
             or not payload.is_active
@@ -181,12 +182,21 @@ async def update_staff(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="You cannot change your own role, branch access, or active status",
             )
-
-    if not can_assign_role(context.membership.role, payload.role):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You cannot assign this role",
-        )
+    else:
+        # A caller must be allowed to manage both the target's current role and
+        # the requested role. This prevents a manager/admin from demoting a
+        # higher-privilege account into a role they would normally be allowed
+        # to assign.
+        if not can_assign_role(context.membership.role, membership.role):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You cannot manage this staff member",
+            )
+        if not can_assign_role(context.membership.role, payload.role):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You cannot assign this role",
+            )
 
     await _validate_branch_ids(
         db,
