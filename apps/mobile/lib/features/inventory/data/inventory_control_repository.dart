@@ -62,9 +62,11 @@ class InventoryControlRepository {
 
   Future<List<InventoryBranch>> branches() async {
     _requireTenant();
+    final currentBranchId = _requireBranch();
     final response = await _apiClient.dio.get<List<dynamic>>('/tenants/current/branches');
     return (response.data ?? const [])
         .map((row) => InventoryBranch.fromJson((row as Map).cast<String, dynamic>()))
+        .where((branch) => branch.id != currentBranchId)
         .toList(growable: false);
   }
 
@@ -74,7 +76,8 @@ class InventoryControlRepository {
     required Map<String, int> productQuantitiesMilli,
     String? reference,
   }) async {
-    _requireBranch();
+    final currentBranchId = _requireBranch();
+    if (destinationBranchId == currentBranchId) throw StateError('Choose a different destination branch.');
     if (productQuantitiesMilli.isEmpty) throw StateError('Choose at least one product to transfer.');
     await _apiClient.dio.post<Map<String, dynamic>>(
       '/inventory/transfers',
