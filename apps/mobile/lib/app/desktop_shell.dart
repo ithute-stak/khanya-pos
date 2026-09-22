@@ -246,7 +246,7 @@ class _DesktopNavItem {
   final Set<String>? allowedRoles;
 
   bool matches(String location) {
-    if (path == '/') return location == '/';
+    if (path == '/' || path == '/accounting') return location == path;
     return location == path || location.startsWith('$path/');
   }
 
