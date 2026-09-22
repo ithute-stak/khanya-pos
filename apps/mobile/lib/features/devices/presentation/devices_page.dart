@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
 import 'package:khanya_pos/features/devices/data/device_repository.dart';
 
 class DevicesPage extends StatefulWidget {
@@ -156,9 +155,7 @@ class _DeviceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final lastSeen = device.lastSeenAt == null
-        ? 'Never seen'
-        : DateFormat('dd MMM yyyy, HH:mm').format(device.lastSeenAt!);
+    final lastSeen = device.lastSeenAt == null ? 'Never seen' : _formatDateTime(device.lastSeenAt!);
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
@@ -186,4 +183,25 @@ class _DeviceCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatDateTime(DateTime value) {
+  const months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final day = value.day.toString().padLeft(2, '0');
+  final hour = value.hour.toString().padLeft(2, '0');
+  final minute = value.minute.toString().padLeft(2, '0');
+  return '$day ${months[value.month - 1]} ${value.year}, $hour:$minute';
 }
