@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.routes import (
     accounting,
+    accounting_cash_flow,
     audit,
     auth,
     customers,
@@ -41,6 +42,7 @@ api_router.include_router(purchases.router, prefix="/purchases", tags=["purchase
 api_router.include_router(expenses.router, prefix="/expenses", tags=["expenses"])
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(accounting.router, prefix="/accounting", tags=["accounting"])
+api_router.include_router(accounting_cash_flow.router, prefix="/accounting", tags=["accounting"])
 api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(realtime.router, prefix="/ws", tags=["realtime"])
