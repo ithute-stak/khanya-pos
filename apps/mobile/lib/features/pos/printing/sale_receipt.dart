@@ -38,6 +38,9 @@ class SaleReceipt {
     required this.syncStatus,
     this.branchId,
     this.cashierName,
+    this.customerName,
+    this.paidNowMinor,
+    this.balanceDueMinor,
     this.cashTenderedMinor,
   });
 
@@ -49,13 +52,21 @@ class SaleReceipt {
   final String syncStatus;
   final String? branchId;
   final String? cashierName;
+  final String? customerName;
+  final int? paidNowMinor;
+  final int? balanceDueMinor;
   final int? cashTenderedMinor;
 
   int get totalMinor => lines.fold(0, (total, line) => total + line.lineTotalMinor);
+  int get paidMinor => paidNowMinor ?? totalMinor;
+  int get creditBalanceMinor =>
+      balanceDueMinor ?? (totalMinor - paidMinor).clamp(0, totalMinor).toInt();
+  bool get isCreditSale => creditBalanceMinor > 0;
+
   int? get cashChangeMinor {
     final tendered = cashTenderedMinor;
-    if (paymentMethod != PaymentMethod.cash || tendered == null) return null;
-    return tendered > totalMinor ? tendered - totalMinor : 0;
+    if (paymentMethod != PaymentMethod.cash || tendered == null || paidMinor <= 0) return null;
+    return tendered > paidMinor ? tendered - paidMinor : 0;
   }
 }
 
@@ -75,7 +86,11 @@ PdfPageFormat saleReceiptPageFormat(
   final lineCount = receipt.lines.isEmpty ? 1 : receipt.lines.length;
   final perLineMm = widthMm == 58 ? 20 : 15;
   final cashExtraMm = receipt.cashTenderedMinor == null ? 0 : 12;
-  final heightMm = (115 + cashExtraMm + (lineCount * perLineMm)).clamp(140, 2000).toDouble();
+  final creditExtraMm = receipt.isCreditSale ? 18 : 0;
+  final customerExtraMm = receipt.customerName == null ? 0 : 8;
+  final heightMm = (115 + cashExtraMm + creditExtraMm + customerExtraMm + (lineCount * perLineMm))
+      .clamp(140, 2000)
+      .toDouble();
   final margin = 4 * PdfPageFormat.mm;
   return PdfPageFormat(
     widthMm * PdfPageFormat.mm,
@@ -117,7 +132,7 @@ Future<Uint8List> buildSaleReceiptPdf(
             style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
           ),
           pw.Text(
-            'Sales Receipt',
+            receipt.isCreditSale ? 'Sales / Credit Receipt' : 'Sales Receipt',
             textAlign: pw.TextAlign.center,
             style: const pw.TextStyle(fontSize: 8),
           ),
@@ -128,7 +143,9 @@ Future<Uint8List> buildSaleReceiptPdf(
             _receiptPair('Branch', receipt.branchId!),
           if (receipt.cashierName != null && receipt.cashierName!.isNotEmpty)
             _receiptPair('Cashier', receipt.cashierName!),
-          _receiptPair('Payment', receipt.paymentMethod.label),
+          if (receipt.customerName != null && receipt.customerName!.isNotEmpty)
+            _receiptPair('Customer', receipt.customerName!),
+          if (receipt.paidMinor > 0) _receiptPair('Payment', receipt.paymentMethod.label),
           pw.SizedBox(height: 2 * PdfPageFormat.mm),
           pw.Divider(height: 1),
           pw.SizedBox(height: 2 * PdfPageFormat.mm),
@@ -168,7 +185,12 @@ Future<Uint8List> buildSaleReceiptPdf(
               ),
             ],
           ),
-          if (receipt.cashTenderedMinor != null) ...[
+          if (receipt.isCreditSale) ...[
+            pw.SizedBox(height: 2 * PdfPageFormat.mm),
+            _receiptPair('Paid now', formatMalotiMinor(receipt.paidMinor)),
+            _receiptPair('Balance due', formatMalotiMinor(receipt.creditBalanceMinor)),
+          ],
+          if (receipt.cashTenderedMinor != null && receipt.paidMinor > 0) ...[
             pw.SizedBox(height: 2 * PdfPageFormat.mm),
             _receiptPair('Cash received', formatMalotiMinor(receipt.cashTenderedMinor!)),
             _receiptPair('Change', formatMalotiMinor(receipt.cashChangeMinor ?? 0)),
