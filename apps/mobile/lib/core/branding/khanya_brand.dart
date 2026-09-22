@@ -6,7 +6,7 @@ abstract final class KhanyaBrand {
   static const String companyDescriptor = 'Management & Consultancy Services';
   static const String tagline = 'People | Process | Profit | A Brighter Tomorrow';
 
-  static const String appIconAsset = 'assets/branding/khanya_app_icon_safe.jpg';
+  static const String appIconAsset = 'assets/branding/khanya_app_icon.png';
   static const String fullLogoAsset = appIconAsset;
 
   static const Color forest = Color(0xFF006B3C);
@@ -101,6 +101,23 @@ class KhanyaMark extends StatelessWidget {
         fit: BoxFit.cover,
         filterQuality: FilterQuality.high,
         semanticLabel: 'Khanya Resources mark',
+        errorBuilder: (context, error, stackTrace) => Container(
+          width: size,
+          height: size,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: KhanyaBrand.forestDark,
+            borderRadius: BorderRadius.circular(radius),
+          ),
+          child: Text(
+            'K',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: size * 0.48,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
       ),
     );
   }
