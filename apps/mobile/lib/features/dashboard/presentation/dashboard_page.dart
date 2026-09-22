@@ -17,6 +17,9 @@ class DashboardPage extends StatelessWidget {
     final membership = session?.memberships
         .where((item) => item.tenantId == session.selectedTenantId)
         .firstOrNull;
+    final role = membership?.role;
+    final canReadReports = const {'owner', 'admin', 'manager', 'accountant'}.contains(role);
+    final canManageStaff = const {'owner', 'admin', 'manager'}.contains(role);
 
     return Scaffold(
       appBar: AppBar(
@@ -103,6 +106,22 @@ class DashboardPage extends StatelessWidget {
                       accent: KhanyaBrand.goldDark,
                       onTap: () => context.push('/till'),
                     ),
+                    if (canReadReports)
+                      _ModuleCard(
+                        title: 'Management Reports',
+                        description: 'Sales, profit, returns, payment mix and product performance',
+                        icon: Icons.analytics_outlined,
+                        accent: KhanyaBrand.navy,
+                        onTap: () => context.push('/reports'),
+                      ),
+                    if (canManageStaff)
+                      _ModuleCard(
+                        title: 'Staff & Roles',
+                        description: 'Staff access, roles, branches and active memberships',
+                        icon: Icons.manage_accounts_outlined,
+                        accent: KhanyaBrand.goldDark,
+                        onTap: () => context.push('/staff'),
+                      ),
                     _ModuleCard(
                       title: 'Customers & Credit',
                       description: 'Credit limits, balances, payments, ageing and statements',
