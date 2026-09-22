@@ -49,6 +49,46 @@ async def _stock_row(
     return stock
 
 
+async def _validate_transfer_replay(
+    db: AsyncSession,
+    replay: StockTransfer,
+    *,
+    source_branch_id: UUID,
+    payload: StockTransferRequest,
+) -> None:
+    if replay.source_branch_id != source_branch_id or replay.destination_branch_id != payload.destination_branch_id:
+        raise InventoryControlError("This transfer operation ID was already used for different branches")
+    if replay.reference != payload.reference or replay.reason != payload.reason.strip():
+        raise InventoryControlError("This transfer operation ID was already used with different details")
+    saved_lines = (
+        await db.execute(select(StockTransferLine).where(StockTransferLine.transfer_id == replay.id))
+    ).scalars().all()
+    saved = {line.product_id: quantity(line.quantity) for line in saved_lines}
+    requested = {line.product_id: quantity(line.quantity) for line in payload.lines}
+    if saved != requested:
+        raise InventoryControlError("This transfer operation ID was already used with different quantities")
+
+
+async def _validate_stocktake_replay(
+    db: AsyncSession,
+    replay: Stocktake,
+    *,
+    branch_id: UUID,
+    payload: StocktakePostRequest,
+) -> None:
+    if replay.branch_id != branch_id:
+        raise InventoryControlError("This stocktake operation ID belongs to another branch")
+    if replay.reference != payload.reference or replay.reason != payload.reason.strip():
+        raise InventoryControlError("This stocktake operation ID was already used with different details")
+    saved_lines = (
+        await db.execute(select(StocktakeLine).where(StocktakeLine.stocktake_id == replay.id))
+    ).scalars().all()
+    saved = {line.product_id: quantity(line.counted_quantity) for line in saved_lines}
+    requested = {line.product_id: quantity(line.counted_quantity) for line in payload.lines}
+    if saved != requested:
+        raise InventoryControlError("This stocktake operation ID was already used with different counts")
+
+
 async def complete_stock_transfer(
     db: AsyncSession,
     *,
@@ -72,8 +112,12 @@ async def complete_stock_transfer(
         )
     ).scalar_one_or_none()
     if replay is not None:
-        if replay.source_branch_id != source_branch_id or replay.destination_branch_id != payload.destination_branch_id:
-            raise InventoryControlError("This transfer operation ID was already used for different branches")
+        await _validate_transfer_replay(
+            db,
+            replay,
+            source_branch_id=source_branch_id,
+            payload=payload,
+        )
         return replay, True
 
     if payload.destination_branch_id == source_branch_id:
@@ -225,8 +269,7 @@ async def post_stocktake(
         )
     ).scalar_one_or_none()
     if replay is not None:
-        if replay.branch_id != branch_id:
-            raise InventoryControlError("This stocktake operation ID belongs to another branch")
+        await _validate_stocktake_replay(db, replay, branch_id=branch_id, payload=payload)
         return replay, True
 
     branch = (
