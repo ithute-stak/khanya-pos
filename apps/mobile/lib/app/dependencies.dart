@@ -19,6 +19,7 @@ import 'package:khanya_pos/features/pos/data/till_repository.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 import 'package:khanya_pos/features/purchasing/data/purchasing_repository.dart';
 import 'package:khanya_pos/features/reports/data/reports_repository.dart';
+import 'package:khanya_pos/features/staff/data/staff_repository.dart';
 
 class AppDependencies {
   AppDependencies._({
@@ -37,6 +38,7 @@ class AppDependencies {
     required this.documentRepository,
     required this.expenseRepository,
     required this.reportsRepository,
+    required this.staffRepository,
     required this.hardwareSettingsRepository,
     required this.realtimeClient,
   });
@@ -108,6 +110,7 @@ class AppDependencies {
       syncService: syncService,
     );
     final reportsRepository = ReportsRepository(apiClient: apiClient);
+    final staffRepository = StaffRepository(apiClient: apiClient);
     return AppDependencies._(
       database: database,
       customerDatabase: customerDatabase,
@@ -124,6 +127,7 @@ class AppDependencies {
       documentRepository: documentRepository,
       expenseRepository: expenseRepository,
       reportsRepository: reportsRepository,
+      staffRepository: staffRepository,
       hardwareSettingsRepository: PosHardwareSettingsRepository(),
       realtimeClient: RealtimeClient(),
     );
@@ -144,6 +148,7 @@ class AppDependencies {
   final DocumentRepository documentRepository;
   final ExpenseRepository expenseRepository;
   final ReportsRepository reportsRepository;
+  final StaffRepository staffRepository;
   final PosHardwareSettingsRepository hardwareSettingsRepository;
   final RealtimeClient realtimeClient;
 
