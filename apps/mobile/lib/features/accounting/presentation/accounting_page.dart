@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:khanya_pos/core/branding/khanya_brand.dart';
 import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/features/accounting/data/accounting_repository.dart';
+import 'package:khanya_pos/features/accounting/data/financial_report_pdf_service.dart';
 import 'package:khanya_pos/features/accounting/domain/accounting_reports.dart';
 
 class AccountingPage extends StatefulWidget {
@@ -126,9 +127,9 @@ class _AccountingPageState extends State<AccountingPage> {
                   return TabBarView(
                     children: [
                       _OverviewTab(data: data),
-                      _ProfitLossTab(report: data.profitLoss),
-                      _BalanceSheetTab(report: data.balanceSheet),
-                      _TrialBalanceTab(report: data.trialBalance),
+                      _ProfitLossTab(report: data.profitLoss, start: _start, end: _end),
+                      _BalanceSheetTab(report: data.balanceSheet, asOf: _end),
+                      _TrialBalanceTab(report: data.trialBalance, asOf: _end),
                       _LedgerTab(rows: data.ledger),
                       _JournalsTab(items: data.journals),
                     ],
@@ -334,16 +335,22 @@ class _MetricCard extends StatelessWidget {
 }
 
 class _ProfitLossTab extends StatelessWidget {
-  const _ProfitLossTab({required this.report});
+  const _ProfitLossTab({required this.report, required this.start, required this.end});
 
   final ProfitLossReport report;
+  final DateTime start;
+  final DateTime end;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _ReportHeader(title: 'Profit & Loss', balanced: null),
+        _ReportHeader(
+          title: 'Profit & Loss',
+          balanced: null,
+          onPrint: () => FinancialReportPdfService.printProfitLoss(report: report, start: start, end: end),
+        ),
         const SizedBox(height: 10),
         _AmountRow('Sales revenue', report.salesRevenueMinor, emphasized: true),
         _AmountRow('Other income', report.otherIncomeMinor),
@@ -368,16 +375,21 @@ class _ProfitLossTab extends StatelessWidget {
 }
 
 class _BalanceSheetTab extends StatelessWidget {
-  const _BalanceSheetTab({required this.report});
+  const _BalanceSheetTab({required this.report, required this.asOf});
 
   final BalanceSheetReport report;
+  final DateTime asOf;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _ReportHeader(title: 'Balance Sheet', balanced: report.isBalanced),
+        _ReportHeader(
+          title: 'Balance Sheet',
+          balanced: report.isBalanced,
+          onPrint: () => FinancialReportPdfService.printBalanceSheet(report: report, asOf: asOf),
+        ),
         const SizedBox(height: 12),
         _AmountRow('Total assets', report.assetsMinor, emphasized: true),
         const SizedBox(height: 8),
@@ -395,16 +407,21 @@ class _BalanceSheetTab extends StatelessWidget {
 }
 
 class _TrialBalanceTab extends StatelessWidget {
-  const _TrialBalanceTab({required this.report});
+  const _TrialBalanceTab({required this.report, required this.asOf});
 
   final TrialBalanceReport report;
+  final DateTime asOf;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _ReportHeader(title: 'Trial Balance', balanced: report.isBalanced),
+        _ReportHeader(
+          title: 'Trial Balance',
+          balanced: report.isBalanced,
+          onPrint: () => FinancialReportPdfService.printTrialBalance(report: report, asOf: asOf),
+        ),
         const SizedBox(height: 12),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -517,10 +534,11 @@ class _JournalsTab extends StatelessWidget {
 }
 
 class _ReportHeader extends StatelessWidget {
-  const _ReportHeader({required this.title, required this.balanced});
+  const _ReportHeader({required this.title, required this.balanced, this.onPrint});
 
   final String title;
   final bool? balanced;
+  final VoidCallback? onPrint;
 
   @override
   Widget build(BuildContext context) {
@@ -528,9 +546,18 @@ class _ReportHeader extends StatelessWidget {
       children: [
         Expanded(child: Text(title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900))),
         if (balanced != null)
-          Chip(
-            avatar: Icon(balanced! ? Icons.check_circle_outline : Icons.warning_amber_rounded, size: 18),
-            label: Text(balanced! ? 'Balanced' : 'Out of balance'),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Chip(
+              avatar: Icon(balanced! ? Icons.check_circle_outline : Icons.warning_amber_rounded, size: 18),
+              label: Text(balanced! ? 'Balanced' : 'Out of balance'),
+            ),
+          ),
+        if (onPrint != null)
+          OutlinedButton.icon(
+            onPressed: onPrint,
+            icon: const Icon(Icons.print_outlined, size: 18),
+            label: const Text('Print'),
           ),
       ],
     );
