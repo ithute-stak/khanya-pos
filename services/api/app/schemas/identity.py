@@ -112,3 +112,9 @@ class DeviceRegister(BaseModel):
     platform: str = Field(min_length=2, max_length=80)
     app_version: str | None = Field(default=None, max_length=40)
     branch_id: UUID
+
+
+class DeviceUpdate(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    branch_id: UUID
+    is_active: bool

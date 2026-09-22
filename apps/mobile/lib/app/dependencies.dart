@@ -11,6 +11,7 @@ import 'package:khanya_pos/features/auth/data/auth_repository.dart';
 import 'package:khanya_pos/features/catalog/data/product_repository.dart';
 import 'package:khanya_pos/features/customers/data/customer_database.dart';
 import 'package:khanya_pos/features/customers/data/customer_repository.dart';
+import 'package:khanya_pos/features/devices/data/device_repository.dart';
 import 'package:khanya_pos/features/documents/data/document_repository.dart';
 import 'package:khanya_pos/features/documents/data/receipt_file_store.dart';
 import 'package:khanya_pos/features/expenses/data/expense_repository.dart';
@@ -45,6 +46,7 @@ class AppDependencies {
     required this.staffRepository,
     required this.accountingRepository,
     required this.businessSettingsRepository,
+    required this.deviceRepository,
     required this.hardwareSettingsRepository,
     required this.realtimeClient,
   });
@@ -123,6 +125,7 @@ class AppDependencies {
     final staffRepository = StaffRepository(apiClient: apiClient);
     final accountingRepository = AccountingRepository(apiClient: apiClient);
     final businessSettingsRepository = BusinessSettingsRepository(apiClient: apiClient);
+    final deviceRepository = DeviceRepository(apiClient: apiClient);
     return AppDependencies._(
       database: database,
       customerDatabase: customerDatabase,
@@ -143,6 +146,7 @@ class AppDependencies {
       staffRepository: staffRepository,
       accountingRepository: accountingRepository,
       businessSettingsRepository: businessSettingsRepository,
+      deviceRepository: deviceRepository,
       hardwareSettingsRepository: PosHardwareSettingsRepository(),
       realtimeClient: RealtimeClient(),
     );
@@ -167,6 +171,7 @@ class AppDependencies {
   final StaffRepository staffRepository;
   final AccountingRepository accountingRepository;
   final BusinessSettingsRepository businessSettingsRepository;
+  final DeviceRepository deviceRepository;
   final PosHardwareSettingsRepository hardwareSettingsRepository;
   final RealtimeClient realtimeClient;
 

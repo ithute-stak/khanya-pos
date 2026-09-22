@@ -291,6 +291,12 @@ const _items = <_DesktopNavItem>[
     icon: Icons.manage_accounts_outlined,
     allowedRoles: {'owner', 'admin', 'manager'},
   ),
+  _DesktopNavItem(
+    label: 'Workstations',
+    path: '/devices',
+    icon: Icons.desktop_windows_outlined,
+    allowedRoles: {'owner', 'admin', 'manager'},
+  ),
   _DesktopNavItem(label: 'Products', path: '/products', icon: Icons.inventory_2_outlined, shortcut: 'F3'),
   _DesktopNavItem(label: 'Customers', path: '/customers', icon: Icons.groups_2_outlined, shortcut: 'Ctrl+4'),
   _DesktopNavItem(label: 'Inventory', path: '/inventory', icon: Icons.warehouse_outlined, shortcut: 'F5'),
