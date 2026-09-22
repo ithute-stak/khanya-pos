@@ -31,10 +31,12 @@ class _InventoryControlsPageState extends State<InventoryControlsPage> {
   }
 
   Future<void> _load() async {
-    if (mounted) setState(() {
-      _loading = true;
-      _error = null;
-    });
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       try {
         await _productsRepository.refresh();
@@ -371,14 +373,14 @@ class _TransferDialogState extends State<_TransferDialog> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<ProductSummary>(
-                  value: product,
+                  initialValue: product,
                   decoration: const InputDecoration(labelText: 'Product'),
                   items: widget.products.map((p) => DropdownMenuItem(value: p, child: Text('${p.name} (${p.sku})'))).toList(),
                   onChanged: (value) => setState(() => product = value),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<InventoryBranch>(
-                  value: branch,
+                  initialValue: branch,
                   decoration: const InputDecoration(labelText: 'Destination branch'),
                   items: widget.branches.map((b) => DropdownMenuItem(value: b, child: Text('${b.name} (${b.code})'))).toList(),
                   onChanged: (value) => setState(() => branch = value),
@@ -438,7 +440,7 @@ class _StocktakeDialogState extends State<_StocktakeDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<ProductSummary>(
-                value: product,
+                initialValue: product,
                 decoration: const InputDecoration(labelText: 'Product'),
                 items: widget.products.map((p) => DropdownMenuItem(value: p, child: Text('${p.name} • System ${ScaledDecimal.fromMilli(p.onHandMilli ?? 0)}'))).toList(),
                 onChanged: (value) => setState(() => product = value),
@@ -496,14 +498,14 @@ class _WriteOffDialogState extends State<_WriteOffDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<ProductSummary>(
-                value: product,
+                initialValue: product,
                 decoration: const InputDecoration(labelText: 'Product'),
                 items: widget.products.map((p) => DropdownMenuItem(value: p, child: Text('${p.name} (${ScaledDecimal.fromMilli(p.onHandMilli ?? 0)} ${p.unit})'))).toList(),
                 onChanged: (value) => setState(() => product = value),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: type,
+                initialValue: type,
                 decoration: const InputDecoration(labelText: 'Write-off type'),
                 items: const [
                   DropdownMenuItem(value: 'damage', child: Text('Damaged stock')),
