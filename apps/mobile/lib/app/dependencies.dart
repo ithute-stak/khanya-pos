@@ -6,6 +6,7 @@ import 'package:khanya_pos/core/security/token_store.dart';
 import 'package:khanya_pos/core/session/session_context.dart';
 import 'package:khanya_pos/core/storage/app_database.dart';
 import 'package:khanya_pos/core/sync/sync_service.dart';
+import 'package:khanya_pos/features/accounting/data/accounting_repository.dart';
 import 'package:khanya_pos/features/auth/data/auth_repository.dart';
 import 'package:khanya_pos/features/catalog/data/product_repository.dart';
 import 'package:khanya_pos/features/customers/data/customer_database.dart';
@@ -41,6 +42,7 @@ class AppDependencies {
     required this.expenseRepository,
     required this.reportsRepository,
     required this.staffRepository,
+    required this.accountingRepository,
     required this.hardwareSettingsRepository,
     required this.realtimeClient,
   });
@@ -117,6 +119,7 @@ class AppDependencies {
     );
     final reportsRepository = ReportsRepository(apiClient: apiClient);
     final staffRepository = StaffRepository(apiClient: apiClient);
+    final accountingRepository = AccountingRepository(apiClient: apiClient);
     return AppDependencies._(
       database: database,
       customerDatabase: customerDatabase,
@@ -135,6 +138,7 @@ class AppDependencies {
       expenseRepository: expenseRepository,
       reportsRepository: reportsRepository,
       staffRepository: staffRepository,
+      accountingRepository: accountingRepository,
       hardwareSettingsRepository: PosHardwareSettingsRepository(),
       realtimeClient: RealtimeClient(),
     );
@@ -157,6 +161,7 @@ class AppDependencies {
   final ExpenseRepository expenseRepository;
   final ReportsRepository reportsRepository;
   final StaffRepository staffRepository;
+  final AccountingRepository accountingRepository;
   final PosHardwareSettingsRepository hardwareSettingsRepository;
   final RealtimeClient realtimeClient;
 
