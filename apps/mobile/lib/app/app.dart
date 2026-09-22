@@ -9,6 +9,7 @@ import 'package:khanya_pos/core/branding/khanya_brand.dart';
 import 'package:khanya_pos/core/connectivity/connectivity_bloc.dart';
 import 'package:khanya_pos/core/realtime/realtime_bloc.dart';
 import 'package:khanya_pos/core/sync/sync_bloc.dart';
+import 'package:khanya_pos/features/accounting/data/accounting_repository.dart';
 import 'package:khanya_pos/features/auth/presentation/bloc/session_bloc.dart';
 import 'package:khanya_pos/features/auth/presentation/business_context_page.dart';
 import 'package:khanya_pos/features/auth/presentation/login_page.dart';
@@ -43,6 +44,7 @@ class _KhanyaPosAppState extends State<KhanyaPosApp> {
         RepositoryProvider.value(value: dependencies.productRepository),
         RepositoryProvider<CustomerRepository>.value(value: dependencies.customerRepository),
         RepositoryProvider<InventoryControlRepository>.value(value: dependencies.inventoryControlRepository),
+        RepositoryProvider<AccountingRepository>.value(value: dependencies.accountingRepository),
         RepositoryProvider.value(value: dependencies.salesRepository),
         RepositoryProvider<HeldSalesRepository>.value(value: dependencies.heldSalesRepository),
         RepositoryProvider<TillRepository>.value(value: dependencies.tillRepository),
