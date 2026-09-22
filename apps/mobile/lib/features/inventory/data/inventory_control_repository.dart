@@ -142,9 +142,13 @@ class InventoryControlRepository {
 
   Future<List<InventoryMovementSummary>> movements({String? productId}) async {
     _requireBranch();
+    final queryParameters = switch (productId) {
+      final String value => <String, dynamic>{'product_id': value, 'limit': 150},
+      null => <String, dynamic>{'limit': 150},
+    };
     final response = await _apiClient.dio.get<List<dynamic>>(
       '/inventory/movements',
-      queryParameters: {if (productId != null) 'product_id': productId, 'limit': 150},
+      queryParameters: queryParameters,
     );
     return (response.data ?? const [])
         .map((row) => InventoryMovementSummary.fromJson((row as Map).cast<String, dynamic>()))
