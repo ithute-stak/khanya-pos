@@ -2,7 +2,7 @@ name: Windows Desktop
 
 on:
   push:
-    branches: [main, "feature/**"]
+    branches: [main, "feature/**", "chore/**"]
     paths:
       - "apps/mobile/**"
       - ".github/workflows/windows-desktop.yml"
@@ -60,7 +60,7 @@ jobs:
         run: |
           $apiBaseUrl = "${{ github.event.inputs.api_base_url }}"
           if ([string]::IsNullOrWhiteSpace($apiBaseUrl)) {
-            $apiBaseUrl = "http://127.0.0.1:8000/api/v1"
+            $apiBaseUrl = "http://127.0.0.1:8009/api/v1"
           }
           ./tool/windows/build_installer.ps1 -ApiBaseUrl $apiBaseUrl
 
