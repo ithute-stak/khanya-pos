@@ -1,4 +1,5 @@
 from app.models.accounting import Account, AccountingSettings, JournalEntry, JournalLine
+from app.models.audit import AuditEvent
 from app.models.base import Base
 from app.models.commerce import (
     BranchProductStock,
@@ -35,6 +36,7 @@ from app.models.till import TillCashMovement, TillShift
 __all__ = [
     "Account",
     "AccountingSettings",
+    "AuditEvent",
     "Base",
     "Branch",
     "BranchProductStock",

@@ -33,6 +33,7 @@ ALL_PERMISSIONS = frozenset(
         "accounting.read",
         "accounting.write",
         "reports.read",
+        "audit.read",
     }
 )
 
@@ -59,6 +60,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
             "customers.write",
             "accounting.read",
             "reports.read",
+            "audit.read",
         }
     ),
     Role.CASHIER: frozenset(
