@@ -81,10 +81,13 @@ async def complete_stock_transfer(
 
     branches = (
         await db.execute(
-            select(Branch).where(
+            select(Branch)
+            .where(
                 Branch.tenant_id == tenant_id,
                 Branch.id.in_([source_branch_id, payload.destination_branch_id]),
             )
+            .order_by(Branch.id)
+            .with_for_update()
         )
     ).scalars().all()
     if len(branches) != 2:
@@ -95,6 +98,7 @@ async def complete_stock_transfer(
         await db.execute(
             select(Product)
             .where(Product.tenant_id == tenant_id, Product.id.in_(product_ids), Product.is_active.is_(True))
+            .order_by(Product.id)
             .with_for_update()
         )
     ).scalars().all()
@@ -114,7 +118,7 @@ async def complete_stock_transfer(
     db.add(transfer)
     await db.flush()
 
-    for line in payload.lines:
+    for line in sorted(payload.lines, key=lambda item: str(item.product_id)):
         product = products_by_id[line.product_id]
         if not product.track_stock:
             raise InventoryControlError(f"{product.name} does not track stock")
@@ -225,11 +229,22 @@ async def post_stocktake(
             raise InventoryControlError("This stocktake operation ID belongs to another branch")
         return replay, True
 
+    branch = (
+        await db.execute(
+            select(Branch)
+            .where(Branch.tenant_id == tenant_id, Branch.id == branch_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if branch is None:
+        raise InventoryControlError("Stocktake branch was not found in this business")
+
     product_ids = [line.product_id for line in payload.lines]
     products = (
         await db.execute(
             select(Product)
             .where(Product.tenant_id == tenant_id, Product.id.in_(product_ids), Product.is_active.is_(True))
+            .order_by(Product.id)
             .with_for_update()
         )
     ).scalars().all()
@@ -251,7 +266,7 @@ async def post_stocktake(
     gain_total = Decimal("0.00")
     loss_total = Decimal("0.00")
 
-    for line in payload.lines:
+    for line in sorted(payload.lines, key=lambda item: str(item.product_id)):
         product = products_by_id[line.product_id]
         if not product.track_stock:
             raise InventoryControlError(f"{product.name} does not track stock")
@@ -263,6 +278,10 @@ async def post_stocktake(
         )
         system_quantity = quantity(stock.on_hand)
         counted_quantity = quantity(line.counted_quantity)
+        if counted_quantity < quantity(stock.reserved):
+            raise InventoryControlError(
+                f"Counted quantity for {product.name} is below reserved stock ({stock.reserved})"
+            )
         variance = quantity(counted_quantity - system_quantity)
         current_cost = unit_cost(product.cost_price)
         db.add(
