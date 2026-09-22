@@ -36,7 +36,7 @@ class StockTransferLine(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("quantity > 0", name="ck_stock_transfer_line_quantity_positive"),
     )
 
-    transfer_id: Mapped[UUID] = mapped_column(ForeKey := ForeignKey("stock_transfers.id", ondelete="CASCADE"), index=True)
+    transfer_id: Mapped[UUID] = mapped_column(ForeignKey("stock_transfers.id", ondelete="CASCADE"), index=True)
     product_id: Mapped[UUID] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), index=True)
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 3))
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=Decimal("0.000000"))
