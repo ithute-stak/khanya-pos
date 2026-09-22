@@ -34,6 +34,8 @@ jobs:
         run: bash -n scripts/deploy-images.sh
 
       - name: Validate production Compose
+        env:
+          KHANYA_ENV_FILE: .env.production.example
         run: docker compose --env-file .env.production.example -f compose.images.yaml config >/dev/null
 
       - name: Build production API image
