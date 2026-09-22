@@ -36,6 +36,18 @@ services:
     volumes:
       - khanya_minio:/data
 
+  migrate:
+    build:
+      context: ./services/api
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./services/api:/app
+    command: ["alembic", "upgrade", "head"]
+
   api:
     build:
       context: ./services/api
@@ -50,9 +62,11 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - ./services/api:/app
-    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8009 --reload"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8009", "--reload"]
 
   outbox-worker:
     build:
@@ -64,9 +78,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - ./services/api:/app
-    command: ["sh", "-c", "alembic upgrade head && python -m app.workers.outbox"]
+    command: ["python", "-m", "app.workers.outbox"]
 
 volumes:
   khanya_postgres:
