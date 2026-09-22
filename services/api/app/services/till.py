@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commerce import Payment, Sale
+from app.models.returns import SaleReturn
 from app.models.till import TillCashMovement, TillShift
 from app.schemas.till import TillCashMovementRequest
 from app.services.idempotency import acquire_operation_lock
@@ -42,6 +43,8 @@ class TillShiftSnapshot:
     opened_at: datetime
     cash_sales: Decimal
     cash_sale_count: int
+    cash_refunds: Decimal
+    cash_refund_count: int
     paid_in: Decimal
     paid_out: Decimal
     expected_cash: Decimal
@@ -81,6 +84,33 @@ async def _cash_sales_totals(
     return money(row[0]), int(row[1] or 0)
 
 
+async def _cash_refund_totals(
+    db: AsyncSession,
+    shift: TillShift,
+    *,
+    cutoff: datetime | None = None,
+) -> tuple[Decimal, int]:
+    conditions = [
+        SaleReturn.tenant_id == shift.tenant_id,
+        SaleReturn.branch_id == shift.branch_id,
+        SaleReturn.processed_by_user_id == shift.cashier_user_id,
+        SaleReturn.refund_method == "cash",
+        SaleReturn.refunded_amount > 0,
+        SaleReturn.processed_at >= shift.opened_at,
+    ]
+    if cutoff is not None:
+        conditions.append(SaleReturn.processed_at <= cutoff)
+    row = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(SaleReturn.refunded_amount), 0),
+                func.count(SaleReturn.id),
+            ).where(*conditions)
+        )
+    ).one()
+    return money(row[0]), int(row[1] or 0)
+
+
 async def _movement_totals(db: AsyncSession, shift_id: UUID) -> tuple[Decimal, Decimal]:
     rows = (
         await db.execute(
@@ -96,8 +126,9 @@ async def _movement_totals(db: AsyncSession, shift_id: UUID) -> tuple[Decimal, D
 async def _snapshot(db: AsyncSession, shift: TillShift) -> TillShiftSnapshot:
     cutoff = shift.closed_at if shift.status == "closed" else None
     cash_sales, cash_sale_count = await _cash_sales_totals(db, shift, cutoff=cutoff)
+    cash_refunds, cash_refund_count = await _cash_refund_totals(db, shift, cutoff=cutoff)
     paid_in, paid_out = await _movement_totals(db, shift.id)
-    expected = money(shift.opening_float + cash_sales + paid_in - paid_out)
+    expected = money(shift.opening_float + cash_sales - cash_refunds + paid_in - paid_out)
     counted = money(shift.closing_cash_counted) if shift.closing_cash_counted is not None else None
     variance = money(counted - expected) if counted is not None else None
     return TillShiftSnapshot(
@@ -111,6 +142,8 @@ async def _snapshot(db: AsyncSession, shift: TillShift) -> TillShiftSnapshot:
         opened_at=shift.opened_at,
         cash_sales=cash_sales,
         cash_sale_count=cash_sale_count,
+        cash_refunds=cash_refunds,
+        cash_refund_count=cash_refund_count,
         paid_in=paid_in,
         paid_out=paid_out,
         expected_cash=expected,

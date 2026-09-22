@@ -11,6 +11,7 @@ import 'package:khanya_pos/features/expenses/presentation/expenses_page.dart';
 import 'package:khanya_pos/features/inventory/presentation/inventory_page.dart';
 import 'package:khanya_pos/features/pos/presentation/hardware_settings_page.dart';
 import 'package:khanya_pos/features/pos/presentation/pos_page.dart';
+import 'package:khanya_pos/features/pos/presentation/sales_history_page.dart';
 import 'package:khanya_pos/features/pos/presentation/till_page.dart';
 import 'package:khanya_pos/features/purchasing/presentation/new_purchase_page.dart';
 import 'package:khanya_pos/features/purchasing/presentation/purchases_page.dart';
@@ -27,6 +28,13 @@ final GoRouter appRouter = GoRouter(
       routes: [
         GoRoute(path: '/', builder: (context, state) => const DashboardPage()),
         GoRoute(path: '/pos', builder: (context, state) => const PosPage()),
+        GoRoute(path: '/sales', builder: (context, state) => const SalesHistoryPage()),
+        GoRoute(
+          path: '/sales/:saleId',
+          builder: (context, state) => SaleDetailPage(
+            saleId: state.pathParameters['saleId']!,
+          ),
+        ),
         GoRoute(path: '/till', builder: (context, state) => const TillPage()),
         GoRoute(path: '/products', builder: (context, state) => const ProductsPage()),
         GoRoute(path: '/customers', builder: (context, state) => const CustomersPage()),

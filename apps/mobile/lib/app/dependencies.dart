@@ -73,6 +73,7 @@ class AppDependencies {
       syncService: syncService,
     );
     final salesRepository = SalesRepository(
+      apiClient: apiClient,
       database: database,
       customerDatabase: customerDatabase,
       sessionContext: sessionContext,

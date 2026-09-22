@@ -90,6 +90,13 @@ class DashboardPage extends StatelessWidget {
                       onTap: () => context.push('/pos'),
                     ),
                     _ModuleCard(
+                      title: 'Sales History',
+                      description: 'Receipts, returns, refunds and void control',
+                      icon: Icons.history_outlined,
+                      accent: KhanyaBrand.navy,
+                      onTap: () => context.push('/sales'),
+                    ),
+                    _ModuleCard(
                       title: 'Till & Shift',
                       description: 'Opening float, cash drawer movements and shift reconciliation',
                       icon: Icons.price_check_outlined,

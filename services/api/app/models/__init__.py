@@ -28,6 +28,7 @@ from app.models.purchasing import (
     Supplier,
     SupplierPayment,
 )
+from app.models.returns import SaleReturn, SaleReturnLine
 from app.models.till import TillCashMovement, TillShift
 
 __all__ = [
@@ -53,6 +54,8 @@ __all__ = [
     "PurchaseLine",
     "Sale",
     "SaleLine",
+    "SaleReturn",
+    "SaleReturnLine",
     "StockMovement",
     "Supplier",
     "SupplierPayment",
