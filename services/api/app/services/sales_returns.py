@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commerce import BranchProductStock, Payment, Product, Sale, SaleLine, StockMovement
 from app.models.returns import SaleReturn, SaleReturnLine
+from app.models.till import TillShift
 from app.schemas.returns import SaleReturnRequest
 from app.services.accounting import PostingLine, payment_account_code, post_journal
 from app.services.idempotency import acquire_operation_lock
@@ -397,6 +398,25 @@ async def process_sale_return(
         raise SaleRefundMethodError(
             f"A refund method is required for {refunded_amount} that must be paid back to the customer"
         )
+
+    # Cash refunds must belong to an open drawer. Locking the shift row also
+    # serializes against shift close so a refund cannot commit invisibly after
+    # the drawer has already been reconciled.
+    if refunded_amount > 0 and refund_method == "cash":
+        cash_shift = (
+            await db.execute(
+                select(TillShift)
+                .where(
+                    TillShift.tenant_id == tenant_id,
+                    TillShift.branch_id == branch_id,
+                    TillShift.cashier_user_id == user_id,
+                    TillShift.status == "open",
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if cash_shift is None:
+            raise SaleRefundMethodError("Open a till shift before issuing a cash refund")
 
     processed_at = datetime.now(timezone.utc)
     sale_return = SaleReturn(
