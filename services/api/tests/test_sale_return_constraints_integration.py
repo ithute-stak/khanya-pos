@@ -89,11 +89,12 @@ async def test_database_rejects_cross_branch_and_over_quantity_returns() -> None
                 payments=[PaymentInput(method="cash", amount=Decimal("2.00"))],
             ),
         )
+        sale_id = completed.id
         detail = await sale_detail(
             db,
             tenant_id=tenant_id,
             branch_id=branch_id,
-            sale_id=completed.id,
+            sale_id=sale_id,
         )
         sale_line_id = detail["lines"][0]["id"]
 
@@ -103,7 +104,7 @@ async def test_database_rejects_cross_branch_and_over_quantity_returns() -> None
             SaleReturn(
                 tenant_id=tenant_id,
                 branch_id=other_branch_id,
-                sale_id=completed.id,
+                sale_id=sale_id,
                 processed_by_user_id=user_id,
                 client_operation_id=uuid4(),
                 return_number=f"RT-SCOPE-{suffix}",
@@ -123,7 +124,7 @@ async def test_database_rejects_cross_branch_and_over_quantity_returns() -> None
         valid_return = SaleReturn(
             tenant_id=tenant_id,
             branch_id=branch_id,
-            sale_id=completed.id,
+            sale_id=sale_id,
             processed_by_user_id=user_id,
             client_operation_id=uuid4(),
             return_number=f"RT-LIMIT-{suffix}",
