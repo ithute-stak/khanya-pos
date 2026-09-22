@@ -242,6 +242,7 @@ const _items = <_DesktopNavItem>[
   _DesktopNavItem(label: 'New Sale', path: '/pos', icon: Icons.point_of_sale_outlined, shortcut: 'F2'),
   _DesktopNavItem(label: 'Sales History', path: '/sales', icon: Icons.history_outlined),
   _DesktopNavItem(label: 'Till & Shift', path: '/till', icon: Icons.price_check_outlined),
+  _DesktopNavItem(label: 'Reports', path: '/reports', icon: Icons.analytics_outlined),
   _DesktopNavItem(label: 'Products', path: '/products', icon: Icons.inventory_2_outlined, shortcut: 'F3'),
   _DesktopNavItem(label: 'Customers', path: '/customers', icon: Icons.groups_2_outlined, shortcut: 'Ctrl+4'),
   _DesktopNavItem(label: 'Inventory', path: '/inventory', icon: Icons.warehouse_outlined, shortcut: 'F5'),
