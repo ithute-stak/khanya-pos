@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,7 +82,7 @@ async def transfer_history(
 
 @router.get("/transfers/{transfer_id}")
 async def transfer_detail(
-    transfer_id: str,
+    transfer_id: UUID,
     context: TenantContext = Depends(require_permissions("inventory.read")),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
@@ -177,7 +179,7 @@ async def stocktake_history(
 
 @router.get("/stocktakes/{stocktake_id}")
 async def stocktake_detail(
-    stocktake_id: str,
+    stocktake_id: UUID,
     context: TenantContext = Depends(require_permissions("inventory.read")),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
@@ -223,7 +225,7 @@ async def stocktake_detail(
 
 @router.get("/movements")
 async def movement_history(
-    product_id: str | None = None,
+    product_id: UUID | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     context: TenantContext = Depends(require_permissions("inventory.read")),
     db: AsyncSession = Depends(get_db),
@@ -238,7 +240,7 @@ async def movement_history(
             StockMovement.branch_id == context.branch.id,
         )
     )
-    if product_id:
+    if product_id is not None:
         query = query.where(StockMovement.product_id == product_id)
     rows = (await db.execute(query.order_by(StockMovement.occurred_at.desc()).limit(limit))).all()
     return [
