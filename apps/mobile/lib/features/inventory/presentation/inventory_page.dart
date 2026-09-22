@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/features/catalog/data/product_repository.dart';
 import 'package:khanya_pos/features/catalog/domain/product_summary.dart';
@@ -26,6 +27,11 @@ class _InventoryView extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Inventory'),
         actions: [
+          IconButton(
+            tooltip: 'Stocktake, transfers and movement history',
+            onPressed: () => context.push('/inventory/controls'),
+            icon: const Icon(Icons.tune_rounded),
+          ),
           IconButton(
             tooltip: 'Refresh inventory',
             onPressed: () => context.read<InventoryBloc>().add(const InventoryRefreshRequested()),
@@ -67,6 +73,12 @@ class _InventoryView extends StatelessWidget {
                       label: const Text('Low stock only'),
                       selected: state.showLowStockOnly,
                       onSelected: (value) => context.read<InventoryBloc>().add(InventoryLowStockFilterChanged(value)),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => context.push('/inventory/controls'),
+                      icon: const Icon(Icons.fact_check_outlined),
+                      label: const Text('Stock controls'),
                     ),
                     if (state.isRefreshing) ...[
                       const SizedBox(width: 12),

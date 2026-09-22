@@ -8,6 +8,7 @@ import 'package:khanya_pos/features/dashboard/presentation/dashboard_page.dart';
 import 'package:khanya_pos/features/documents/presentation/receipt_vault_page.dart';
 import 'package:khanya_pos/features/expenses/presentation/add_expense_page.dart';
 import 'package:khanya_pos/features/expenses/presentation/expenses_page.dart';
+import 'package:khanya_pos/features/inventory/presentation/inventory_controls_page.dart';
 import 'package:khanya_pos/features/inventory/presentation/inventory_page.dart';
 import 'package:khanya_pos/features/pos/presentation/hardware_settings_page.dart';
 import 'package:khanya_pos/features/pos/presentation/pos_page.dart';
@@ -55,6 +56,7 @@ final GoRouter appRouter = GoRouter(
           ),
         ),
         GoRoute(path: '/inventory', builder: (context, state) => const InventoryPage()),
+        GoRoute(path: '/inventory/controls', builder: (context, state) => const InventoryControlsPage()),
         GoRoute(path: '/purchases', builder: (context, state) => const PurchasesPage()),
         GoRoute(path: '/purchases/new', builder: (context, state) => const NewPurchasePage()),
         GoRoute(path: '/suppliers', builder: (context, state) => const SuppliersPage()),
