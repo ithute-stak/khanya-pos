@@ -1,0 +1,16 @@
+# Khanya POS API route for the shared VPS Caddy edge.
+# The API service joins the existing external Docker network `public-edge`
+# with the alias `khanya-api`.
+
+api.khanya.ithute.co.ls {
+    encode zstd gzip
+
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+
+    reverse_proxy khanya-api:8009
+}
