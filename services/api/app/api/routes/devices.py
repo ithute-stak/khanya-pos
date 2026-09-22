@@ -5,10 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import TenantContext, get_tenant_context, require_permissions
+from app.api.deps import Principal, TenantContext, get_current_principal, get_tenant_context, require_permissions
 from app.core.database import get_db
 from app.models.identity import Branch, Device
 from app.schemas.identity import DeviceRegister, DeviceUpdate
+from app.services.audit import record_audit_event
 
 router = APIRouter()
 
@@ -91,6 +92,7 @@ async def update_device(
     device_id: UUID,
     payload: DeviceUpdate,
     context: TenantContext = Depends(require_permissions("devices.manage")),
+    principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     result = await db.execute(
@@ -111,9 +113,36 @@ async def update_device(
     if branch is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Branch is invalid or inactive")
 
+    before = {
+        "name": device.name,
+        "branch_id": str(device.branch_id),
+        "is_active": device.is_active,
+    }
     device.name = payload.name.strip()
     device.branch_id = branch.id
     device.is_active = payload.is_active
+    record_audit_event(
+        db,
+        tenant_id=context.tenant.id,
+        branch_id=branch.id,
+        actor_user_id=principal.user.id,
+        actor_name=principal.user.display_name,
+        actor_email=principal.user.email,
+        actor_role=context.membership.role,
+        action="device.updated",
+        entity_type="device",
+        entity_id=str(device.id),
+        summary=f"Updated workstation {device.name}",
+        details={
+            "before": before,
+            "after": {
+                "name": device.name,
+                "branch_id": str(device.branch_id),
+                "is_active": device.is_active,
+            },
+            "installation_id": device.installation_id,
+        },
+    )
     await db.commit()
     await db.refresh(device)
     return {
