@@ -58,6 +58,30 @@ void main() {
     expect(report.missingJournalCount, 6);
   });
 
+  test('management summary parses liquidity and working capital', () {
+    final report = ManagementSummary.fromJson({
+      'cash_on_hand': '120.00',
+      'bank': '500.00',
+      'cash_equivalents': '80.00',
+      'liquid_funds': '700.00',
+      'accounts_receivable': '250.00',
+      'inventory': '900.00',
+      'accounts_payable': '400.00',
+      'supplier_advances': '50.00',
+      'current_assets': '1900.00',
+      'working_capital': '1500.00',
+      'sales_revenue': '3000.00',
+      'gross_profit': '1200.00',
+      'net_profit': '600.00',
+      'ledger_healthy': true,
+    });
+
+    expect(report.liquidFundsMinor, 70000);
+    expect(report.workingCapitalMinor, 150000);
+    expect(report.accountsPayableMinor, 40000);
+    expect(report.ledgerHealthy, isTrue);
+  });
+
   test('journal parses balanced lines', () {
     final journal = JournalEntrySummary.fromJson({
       'id': 'journal-1',
