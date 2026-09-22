@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:khanya_pos/features/accounting/domain/accounting_models.dart';
+import 'package:khanya_pos/features/accounting/domain/cash_flow_report.dart';
 
 void main() {
   test('trial balance parses money and balanced status', () {
@@ -80,6 +81,35 @@ void main() {
     expect(report.workingCapitalMinor, 150000);
     expect(report.accountsPayableMinor, 40000);
     expect(report.ledgerHealthy, isTrue);
+  });
+
+  test('cash flow parses categories and reconciliation', () {
+    final report = CashFlowReport.fromJson({
+      'opening_cash': '100.00',
+      'operating_cash_flow': '250.00',
+      'investing_cash_flow': '-50.00',
+      'financing_cash_flow': '0.00',
+      'net_change_in_cash': '200.00',
+      'closing_cash': '300.00',
+      'expected_closing_cash': '300.00',
+      'difference': '0.00',
+      'activities': [
+        {
+          'entry_number': 'JE-0002',
+          'occurred_at': '2026-09-22T06:00:00Z',
+          'description': 'Cash sale',
+          'source_type': 'sale',
+          'category': 'operating',
+          'amount': '250.00',
+        },
+      ],
+    });
+
+    expect(report.openingCashMinor, 10000);
+    expect(report.netChangeInCashMinor, 20000);
+    expect(report.closingCashMinor, 30000);
+    expect(report.reconciles, isTrue);
+    expect(report.activities.single.category, 'operating');
   });
 
   test('journal parses balanced lines', () {
