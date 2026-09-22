@@ -66,22 +66,20 @@ class ManualJournalLineDraft extends Equatable {
 }
 
 class AccountingControlsData extends Equatable {
-  const AccountingControlsData({required this.accounts, required this.settings});
-
-  final List<AccountSummary> accounts;
-  final DateTime? lockedThrough;
-  final String? lockReason;
-
-  AccountingControlsData._({
+  const AccountingControlsData({
     required this.accounts,
     required this.lockedThrough,
     required this.lockReason,
   });
 
+  final List<AccountSummary> accounts;
+  final DateTime? lockedThrough;
+  final String? lockReason;
+
   factory AccountingControlsData.fromSettings({
     required List<AccountSummary> accounts,
     required Map<String, dynamic> settings,
-  }) => AccountingControlsData._(
+  }) => AccountingControlsData(
         accounts: accounts,
         lockedThrough: settings['locked_through'] == null
             ? null
