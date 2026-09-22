@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -6,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import TenantContext, get_tenant_context, require_permissions
 from app.core.database import get_db
-from app.models.identity import Device
-from app.schemas.identity import DeviceRegister
+from app.models.identity import Branch, Device
+from app.schemas.identity import DeviceRegister, DeviceUpdate
 
 router = APIRouter()
 
@@ -63,14 +64,17 @@ async def list_devices(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, object]]:
     result = await db.execute(
-        select(Device)
+        select(Device, Branch.name)
+        .join(Branch, Branch.id == Device.branch_id)
         .where(Device.tenant_id == context.tenant.id)
-        .order_by(Device.name)
+        .order_by(Device.is_active.desc(), Device.name)
     )
     return [
         {
             "id": device.id,
+            "installation_id": device.installation_id,
             "branch_id": device.branch_id,
+            "branch_name": branch_name,
             "name": device.name,
             "device_type": device.device_type,
             "platform": device.platform,
@@ -78,5 +82,49 @@ async def list_devices(
             "is_active": device.is_active,
             "last_seen_at": device.last_seen_at,
         }
-        for device in result.scalars().all()
+        for device, branch_name in result.all()
     ]
+
+
+@router.patch("/{device_id}")
+async def update_device(
+    device_id: UUID,
+    payload: DeviceUpdate,
+    context: TenantContext = Depends(require_permissions("devices.manage")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    result = await db.execute(
+        select(Device).where(Device.id == device_id, Device.tenant_id == context.tenant.id)
+    )
+    device = result.scalar_one_or_none()
+    if device is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+
+    branch_result = await db.execute(
+        select(Branch).where(
+            Branch.id == payload.branch_id,
+            Branch.tenant_id == context.tenant.id,
+            Branch.is_active.is_(True),
+        )
+    )
+    branch = branch_result.scalar_one_or_none()
+    if branch is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Branch is invalid or inactive")
+
+    device.name = payload.name.strip()
+    device.branch_id = branch.id
+    device.is_active = payload.is_active
+    await db.commit()
+    await db.refresh(device)
+    return {
+        "id": device.id,
+        "installation_id": device.installation_id,
+        "branch_id": device.branch_id,
+        "branch_name": branch.name,
+        "name": device.name,
+        "device_type": device.device_type,
+        "platform": device.platform,
+        "app_version": device.app_version,
+        "is_active": device.is_active,
+        "last_seen_at": device.last_seen_at,
+    }
