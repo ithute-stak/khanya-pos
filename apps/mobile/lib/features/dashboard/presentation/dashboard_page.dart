@@ -114,6 +114,14 @@ class DashboardPage extends StatelessWidget {
                         accent: KhanyaBrand.navy,
                         onTap: () => context.push('/reports'),
                       ),
+                    if (canReadReports)
+                      _ModuleCard(
+                        title: 'Accounting Centre',
+                        description: 'General ledger, trial balance, P&L, balance sheet and reconciliation',
+                        icon: Icons.account_balance_outlined,
+                        accent: KhanyaBrand.forest,
+                        onTap: () => context.push('/accounting'),
+                      ),
                     if (canManageStaff)
                       _ModuleCard(
                         title: 'Staff & Roles',
@@ -170,12 +178,6 @@ class DashboardPage extends StatelessWidget {
                       icon: Icons.account_balance_wallet_outlined,
                       accent: KhanyaBrand.forest,
                       onTap: () => context.push('/expenses'),
-                    ),
-                    const _ModuleCard(
-                      title: 'Accounting',
-                      description: 'Ledgers, reconciliation and financial reporting foundation',
-                      icon: Icons.account_balance_outlined,
-                      accent: KhanyaBrand.navy,
                     ),
                   ]),
                 ),
