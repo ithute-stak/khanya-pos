@@ -90,6 +90,16 @@ class AccountingRepository {
     return AccountingControlsData.fromSettings(accounts: accounts, settings: settings);
   }
 
+  Future<List<JournalEntrySummary>> journalHistory({int limit = 150}) async {
+    final response = await _apiClient.dio.get<List<dynamic>>(
+      '/accounting/journals',
+      queryParameters: {'limit': limit},
+    );
+    return (response.data ?? const <dynamic>[])
+        .map((item) => JournalEntrySummary.fromJson((item as Map).cast<String, dynamic>()))
+        .toList(growable: false);
+  }
+
   Future<void> postManualJournal({
     required String description,
     required List<ManualJournalLineDraft> lines,
