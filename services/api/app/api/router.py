@@ -9,6 +9,7 @@ from app.api.routes import (
     expenses,
     health,
     inventory,
+    inventory_controls,
     products,
     purchases,
     realtime,
@@ -28,6 +29,7 @@ api_router.include_router(staff.router, prefix="/staff", tags=["staff"])
 api_router.include_router(devices.router, prefix="/devices", tags=["devices"])
 api_router.include_router(products.router, prefix="/products", tags=["products"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
+api_router.include_router(inventory_controls.router, prefix="/inventory", tags=["inventory"])
 api_router.include_router(sales.router, prefix="/pos/sales", tags=["sales"])
 api_router.include_router(till.router, prefix="/pos/till", tags=["till"])
 api_router.include_router(customers.router, prefix="/customers", tags=["customers"])
