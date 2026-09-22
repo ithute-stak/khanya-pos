@@ -42,14 +42,16 @@ cp .env.example .env
 docker compose up --build
 ```
 
+The local FastAPI service listens on **port 8009**.
+
 Health endpoints:
 
-- `GET /api/v1/health`
-- `GET /api/v1/health/ready`
+- `GET http://127.0.0.1:8009/api/v1/health`
+- `GET http://127.0.0.1:8009/api/v1/health/ready`
 
 Initial tenant WebSocket route:
 
-- `WS /api/v1/ws/tenants/{tenant_id}`
+- `WS ws://127.0.0.1:8009/api/v1/ws/tenants/{tenant_id}`
 
 The WebSocket route is foundation-only and must receive authentication/authorization before production use.
 
@@ -96,7 +98,7 @@ The installer is written to:
 apps/mobile/build/windows/installer/KhanyaPOS-Setup.exe
 ```
 
-If `KHANYA_API_BASE_URL` is not supplied, Android emulator development defaults to `http://10.0.2.2:8000/api/v1`, while native desktop development defaults to `http://127.0.0.1:8000/api/v1`.
+If `KHANYA_API_BASE_URL` is not supplied, Android emulator development defaults to `http://10.0.2.2:8009/api/v1`, while native desktop development defaults to `http://127.0.0.1:8009/api/v1`.
 
 GitHub Actions also runs a Windows build, tests the Flutter client, packages the installer with Inno Setup, and publishes `khanya-pos-windows-installer` as a workflow artifact. A manually dispatched build can provide the API base URL that should be compiled into the installer.
 
