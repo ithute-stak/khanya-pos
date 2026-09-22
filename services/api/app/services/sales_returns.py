@@ -49,13 +49,15 @@ async def _returned_totals_by_sale_line(
     db: AsyncSession,
     *,
     sale_id: UUID,
-) -> dict[UUID, tuple[Decimal, Decimal]]:
+) -> dict[UUID, tuple[Decimal, Decimal, Decimal, Decimal]]:
     rows = (
         await db.execute(
             select(
                 SaleReturnLine.sale_line_id,
                 func.coalesce(func.sum(SaleReturnLine.quantity), 0),
                 func.coalesce(func.sum(SaleReturnLine.line_total), 0),
+                func.coalesce(func.sum(SaleReturnLine.tax_total), 0),
+                func.coalesce(func.sum(SaleReturnLine.cost_total), 0),
             )
             .join(SaleReturn, SaleReturn.id == SaleReturnLine.sale_return_id)
             .where(SaleReturn.sale_id == sale_id)
@@ -63,8 +65,13 @@ async def _returned_totals_by_sale_line(
         )
     ).all()
     return {
-        sale_line_id: (quantity(returned_quantity), money(returned_total))
-        for sale_line_id, returned_quantity, returned_total in rows
+        sale_line_id: (
+            quantity(returned_quantity),
+            money(returned_total),
+            money(returned_tax),
+            money(returned_cost),
+        )
+        for sale_line_id, returned_quantity, returned_total, returned_tax, returned_cost in rows
     }
 
 
@@ -177,9 +184,9 @@ async def sale_detail(
 
     lines: list[dict[str, object]] = []
     for line, product in line_rows:
-        returned_quantity, returned_line_total = returned_by_line.get(
+        returned_quantity, returned_line_total, _, _ = returned_by_line.get(
             line.id,
-            (Decimal("0.000"), Decimal("0.00")),
+            (Decimal("0.000"), Decimal("0.00"), Decimal("0.00"), Decimal("0.00")),
         )
         returnable_quantity = quantity(max(Decimal("0.000"), line.quantity - returned_quantity))
         lines.append(
@@ -350,9 +357,9 @@ async def process_sale_return(
 
     for line_id, requested_quantity in requested.items():
         line, product = line_map[line_id]
-        prior_quantity, prior_amount = returned_by_line.get(
+        prior_quantity, prior_amount, prior_tax, prior_cost = returned_by_line.get(
             line.id,
-            (Decimal("0.000"), Decimal("0.00")),
+            (Decimal("0.000"), Decimal("0.00"), Decimal("0.00"), Decimal("0.00")),
         )
         available = quantity(line.quantity - prior_quantity)
         if requested_quantity <= 0 or requested_quantity > available:
@@ -360,12 +367,18 @@ async def process_sale_return(
                 f"Return quantity {requested_quantity} exceeds remaining quantity {available} for {product.name}"
             )
 
+        original_cost_total = calculate_line_total(unit_cost(line.unit_cost), line.quantity)
         if requested_quantity == available:
+            # The last return takes exact monetary remainders. This prevents
+            # repeated partial-return rounding from stranding cents in tax,
+            # inventory, COGS or revenue accounts.
             amount = money(line.line_total - prior_amount)
+            tax = money(line.tax_total - prior_tax)
+            cost = money(original_cost_total - prior_cost)
         else:
             amount = money((line.line_total * requested_quantity) / line.quantity)
-        tax = money((line.tax_total * requested_quantity) / line.quantity) if line.tax_total else Decimal("0.00")
-        cost = calculate_line_total(unit_cost(line.unit_cost), requested_quantity)
+            tax = money((line.tax_total * requested_quantity) / line.quantity) if line.tax_total else Decimal("0.00")
+            cost = calculate_line_total(unit_cost(line.unit_cost), requested_quantity)
         processed_lines.append((line, product, requested_quantity, amount, tax, cost))
         return_total += amount
         tax_total += tax
