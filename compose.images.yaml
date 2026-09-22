@@ -1,0 +1,102 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-khanya}
+      POSTGRES_USER: ${POSTGRES_USER:-khanya}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-khanya} -d ${POSTGRES_DB:-khanya}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    image: quay.io/minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${OBJECT_STORAGE_ACCESS_KEY:?Set OBJECT_STORAGE_ACCESS_KEY in .env}
+      MINIO_ROOT_PASSWORD: ${OBJECT_STORAGE_SECRET_KEY:?Set OBJECT_STORAGE_SECRET_KEY in .env}
+    command: ["server", "/data", "--console-address", ":9001"]
+    volumes:
+      - minio_data:/data
+
+  api:
+    image: ghcr.io/ithute-stak/khanya-pos-api:${KHANYA_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: 8009
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://khanya:${POSTGRES_PASSWORD}@db:5432/khanya}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-http://minio:9000}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8009"]
+    ports:
+      - "127.0.0.1:${KHANYA_API_HOST_PORT:-18009}:8009"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8009/api/v1/health', timeout=3).read()"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    networks:
+      default: {}
+      public-edge:
+        aliases:
+          - khanya-api
+
+  outbox-worker:
+    image: ghcr.io/ithute-stak/khanya-pos-api:${KHANYA_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://khanya:${POSTGRES_PASSWORD}@db:5432/khanya}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-http://minio:9000}
+    command: ["python", "-m", "app.workers.outbox"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+
+networks:
+  public-edge:
+    external: true
+    name: public-edge
