@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:khanya_pos/core/connectivity/connectivity_bloc.dart';
 import 'package:khanya_pos/core/realtime/realtime_bloc.dart';
 import 'package:khanya_pos/core/sync/sync_bloc.dart';
+import 'package:khanya_pos/features/auth/presentation/bloc/session_bloc.dart';
 
 class DesktopShell extends StatelessWidget {
   const DesktopShell({
@@ -63,6 +64,9 @@ class _DesktopSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final role = _selectedRole(context.watch<SessionBloc>().state);
+    final visibleItems = _items.where((item) => item.isVisibleFor(role)).toList(growable: false);
+
     return SizedBox(
       width: 252,
       child: Material(
@@ -94,8 +98,16 @@ class _DesktopSidebar extends StatelessWidget {
                       ),
                 ),
                 const SizedBox(height: 10),
-                for (final item in _items) _DesktopNavTile(item: item, selected: item.matches(location)),
-                const Spacer(),
+                Expanded(
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    children: [
+                      for (final item in visibleItems)
+                        _DesktopNavTile(item: item, selected: item.matches(location)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
                 const _DesktopSystemStatus(),
                 const SizedBox(height: 12),
                 Text(
@@ -224,17 +236,30 @@ class _DesktopNavItem {
     required this.path,
     required this.icon,
     this.shortcut,
+    this.allowedRoles,
   });
 
   final String label;
   final String path;
   final IconData icon;
   final String? shortcut;
+  final Set<String>? allowedRoles;
 
   bool matches(String location) {
     if (path == '/') return location == '/';
     return location == path || location.startsWith('$path/');
   }
+
+  bool isVisibleFor(String? role) => allowedRoles == null || (role != null && allowedRoles!.contains(role));
+}
+
+String? _selectedRole(SessionState state) {
+  if (state is! SessionAuthenticated) return null;
+  final tenantId = state.session.selectedTenantId;
+  for (final membership in state.session.memberships) {
+    if (membership.tenantId == tenantId) return membership.role;
+  }
+  return null;
 }
 
 const _items = <_DesktopNavItem>[
@@ -242,7 +267,18 @@ const _items = <_DesktopNavItem>[
   _DesktopNavItem(label: 'New Sale', path: '/pos', icon: Icons.point_of_sale_outlined, shortcut: 'F2'),
   _DesktopNavItem(label: 'Sales History', path: '/sales', icon: Icons.history_outlined),
   _DesktopNavItem(label: 'Till & Shift', path: '/till', icon: Icons.price_check_outlined),
-  _DesktopNavItem(label: 'Reports', path: '/reports', icon: Icons.analytics_outlined),
+  _DesktopNavItem(
+    label: 'Reports',
+    path: '/reports',
+    icon: Icons.analytics_outlined,
+    allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
+  ),
+  _DesktopNavItem(
+    label: 'Staff & Roles',
+    path: '/staff',
+    icon: Icons.manage_accounts_outlined,
+    allowedRoles: {'owner', 'admin', 'manager'},
+  ),
   _DesktopNavItem(label: 'Products', path: '/products', icon: Icons.inventory_2_outlined, shortcut: 'F3'),
   _DesktopNavItem(label: 'Customers', path: '/customers', icon: Icons.groups_2_outlined, shortcut: 'Ctrl+4'),
   _DesktopNavItem(label: 'Inventory', path: '/inventory', icon: Icons.warehouse_outlined, shortcut: 'F5'),

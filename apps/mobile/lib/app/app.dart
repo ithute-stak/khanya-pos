@@ -17,6 +17,7 @@ import 'package:khanya_pos/features/pos/data/held_sales_repository.dart';
 import 'package:khanya_pos/features/pos/data/till_repository.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 import 'package:khanya_pos/features/reports/data/reports_repository.dart';
+import 'package:khanya_pos/features/staff/data/staff_repository.dart';
 
 class KhanyaPosApp extends StatefulWidget {
   const KhanyaPosApp({super.key, required this.dependencies});
@@ -47,6 +48,7 @@ class _KhanyaPosAppState extends State<KhanyaPosApp> {
         RepositoryProvider.value(value: dependencies.documentRepository),
         RepositoryProvider.value(value: dependencies.expenseRepository),
         RepositoryProvider<ReportsRepository>.value(value: dependencies.reportsRepository),
+        RepositoryProvider<StaffRepository>.value(value: dependencies.staffRepository),
         RepositoryProvider<PosHardwareSettingsRepository>.value(
           value: dependencies.hardwareSettingsRepository,
         ),
