@@ -28,6 +28,7 @@ from app.services.accounting import (
     reverse_manual_journal,
     trial_balance,
 )
+from app.services.management_reports import management_summary
 
 router = APIRouter()
 
@@ -327,6 +328,27 @@ async def get_balance_sheet(
         as_of=as_of,
     )
     return {"as_of": as_of, **report}
+
+
+@router.get("/management-summary")
+async def get_management_summary(
+    start: datetime | None = None,
+    end: datetime | None = None,
+    context: TenantContext = Depends(require_permissions("accounting.read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    if start is not None and end is not None and end < start:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="end must not be before start",
+        )
+    return await management_summary(
+        db,
+        tenant_id=context.tenant.id,
+        branch_id=context.branch.id if context.branch is not None else None,
+        start=start,
+        end=end,
+    )
 
 
 @router.get("/reconciliation")
