@@ -75,6 +75,14 @@ class StaffCreate(BaseModel):
     branch_ids: list[UUID] = Field(min_length=1)
 
 
+class StaffUpdate(BaseModel):
+    display_name: str = Field(min_length=2, max_length=160)
+    phone: str | None = Field(default=None, max_length=32)
+    role: Role
+    branch_ids: list[UUID] = Field(min_length=1)
+    is_active: bool
+
+
 class DeviceRegister(BaseModel):
     installation_id: str = Field(min_length=8, max_length=160)
     name: str = Field(min_length=2, max_length=160)
