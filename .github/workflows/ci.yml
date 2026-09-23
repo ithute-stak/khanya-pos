@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "feature/**"]
+    branches: [main, "feature/**", "fix/**"]
   pull_request:
     branches: [main]
 
@@ -81,13 +81,17 @@ jobs:
           tests/test_inventory_idempotency_integration.py
 
   mobile:
-    name: Flutter
+    name: Flutter + Android release
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: apps/mobile
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -102,3 +106,20 @@ jobs:
         run: flutter analyze
       - name: Test
         run: flutter test
+      - name: Generate Android production runner
+        run: bash tool/android/bootstrap.sh
+      - name: Verify Android release internet permission
+        run: grep -F 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml
+      - name: Build Android release APK
+        run: >-
+          flutter build apk --release
+          --dart-define=KHANYA_API_BASE_URL=https://api.khanya.ithute.co.ls/api/v1
+      - name: Verify APK exists
+        run: test -s build/app/outputs/flutter-apk/app-release.apk
+      - name: Upload Android release smoke artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: khanya-pos-android-release-smoke
+          path: apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 7
