@@ -39,7 +39,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/branding/khanya_pos_app_icon.png
+    # Bundle the whole branding directory so runtime marks, launcher/splash
+    # sources, and future Khanya brand variants cannot silently drift apart.
+    - assets/branding/
 
 flutter_launcher_icons:
   android: true
