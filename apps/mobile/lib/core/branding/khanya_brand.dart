@@ -6,7 +6,7 @@ abstract final class KhanyaBrand {
   static const String companyDescriptor = 'Management & Consultancy Services';
   static const String tagline = 'People | Process | Profit | A Brighter Tomorrow';
 
-  static const String appIconAsset = 'assets/branding/khanya_app_icon.png';
+  static const String appIconAsset = 'assets/branding/khanya_pos_app_icon.png';
   static const String fullLogoAsset = appIconAsset;
 
   static const Color forest = Color(0xFF006B3C);
@@ -100,7 +100,7 @@ class KhanyaMark extends StatelessWidget {
         height: size,
         fit: BoxFit.cover,
         filterQuality: FilterQuality.high,
-        semanticLabel: 'Khanya Resources mark',
+        semanticLabel: 'Khanya POS mark',
         errorBuilder: (context, error, stackTrace) => Container(
           width: size,
           height: size,
@@ -245,16 +245,26 @@ class KhanyaLoadingView extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const KhanyaMark(size: 118, radius: 28),
+                    const KhanyaMark(size: 154, radius: 34),
                     const SizedBox(height: 24),
                     Text(
                       KhanyaBrand.appName,
+                      textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                             color: KhanyaBrand.forestDark,
                             fontWeight: FontWeight.w900,
                           ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 5),
+                    Text(
+                      KhanyaBrand.companyName,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: KhanyaBrand.forest,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 10),
                     Text(
                       KhanyaBrand.tagline,
                       textAlign: TextAlign.center,
@@ -262,14 +272,24 @@ class KhanyaLoadingView extends StatelessWidget {
                             color: KhanyaBrand.navy.withValues(alpha: 0.72),
                           ),
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 30),
                     const SizedBox(
-                      width: 32,
-                      height: 32,
-                      child: CircularProgressIndicator(strokeWidth: 3),
+                      width: 34,
+                      height: 34,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        color: KhanyaBrand.forest,
+                      ),
                     ),
                     const SizedBox(height: 14),
-                    Text(message, style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: KhanyaBrand.navy.withValues(alpha: 0.7),
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
                   ],
                 ),
               ),
