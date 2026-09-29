@@ -34,6 +34,32 @@ class ProductRepository {
     return rows.map(_fromCached).toList(growable: false);
   }
 
+  Future<void> createProduct({
+    required String name,
+    required String sku,
+    String? barcode,
+    required String unit,
+    required String sellingPrice,
+    required String costPrice,
+    required String reorderLevel,
+    required bool trackStock,
+  }) async {
+    await _apiClient.dio.post<Map<String, dynamic>>(
+      '/products',
+      data: <String, dynamic>{
+        'name': name.trim(),
+        'sku': sku.trim(),
+        'barcode': barcode?.trim().isEmpty ?? true ? null : barcode!.trim(),
+        'unit': unit.trim(),
+        'selling_price': sellingPrice.trim(),
+        'cost_price': costPrice.trim(),
+        'reorder_level': reorderLevel.trim(),
+        'track_stock': trackStock,
+      },
+    );
+    await refresh();
+  }
+
   Future<void> refresh() async {
     final tenantId = _requireTenant();
     final branchId = _requireBranch();
