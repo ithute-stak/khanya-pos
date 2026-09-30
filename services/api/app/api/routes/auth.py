@@ -260,5 +260,6 @@ async def me(
         display_name=principal.user.display_name,
         email=principal.user.email,
         phone=principal.user.phone,
+        is_platform_admin=principal.user.email.lower() in settings.platform_admin_email_set,
         memberships=memberships,
     )
