@@ -42,19 +42,17 @@ class _SignupPageState extends State<SignupPage> {
     });
   }
 
-  String _slugify(String value) => value
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-      .replaceAll(RegExp(r'^-+|-+$'), '')
-      .substring(0, value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '').length.clamp(0, 80));
-
-  void _suggestSlug() {
-    if (_slugEdited) return;
-    final slug = _businessName.text
+  String _slugify(String value) {
+    final slug = value
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
         .replaceAll(RegExp(r'^-+|-+$'), '');
-    final safe = slug.length > 80 ? slug.substring(0, 80) : slug;
+    return slug.length > 80 ? slug.substring(0, 80) : slug;
+  }
+
+  void _suggestSlug() {
+    if (_slugEdited) return;
+    final safe = _slugify(_businessName.text);
     if (_businessSlug.text != safe) {
       _businessSlug.value = TextEditingValue(
         text: safe,
