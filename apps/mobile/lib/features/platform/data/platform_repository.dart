@@ -38,6 +38,37 @@ class PlatformRepository {
     );
   }
 
+  Future<List<Map<String, dynamic>>> subscriptions() async {
+    final response = await _apiClient.dio.get<List<dynamic>>('/subscriptions/platform');
+    return (response.data ?? const <dynamic>[])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: false);
+  }
+
+  Future<void> updateSubscription({
+    required String tenantId,
+    String? plan,
+    String? status,
+    DateTime? currentPeriodEnd,
+    DateTime? graceEndsAt,
+    String? billingReference,
+    String? notes,
+  }) async {
+    final periodEnd = currentPeriodEnd?.toUtc().toIso8601String();
+    final graceEnd = graceEndsAt?.toUtc().toIso8601String();
+    await _apiClient.dio.patch<void>(
+      '/subscriptions/platform/$tenantId',
+      data: <String, dynamic>{
+        'plan': ?plan,
+        'status': ?status,
+        'current_period_end': ?periodEnd,
+        'grace_ends_at': ?graceEnd,
+        'billing_reference': ?billingReference,
+        'notes': ?notes,
+      },
+    );
+  }
+
   Future<List<Map<String, dynamic>>> tenants() async {
     final response = await _apiClient.dio.get<List<dynamic>>('/platform/tenants');
     return (response.data ?? const <dynamic>[])

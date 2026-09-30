@@ -16,6 +16,7 @@ import 'package:khanya_pos/features/expenses/presentation/expenses_page.dart';
 import 'package:khanya_pos/features/inventory/presentation/inventory_controls_page.dart';
 import 'package:khanya_pos/features/inventory/presentation/inventory_page.dart';
 import 'package:khanya_pos/features/platform/presentation/platform_admin_page.dart';
+import 'package:khanya_pos/features/platform/presentation/platform_subscriptions_page.dart';
 import 'package:khanya_pos/features/pos/presentation/hardware_settings_page.dart';
 import 'package:khanya_pos/features/pos/presentation/pos_page.dart';
 import 'package:khanya_pos/features/pos/presentation/sales_history_page.dart';
@@ -38,6 +39,7 @@ final GoRouter appRouter = GoRouter(
       routes: [
         GoRoute(path: '/', builder: (context, state) => const DashboardPage()),
         GoRoute(path: '/platform-admin', builder: (context, state) => const PlatformAdminPage()),
+        GoRoute(path: '/platform-admin/subscriptions', builder: (context, state) => const PlatformSubscriptionsPage()),
         GoRoute(path: '/pos', builder: (context, state) => const PosPage()),
         GoRoute(path: '/sales', builder: (context, state) => const SalesHistoryPage()),
         GoRoute(
