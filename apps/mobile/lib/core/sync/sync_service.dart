@@ -107,7 +107,11 @@ class SyncService {
         final response = await _apiClient.dio.post<Map<String, dynamic>>(
           endpoint,
           data: form,
-          options: Options(contentType: 'multipart/form-data'),
+          options: _requestOptions(
+            tenantId: document.tenantId,
+            branchId: document.branchId,
+            contentType: 'multipart/form-data',
+          ),
         );
         final remoteId = response.data?['id']?.toString();
         if (remoteId == null || remoteId.isEmpty) {
@@ -214,7 +218,11 @@ class SyncService {
           payload['receipt_document_id'] = document.remoteDocumentId;
         }
 
-        await _apiClient.dio.post<Map<String, dynamic>>('/purchases/receive', data: payload);
+        await _apiClient.dio.post<Map<String, dynamic>>(
+          '/purchases/receive',
+          data: payload,
+          options: _requestOptions(tenantId: purchase.tenantId, branchId: purchase.branchId),
+        );
         final localDocumentId = purchase.localDocumentId;
         await _database.deletePendingPurchase(purchase.clientOperationId);
         await _cleanupDocument(localDocumentId);
@@ -269,6 +277,7 @@ class SyncService {
         await _apiClient.dio.post<Map<String, dynamic>>(
           '/pos/sales/complete',
           data: jsonDecode(sale.payloadJson),
+          options: _requestOptions(tenantId: sale.tenantId, branchId: sale.branchId),
         );
         await _customerDatabase.finalizeCreditReservation(sale.clientOperationId);
         await _database.deletePendingSale(sale.clientOperationId);
@@ -322,6 +331,7 @@ class SyncService {
         await _apiClient.dio.post<Map<String, dynamic>>(
           '/customers/${payment.customerId}/payments',
           data: jsonDecode(payment.payloadJson),
+          options: _requestOptions(tenantId: payment.tenantId, branchId: payment.branchId),
         );
         await _customerDatabase.deletePendingPayment(payment.clientOperationId);
         synced += 1;
@@ -413,7 +423,11 @@ class SyncService {
           payload['receipt_document_id'] = document.remoteDocumentId;
         }
 
-        await _apiClient.dio.post<Map<String, dynamic>>('/expenses', data: payload);
+        await _apiClient.dio.post<Map<String, dynamic>>(
+          '/expenses',
+          data: payload,
+          options: _requestOptions(tenantId: expense.tenantId, branchId: expense.branchId),
+        );
         final localDocumentId = expense.localDocumentId;
         await _database.deletePendingExpense(expense.clientOperationId);
         await _cleanupDocument(localDocumentId);
@@ -447,6 +461,20 @@ class SyncService {
         conflicts: conflicts,
         networkUnavailable: networkUnavailable,
       ),
+    );
+  }
+
+  Options _requestOptions({
+    required String tenantId,
+    required String branchId,
+    String? contentType,
+  }) {
+    return Options(
+      contentType: contentType,
+      headers: {
+        'X-Tenant-ID': tenantId,
+        'X-Branch-ID': branchId,
+      },
     );
   }
 
