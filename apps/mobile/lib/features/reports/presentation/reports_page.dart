@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:khanya_pos/core/branding/khanya_brand.dart';
 import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/features/reports/data/reports_repository.dart';
+import 'package:khanya_pos/features/reports/domain/business_intelligence.dart';
 import 'package:khanya_pos/features/reports/domain/sales_summary_report.dart';
 
 class ReportsPage extends StatefulWidget {
@@ -12,10 +13,24 @@ class ReportsPage extends StatefulWidget {
   State<ReportsPage> createState() => _ReportsPageState();
 }
 
+class _ReportBundle {
+  const _ReportBundle({
+    required this.sales,
+    required this.health,
+    required this.stock,
+    required this.suppliers,
+  });
+
+  final SalesSummaryReport sales;
+  final BusinessHealthReport health;
+  final StockIntelligenceReport stock;
+  final SupplierIntelligenceReport suppliers;
+}
+
 class _ReportsPageState extends State<ReportsPage> {
   late DateTime _start;
   late DateTime _end;
-  late Future<SalesSummaryReport> _future;
+  late Future<_ReportBundle> _future;
 
   @override
   void initState() {
@@ -27,7 +42,21 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 
   void _reload() {
-    _future = context.read<ReportsRepository>().salesSummary(start: _start, end: _end);
+    final repository = context.read<ReportsRepository>();
+    _future = () async {
+      final results = await Future.wait<Object>([
+        repository.salesSummary(start: _start, end: _end),
+        repository.businessHealth(start: _start, end: _end),
+        repository.stockIntelligence(days: 30),
+        repository.supplierIntelligence(days: 90),
+      ]);
+      return _ReportBundle(
+        sales: results[0] as SalesSummaryReport,
+        health: results[1] as BusinessHealthReport,
+        stock: results[2] as StockIntelligenceReport,
+        suppliers: results[3] as SupplierIntelligenceReport,
+      );
+    }();
   }
 
   void _setRange(Duration duration) {
@@ -52,7 +81,7 @@ class _ReportsPageState extends State<ReportsPage> {
           ),
         ],
       ),
-      body: FutureBuilder<SalesSummaryReport>(
+      body: FutureBuilder<_ReportBundle>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -61,7 +90,7 @@ class _ReportsPageState extends State<ReportsPage> {
           if (snapshot.hasError) {
             return _ErrorView(onRetry: () => setState(_reload));
           }
-          final report = snapshot.requireData;
+          final data = snapshot.requireData;
           return LayoutBuilder(
             builder: (context, constraints) {
               final wide = constraints.maxWidth >= 900;
@@ -77,6 +106,8 @@ class _ReportsPageState extends State<ReportsPage> {
                     on90Days: () => _setRange(const Duration(days: 90)),
                   ),
                   const SizedBox(height: 18),
+                  _BusinessHealthCard(data.health, wide: wide),
+                  const SizedBox(height: 18),
                   GridView.count(
                     crossAxisCount: wide ? 4 : 2,
                     shrinkWrap: true,
@@ -85,14 +116,14 @@ class _ReportsPageState extends State<ReportsPage> {
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
                     children: [
-                      _MetricCard('Net sales', Loti.formatMinor(report.netSalesMinor), Icons.trending_up),
-                      _MetricCard('Gross profit', Loti.formatMinor(report.grossProfitMinor), Icons.savings_outlined),
-                      _MetricCard('Transactions', '${report.saleCount}', Icons.receipt_long_outlined),
-                      _MetricCard('Returns', Loti.formatMinor(report.returnsTotalMinor), Icons.assignment_return_outlined),
-                      _MetricCard('Gross sales', Loti.formatMinor(report.grossSalesMinor), Icons.point_of_sale_outlined),
-                      _MetricCard('COGS', Loti.formatMinor(report.costOfGoodsMinor), Icons.inventory_2_outlined),
-                      _MetricCard('Tax', Loti.formatMinor(report.taxTotalMinor), Icons.account_balance_outlined),
-                      _MetricCard('Credit outstanding', Loti.formatMinor(report.balanceDueMinor), Icons.credit_score_outlined),
+                      _MetricCard('Net sales', Loti.formatMinor(data.sales.netSalesMinor), Icons.trending_up),
+                      _MetricCard('Gross profit', Loti.formatMinor(data.sales.grossProfitMinor), Icons.savings_outlined),
+                      _MetricCard('Transactions', '${data.sales.saleCount}', Icons.receipt_long_outlined),
+                      _MetricCard('Returns', Loti.formatMinor(data.sales.returnsTotalMinor), Icons.assignment_return_outlined),
+                      _MetricCard('Gross sales', Loti.formatMinor(data.sales.grossSalesMinor), Icons.point_of_sale_outlined),
+                      _MetricCard('COGS', Loti.formatMinor(data.sales.costOfGoodsMinor), Icons.inventory_2_outlined),
+                      _MetricCard('Tax', Loti.formatMinor(data.sales.taxTotalMinor), Icons.account_balance_outlined),
+                      _MetricCard('Credit outstanding', Loti.formatMinor(data.sales.balanceDueMinor), Icons.credit_score_outlined),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -100,21 +131,210 @@ class _ReportsPageState extends State<ReportsPage> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(child: _PaymentsCard(report.payments)),
+                        Expanded(child: _StockIntelligenceCard(data.stock)),
                         const SizedBox(width: 14),
-                        Expanded(child: _TopProductsCard(report.topProducts)),
+                        Expanded(child: _SupplierIntelligenceCard(data.suppliers)),
                       ],
                     )
                   else ...[
-                    _PaymentsCard(report.payments),
+                    _StockIntelligenceCard(data.stock),
                     const SizedBox(height: 14),
-                    _TopProductsCard(report.topProducts),
+                    _SupplierIntelligenceCard(data.suppliers),
+                  ],
+                  const SizedBox(height: 20),
+                  if (wide)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _PaymentsCard(data.sales.payments)),
+                        const SizedBox(width: 14),
+                        Expanded(child: _TopProductsCard(data.sales.topProducts)),
+                      ],
+                    )
+                  else ...[
+                    _PaymentsCard(data.sales.payments),
+                    const SizedBox(height: 14),
+                    _TopProductsCard(data.sales.topProducts),
                   ],
                 ],
               );
             },
           );
         },
+      ),
+    );
+  }
+}
+
+class _BusinessHealthCard extends StatelessWidget {
+  const _BusinessHealthCard(this.report, {required this.wide});
+
+  final BusinessHealthReport report;
+  final bool wide;
+
+  @override
+  Widget build(BuildContext context) {
+    final growth = report.salesGrowthRate * 100;
+    final margin = report.grossMarginRate * 100;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor: KhanyaBrand.forest.withValues(alpha: 0.12),
+                  child: Text(
+                    '${report.overallScore}',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: KhanyaBrand.forest,
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Business Health Score', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 3),
+                      Text('${_bandLabel(report.band)} • Sales growth ${growth.toStringAsFixed(1)}% • Gross margin ${margin.toStringAsFixed(1)}%'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _ScoreChip('Sales growth', report.salesGrowthScore),
+                _ScoreChip('Profitability', report.profitabilityScore),
+                _ScoreChip('Stock health', report.stockHealthScore),
+                _ScoreChip('Customer credit', report.customerCreditScore),
+                _ScoreChip('Expense pressure', report.expensePressureScore),
+                _ScoreChip('Returns control', report.returnsScore),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'The score combines sales trend, gross margin, stock pressure, customer credit exposure, expenses and returns. It is an operational indicator, not an accounting opinion.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScoreChip extends StatelessWidget {
+  const _ScoreChip(this.label, this.score);
+  final String label;
+  final int score;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 190,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [Text(label), Text('$score/100', style: const TextStyle(fontWeight: FontWeight.w800))],
+          ),
+          const SizedBox(height: 5),
+          LinearProgressIndicator(value: score / 100),
+        ],
+      ),
+    );
+  }
+}
+
+class _StockIntelligenceCard extends StatelessWidget {
+  const _StockIntelligenceCard(this.report);
+  final StockIntelligenceReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = report.items.take(6).toList(growable: false);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Stock intelligence', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            Text('${report.lowStockCount} low • ${report.outOfStockCount} out • ${report.deadStockCount} dead stock'),
+            if (report.deadStockCostValueMinor > 0) ...[
+              const SizedBox(height: 4),
+              Text('Dead-stock cost exposure: ${Loti.formatMinor(report.deadStockCostValueMinor)}'),
+            ],
+            const Divider(height: 24),
+            if (items.isEmpty)
+              const Text('No urgent stock risks in the current window.')
+            else
+              for (final item in items)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(item.isOutOfStock ? Icons.error_outline : item.isDeadStock ? Icons.hourglass_empty : Icons.inventory_2_outlined),
+                  title: Text(item.name),
+                  subtitle: Text(
+                    item.isDeadStock
+                        ? '${item.sku} • No sales in ${report.windowDays} days'
+                        : '${item.sku} • ${item.daysCover == null ? 'No velocity' : '${item.daysCover!.toStringAsFixed(1)} days cover'}',
+                  ),
+                  trailing: item.suggestedReorderMilli > 0
+                      ? Text('Order ${ScaledDecimal.fromMilli(item.suggestedReorderMilli)}', style: const TextStyle(fontWeight: FontWeight.w800))
+                      : null,
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SupplierIntelligenceCard extends StatelessWidget {
+  const _SupplierIntelligenceCard(this.report);
+  final SupplierIntelligenceReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final suppliers = report.suppliers.take(6).toList(growable: false);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Supplier intelligence', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            Text('90-day spend ${Loti.formatMinor(report.purchaseTotalMinor)} • Outstanding ${Loti.formatMinor(report.outstandingTotalMinor)}'),
+            const Divider(height: 24),
+            if (suppliers.isEmpty)
+              const Text('No supplier activity in this period.')
+            else
+              for (final supplier in suppliers)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(supplier.name),
+                  subtitle: Text('${supplier.purchaseCount} purchases • ${Loti.formatMinor(supplier.purchaseTotalMinor)}'),
+                  trailing: supplier.outstandingMinor > 0
+                      ? Text('Due ${Loti.formatMinor(supplier.outstandingMinor)}', style: const TextStyle(fontWeight: FontWeight.w800))
+                      : const Text('Paid'),
+                ),
+          ],
+        ),
       ),
     );
   }
@@ -276,6 +496,14 @@ class _ErrorView extends StatelessWidget {
 }
 
 String _date(DateTime value) => '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+
+String _bandLabel(String band) => switch (band) {
+      'strong' => 'Strong',
+      'healthy' => 'Healthy',
+      'watch' => 'Needs attention',
+      'at_risk' => 'At risk',
+      _ => band,
+    };
 
 String _paymentLabel(String method) => switch (method) {
       'cash' => 'Cash',
