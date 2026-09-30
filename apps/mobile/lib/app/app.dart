@@ -20,7 +20,7 @@ import 'package:khanya_pos/features/customers/data/customer_repository.dart';
 import 'package:khanya_pos/features/devices/data/device_repository.dart';
 import 'package:khanya_pos/features/inventory/data/inventory_control_repository.dart';
 import 'package:khanya_pos/features/platform/data/platform_repository.dart';
-import 'package:khanya_pos/features/platform/presentation/platform_admin_page.dart';
+import 'package:khanya_pos/features/platform/presentation/platform_admin_shell_page.dart';
 import 'package:khanya_pos/features/pos/data/held_sales_repository.dart';
 import 'package:khanya_pos/features/pos/data/till_repository.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
@@ -159,7 +159,7 @@ class _SessionGate extends StatelessWidget {
         }
         if (state is SessionAuthenticated) {
           if (state.session.isPlatformAdmin) {
-            return const PlatformAdminPage();
+            return const PlatformAdminShellPage();
           }
           if (state.session.selectedTenantId == null || state.session.selectedBranchId == null) {
             return BusinessContextPage(state: state);
