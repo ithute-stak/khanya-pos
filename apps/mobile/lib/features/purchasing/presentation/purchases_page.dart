@@ -30,6 +30,11 @@ class _PurchasesView extends StatelessWidget {
         title: const Text('Purchases'),
         actions: [
           IconButton(
+            tooltip: 'Purchase Orders',
+            onPressed: () => context.push('/purchase-orders'),
+            icon: const Icon(Icons.assignment_outlined),
+          ),
+          IconButton(
             tooltip: 'Receipt Vault',
             onPressed: () => context.push('/receipts'),
             icon: const Icon(Icons.receipt_long_outlined),
@@ -87,9 +92,7 @@ class _PurchasesView extends StatelessWidget {
                     (purchase) => Card(
                       child: ListTile(
                         leading: CircleAvatar(
-                          child: Icon(
-                            purchase.balanceDueMinor > 0 ? Icons.schedule_outlined : Icons.check,
-                          ),
+                          child: Icon(purchase.balanceDueMinor > 0 ? Icons.schedule_outlined : Icons.check),
                         ),
                         title: Text(purchase.purchaseNumber),
                         subtitle: Text(
