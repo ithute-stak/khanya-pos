@@ -106,7 +106,7 @@ class _PlatformAdminPageState extends State<PlatformAdminPage> {
       ),
     );
     controller.dispose();
-    if (reason == null || reason.isEmpty) return;
+    if (!mounted || reason == null || reason.isEmpty) return;
 
     final tenantId = application['tenant_id'].toString();
     setState(() => _busyTenantId = tenantId);
