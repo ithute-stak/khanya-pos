@@ -8,14 +8,8 @@ import 'package:khanya_pos/core/sync/sync_bloc.dart';
 import 'package:khanya_pos/features/auth/presentation/bloc/session_bloc.dart';
 
 class DesktopShell extends StatelessWidget {
-  const DesktopShell({
-    super.key,
-    required this.location,
-    required this.child,
-  });
-
+  const DesktopShell({super.key, required this.location, required this.child});
   static const double breakpoint = 1100;
-
   final String location;
   final Widget child;
 
@@ -24,7 +18,6 @@ class DesktopShell extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < breakpoint) return child;
-
         return CallbackShortcuts(
           bindings: <ShortcutActivator, VoidCallback>{
             const SingleActivator(LogicalKeyboardKey.f1): () => context.go('/'),
@@ -58,7 +51,6 @@ class DesktopShell extends StatelessWidget {
 
 class _DesktopSidebar extends StatelessWidget {
   const _DesktopSidebar({required this.location});
-
   final String location;
 
   @override
@@ -66,7 +58,6 @@ class _DesktopSidebar extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final role = _selectedRole(context.watch<SessionBloc>().state);
     final visibleItems = _items.where((item) => item.isVisibleFor(role)).toList(growable: false);
-
     return SizedBox(
       width: 252,
       child: Material(
@@ -128,7 +119,6 @@ class _DesktopSidebar extends StatelessWidget {
 
 class _DesktopNavTile extends StatelessWidget {
   const _DesktopNavTile({required this.item, required this.selected});
-
   final _DesktopNavItem item;
   final bool selected;
 
@@ -184,7 +174,6 @@ class _DesktopSystemStatus extends StatelessWidget {
     final sync = context.watch<SyncBloc>().state;
     final realtime = context.watch<RealtimeBloc>().state;
     final scheme = Theme.of(context).colorScheme;
-
     return DecoratedBox(
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
@@ -203,10 +192,7 @@ class _DesktopSystemStatus extends StatelessWidget {
                   color: connectivity.isNetworkAvailable ? scheme.primary : scheme.error,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  connectivity.isNetworkAvailable ? 'Online' : 'Offline mode',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
+                Text(connectivity.isNetworkAvailable ? 'Online' : 'Offline mode', style: Theme.of(context).textTheme.labelLarge),
               ],
             ),
             const SizedBox(height: 8),
@@ -231,14 +217,7 @@ class _DesktopSystemStatus extends StatelessWidget {
 }
 
 class _DesktopNavItem {
-  const _DesktopNavItem({
-    required this.label,
-    required this.path,
-    required this.icon,
-    this.shortcut,
-    this.allowedRoles,
-  });
-
+  const _DesktopNavItem({required this.label, required this.path, required this.icon, this.shortcut, this.allowedRoles});
   final String label;
   final String path;
   final IconData icon;
@@ -267,69 +246,21 @@ const _items = <_DesktopNavItem>[
   _DesktopNavItem(label: 'New Sale', path: '/pos', icon: Icons.point_of_sale_outlined, shortcut: 'F2'),
   _DesktopNavItem(label: 'Sales History', path: '/sales', icon: Icons.history_outlined),
   _DesktopNavItem(label: 'Till & Shift', path: '/till', icon: Icons.price_check_outlined),
-  _DesktopNavItem(
-    label: 'Reports',
-    path: '/reports',
-    icon: Icons.analytics_outlined,
-    allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
-  ),
-  _DesktopNavItem(
-    label: 'Accounting',
-    path: '/accounting',
-    icon: Icons.account_balance_outlined,
-    allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
-  ),
-  _DesktopNavItem(
-    label: 'Management Reports',
-    path: '/accounting/management',
-    icon: Icons.insights_outlined,
-    allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
-  ),
-  _DesktopNavItem(
-    label: 'Cash Flow',
-    path: '/accounting/cash-flow',
-    icon: Icons.waterfall_chart_outlined,
-    allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
-  ),
-  _DesktopNavItem(
-    label: 'Financial Statements',
-    path: '/accounting/statements',
-    icon: Icons.description_outlined,
-    allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
-  ),
-  _DesktopNavItem(
-    label: 'Staff & Roles',
-    path: '/staff',
-    icon: Icons.manage_accounts_outlined,
-    allowedRoles: {'owner', 'admin', 'manager'},
-  ),
-  _DesktopNavItem(
-    label: 'Workstations',
-    path: '/devices',
-    icon: Icons.desktop_windows_outlined,
-    allowedRoles: {'owner', 'admin', 'manager'},
-  ),
+  _DesktopNavItem(label: 'Reports', path: '/reports', icon: Icons.analytics_outlined, allowedRoles: {'owner', 'admin', 'manager', 'accountant'}),
+  _DesktopNavItem(label: 'Accounting', path: '/accounting', icon: Icons.account_balance_outlined, allowedRoles: {'owner', 'admin', 'manager', 'accountant'}),
+  _DesktopNavItem(label: 'Management Reports', path: '/accounting/management', icon: Icons.insights_outlined, allowedRoles: {'owner', 'admin', 'manager', 'accountant'}),
+  _DesktopNavItem(label: 'Cash Flow', path: '/accounting/cash-flow', icon: Icons.waterfall_chart_outlined, allowedRoles: {'owner', 'admin', 'manager', 'accountant'}),
+  _DesktopNavItem(label: 'Financial Statements', path: '/accounting/statements', icon: Icons.description_outlined, allowedRoles: {'owner', 'admin', 'manager', 'accountant'}),
+  _DesktopNavItem(label: 'Staff & Roles', path: '/staff', icon: Icons.manage_accounts_outlined, allowedRoles: {'owner', 'admin', 'manager'}),
+  _DesktopNavItem(label: 'Workstations', path: '/devices', icon: Icons.desktop_windows_outlined, allowedRoles: {'owner', 'admin', 'manager'}),
   _DesktopNavItem(label: 'Products', path: '/products', icon: Icons.inventory_2_outlined, shortcut: 'F3'),
   _DesktopNavItem(label: 'Customers', path: '/customers', icon: Icons.groups_2_outlined, shortcut: 'Ctrl+4'),
   _DesktopNavItem(label: 'Inventory', path: '/inventory', icon: Icons.warehouse_outlined, shortcut: 'F5'),
-  _DesktopNavItem(
-    label: 'Purchases',
-    path: '/purchases',
-    icon: Icons.shopping_bag_outlined,
-    shortcut: 'F6',
-  ),
+  _DesktopNavItem(label: 'Purchases', path: '/purchases', icon: Icons.shopping_bag_outlined, shortcut: 'F6'),
   _DesktopNavItem(label: 'Suppliers', path: '/suppliers', icon: Icons.local_shipping_outlined, shortcut: 'F7'),
   _DesktopNavItem(label: 'Receipt Vault', path: '/receipts', icon: Icons.receipt_long_outlined, shortcut: 'F8'),
   _DesktopNavItem(label: 'Expenses', path: '/expenses', icon: Icons.account_balance_wallet_outlined, shortcut: 'F10'),
-  _DesktopNavItem(
-    label: 'Business Settings',
-    path: '/settings/business',
-    icon: Icons.business_outlined,
-    allowedRoles: {'owner', 'admin'},
-  ),
-  _DesktopNavItem(
-    label: 'POS Hardware',
-    path: '/settings/hardware',
-    icon: Icons.settings_input_component_outlined,
-  ),
+  _DesktopNavItem(label: 'Promotions & Loyalty', path: '/growth', icon: Icons.loyalty_outlined, allowedRoles: {'owner', 'admin', 'manager'}),
+  _DesktopNavItem(label: 'Business Settings', path: '/settings/business', icon: Icons.business_outlined, allowedRoles: {'owner', 'admin'}),
+  _DesktopNavItem(label: 'POS Hardware', path: '/settings/hardware', icon: Icons.settings_input_component_outlined),
 ];
