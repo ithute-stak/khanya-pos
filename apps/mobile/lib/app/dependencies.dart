@@ -22,6 +22,7 @@ import 'package:khanya_pos/features/pos/data/held_sales_repository.dart';
 import 'package:khanya_pos/features/pos/data/sales_repository.dart';
 import 'package:khanya_pos/features/pos/data/till_repository.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
+import 'package:khanya_pos/features/purchasing/data/purchase_order_repository.dart';
 import 'package:khanya_pos/features/purchasing/data/purchasing_repository.dart';
 import 'package:khanya_pos/features/reports/data/reports_repository.dart';
 import 'package:khanya_pos/features/settings/data/business_settings_repository.dart';
@@ -44,6 +45,7 @@ class AppDependencies {
     required this.heldSalesRepository,
     required this.tillRepository,
     required this.purchasingRepository,
+    required this.purchaseOrderRepository,
     required this.documentRepository,
     required this.expenseRepository,
     required this.reportsRepository,
@@ -73,6 +75,7 @@ class AppDependencies {
     apiClient.setUnauthorizedHandler(sessionContext.refreshAccessToken);
     final platformRepository = PlatformRepository(apiClient: apiClient);
     final growthRepository = GrowthRepository(apiClient: apiClient);
+    final purchaseOrderRepository = PurchaseOrderRepository(apiClient: apiClient);
     final productRepository = ProductRepository(
       apiClient: apiClient,
       database: database,
@@ -148,6 +151,7 @@ class AppDependencies {
       heldSalesRepository: heldSalesRepository,
       tillRepository: tillRepository,
       purchasingRepository: purchasingRepository,
+      purchaseOrderRepository: purchaseOrderRepository,
       documentRepository: documentRepository,
       expenseRepository: expenseRepository,
       reportsRepository: reportsRepository,
@@ -175,6 +179,7 @@ class AppDependencies {
   final HeldSalesRepository heldSalesRepository;
   final TillRepository tillRepository;
   final PurchasingRepository purchasingRepository;
+  final PurchaseOrderRepository purchaseOrderRepository;
   final DocumentRepository documentRepository;
   final ExpenseRepository expenseRepository;
   final ReportsRepository reportsRepository;
