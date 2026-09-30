@@ -17,8 +17,22 @@ class PlatformRepository {
         .toList(growable: false);
   }
 
+  Future<List<Map<String, dynamic>>> tenants() async {
+    final response = await _apiClient.dio.get<List<dynamic>>('/platform/tenants');
+    return (response.data ?? const <dynamic>[])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: false);
+  }
+
   Future<List<Map<String, dynamic>>> dailyActivity() async {
     final response = await _apiClient.dio.get<List<dynamic>>('/platform/activity/daily');
+    return (response.data ?? const <dynamic>[])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> tenantActivity(String tenantId) async {
+    final response = await _apiClient.dio.get<List<dynamic>>('/platform/activity/$tenantId');
     return (response.data ?? const <dynamic>[])
         .map((item) => Map<String, dynamic>.from(item as Map))
         .toList(growable: false);
@@ -33,5 +47,16 @@ class PlatformRepository {
       '/platform/onboarding/$tenantId/reject',
       data: {'reason': reason.trim()},
     );
+  }
+
+  Future<void> suspend(String tenantId, String reason) async {
+    await _apiClient.dio.post<void>(
+      '/platform/tenants/$tenantId/suspend',
+      data: {'reason': reason.trim()},
+    );
+  }
+
+  Future<void> reactivate(String tenantId) async {
+    await _apiClient.dio.post<void>('/platform/tenants/$tenantId/reactivate');
   }
 }

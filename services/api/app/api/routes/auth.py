@@ -158,17 +158,25 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
             .limit(1)
         )
         if access_result.scalar_one_or_none() is None:
-            pending_result = await db.execute(
-                select(Tenant.onboarding_status)
+            tenant_state_result = await db.execute(
+                select(Tenant.onboarding_status, Tenant.is_active)
                 .join(TenantMembership, TenantMembership.tenant_id == Tenant.id)
                 .where(TenantMembership.user_id == user.id)
+                .order_by(TenantMembership.created_at.asc())
                 .limit(1)
             )
-            onboarding_status = pending_result.scalar_one_or_none()
+            tenant_state = tenant_state_result.first()
+            onboarding_status = tenant_state[0] if tenant_state else None
+            tenant_active = bool(tenant_state[1]) if tenant_state else False
             if onboarding_status == "rejected":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Your Khanya business application was not approved.",
+                )
+            if onboarding_status == "approved" and not tenant_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Your Khanya business account is suspended. Contact Khanya support for assistance.",
                 )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
