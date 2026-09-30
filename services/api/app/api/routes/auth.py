@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.audit import AuditEvent
 from app.models.identity import Branch, MembershipBranch, Tenant, TenantMembership, User, UserSession
+from app.models.platform import PlatformEvent
 from app.schemas.identity import (
     BootstrapRequest,
     LoginRequest,
@@ -113,6 +114,20 @@ async def signup(
                 entity_type="tenant",
                 entity_id=str(tenant.id),
                 summary=f"New Khanya business application: {tenant.name}",
+                details={"business_slug": tenant.slug},
+            )
+        )
+        db.add(
+            PlatformEvent(
+                tenant_id=tenant.id,
+                actor_user_id=user.id,
+                actor_name=user.display_name,
+                actor_email=user.email,
+                actor_role=Role.OWNER.value,
+                event_type="tenant.application.submitted",
+                severity="info",
+                title="New business application",
+                message=f"{tenant.name} submitted a Khanya account application.",
                 details={"business_slug": tenant.slug},
             )
         )
