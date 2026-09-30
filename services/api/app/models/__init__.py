@@ -1,7 +1,12 @@
 from app.models.accounting import Account, AccountingSettings, JournalEntry, JournalLine
 from app.models.audit import AuditEvent
 from app.models.base import Base
-from app.models.catalog_public import PublicCatalogListing, PublicCatalogSettings
+from app.models.catalog_public import (
+    PublicCatalogListing,
+    PublicCatalogOrder,
+    PublicCatalogOrderLine,
+    PublicCatalogSettings,
+)
 from app.models.commerce import (
     BranchProductStock,
     Payment,
@@ -66,6 +71,8 @@ __all__ = [
     "ProductCategory",
     "Promotion",
     "PublicCatalogListing",
+    "PublicCatalogOrder",
+    "PublicCatalogOrderLine",
     "PublicCatalogSettings",
     "Purchase",
     "PurchaseLine",
