@@ -21,6 +21,7 @@ import 'package:khanya_pos/features/pos/presentation/pos_page.dart';
 import 'package:khanya_pos/features/pos/presentation/sales_history_page.dart';
 import 'package:khanya_pos/features/pos/presentation/till_page.dart';
 import 'package:khanya_pos/features/purchasing/presentation/new_purchase_page.dart';
+import 'package:khanya_pos/features/purchasing/presentation/purchase_orders_page.dart';
 import 'package:khanya_pos/features/purchasing/presentation/purchases_page.dart';
 import 'package:khanya_pos/features/purchasing/presentation/suppliers_page.dart';
 import 'package:khanya_pos/features/reports/presentation/reports_page.dart';
@@ -31,18 +32,12 @@ final GoRouter appRouter = GoRouter(
   initialLocation: '/',
   routes: [
     ShellRoute(
-      builder: (context, state, child) => DesktopShell(
-        location: state.uri.path,
-        child: child,
-      ),
+      builder: (context, state, child) => DesktopShell(location: state.uri.path, child: child),
       routes: [
         GoRoute(path: '/', builder: (context, state) => const DashboardPage()),
         GoRoute(path: '/pos', builder: (context, state) => const PosPage()),
         GoRoute(path: '/sales', builder: (context, state) => const SalesHistoryPage()),
-        GoRoute(
-          path: '/sales/:saleId',
-          builder: (context, state) => SaleDetailPage(saleId: state.pathParameters['saleId']!),
-        ),
+        GoRoute(path: '/sales/:saleId', builder: (context, state) => SaleDetailPage(saleId: state.pathParameters['saleId']!)),
         GoRoute(path: '/till', builder: (context, state) => const TillPage()),
         GoRoute(path: '/reports', builder: (context, state) => const ReportsPage()),
         GoRoute(path: '/accounting', builder: (context, state) => const AccountingPage()),
@@ -53,18 +48,13 @@ final GoRouter appRouter = GoRouter(
         GoRoute(path: '/devices', builder: (context, state) => const DevicesPage()),
         GoRoute(path: '/products', builder: (context, state) => const ProductsPage()),
         GoRoute(path: '/customers', builder: (context, state) => const CustomersPage()),
-        GoRoute(
-          path: '/customers/:customerId',
-          builder: (context, state) => CustomerDetailPage(customerId: state.pathParameters['customerId']!),
-        ),
-        GoRoute(
-          path: '/customers/:customerId/statement',
-          builder: (context, state) => CustomerStatementPage(customerId: state.pathParameters['customerId']!),
-        ),
+        GoRoute(path: '/customers/:customerId', builder: (context, state) => CustomerDetailPage(customerId: state.pathParameters['customerId']!)),
+        GoRoute(path: '/customers/:customerId/statement', builder: (context, state) => CustomerStatementPage(customerId: state.pathParameters['customerId']!)),
         GoRoute(path: '/inventory', builder: (context, state) => const InventoryPage()),
         GoRoute(path: '/inventory/controls', builder: (context, state) => const InventoryControlsPage()),
         GoRoute(path: '/purchases', builder: (context, state) => const PurchasesPage()),
         GoRoute(path: '/purchases/new', builder: (context, state) => const NewPurchasePage()),
+        GoRoute(path: '/purchase-orders', builder: (context, state) => const PurchaseOrdersPage()),
         GoRoute(path: '/suppliers', builder: (context, state) => const SuppliersPage()),
         GoRoute(path: '/receipts', builder: (context, state) => const ReceiptVaultPage()),
         GoRoute(path: '/expenses', builder: (context, state) => const ExpensesPage()),
