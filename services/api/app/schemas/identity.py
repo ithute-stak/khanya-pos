@@ -77,6 +77,7 @@ class MeResponse(BaseModel):
     display_name: str
     email: str
     phone: str | None
+    is_platform_admin: bool = False
     memberships: list[MembershipSummary]
 
 
