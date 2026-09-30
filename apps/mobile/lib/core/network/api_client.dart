@@ -17,9 +17,7 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          if (_requestHeadersProvider != null) {
-            options.headers.addAll(await _requestHeadersProvider());
-          }
+          await _applyContextHeaders(options.headers);
           handler.next(options);
         },
         onError: (error, handler) async {
@@ -42,9 +40,7 @@ class ApiClient {
 
           final request = error.requestOptions;
           request.extra['khanyaAuthRetried'] = true;
-          if (_requestHeadersProvider != null) {
-            request.headers.addAll(await _requestHeadersProvider());
-          }
+          await _applyContextHeaders(request.headers);
           try {
             final response = await dio.fetch<dynamic>(request);
             handler.resolve(response);
@@ -59,6 +55,22 @@ class ApiClient {
   final Dio dio;
   final RequestHeadersProvider? _requestHeadersProvider;
   UnauthorizedHandler? _unauthorizedHandler;
+
+  Future<void> _applyContextHeaders(Map<String, dynamic> target) async {
+    final provider = _requestHeadersProvider;
+    if (provider == null) return;
+    final contextual = await provider();
+    for (final entry in contextual.entries) {
+      if (entry.key.toLowerCase() == 'authorization') {
+        // Authentication must always follow the latest refreshed access token.
+        target[entry.key] = entry.value;
+      } else {
+        // A caller may deliberately pin tenant/branch headers, notably when
+        // replaying an offline operation created under an earlier context.
+        target.putIfAbsent(entry.key, () => entry.value);
+      }
+    }
+  }
 
   void setUnauthorizedHandler(UnauthorizedHandler handler) {
     _unauthorizedHandler = handler;
