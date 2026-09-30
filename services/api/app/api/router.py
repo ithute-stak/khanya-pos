@@ -9,6 +9,7 @@ from app.api.routes import (
     devices,
     documents,
     expenses,
+    growth,
     health,
     inventory,
     inventory_controls,
@@ -31,6 +32,7 @@ api_router.include_router(health.router, prefix="/health", tags=["health"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(platform.router, prefix="/platform", tags=["platform"])
 api_router.include_router(subscriptions.router, prefix="/subscriptions", tags=["subscriptions"])
+api_router.include_router(growth.router, prefix="/growth", tags=["loyalty", "promotions"])
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
 api_router.include_router(staff.router, prefix="/staff", tags=["staff"])
 api_router.include_router(devices.router, prefix="/devices", tags=["devices"])
