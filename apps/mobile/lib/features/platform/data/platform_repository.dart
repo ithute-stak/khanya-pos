@@ -54,15 +54,17 @@ class PlatformRepository {
     String? billingReference,
     String? notes,
   }) async {
+    final periodEnd = currentPeriodEnd?.toUtc().toIso8601String();
+    final graceEnd = graceEndsAt?.toUtc().toIso8601String();
     await _apiClient.dio.patch<void>(
       '/subscriptions/platform/$tenantId',
       data: <String, dynamic>{
-        if (plan != null) 'plan': plan,
-        if (status != null) 'status': status,
-        if (currentPeriodEnd != null) 'current_period_end': currentPeriodEnd.toUtc().toIso8601String(),
-        if (graceEndsAt != null) 'grace_ends_at': graceEndsAt.toUtc().toIso8601String(),
-        if (billingReference != null) 'billing_reference': billingReference,
-        if (notes != null) 'notes': notes,
+        'plan': ?plan,
+        'status': ?status,
+        'current_period_end': ?periodEnd,
+        'grace_ends_at': ?graceEnd,
+        'billing_reference': ?billingReference,
+        'notes': ?notes,
       },
     );
   }
