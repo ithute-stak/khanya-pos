@@ -24,6 +24,7 @@ from app.models.identity import (
 from app.models.inventory_controls import Stocktake, StocktakeLine, StockTransfer, StockTransferLine
 from app.models.outbox import OutboxEvent
 from app.models.platform import PlatformEvent
+from app.models.purchase_orders import PurchaseOrder, PurchaseOrderLine
 from app.models.purchasing import (
     BusinessDocument,
     Expense,
@@ -63,6 +64,8 @@ __all__ = [
     "Promotion",
     "Purchase",
     "PurchaseLine",
+    "PurchaseOrder",
+    "PurchaseOrderLine",
     "Sale",
     "SaleLine",
     "SaleReturn",
