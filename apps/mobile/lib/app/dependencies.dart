@@ -16,6 +16,7 @@ import 'package:khanya_pos/features/documents/data/document_repository.dart';
 import 'package:khanya_pos/features/documents/data/receipt_file_store.dart';
 import 'package:khanya_pos/features/expenses/data/expense_repository.dart';
 import 'package:khanya_pos/features/inventory/data/inventory_control_repository.dart';
+import 'package:khanya_pos/features/platform/data/platform_repository.dart';
 import 'package:khanya_pos/features/pos/data/held_sales_repository.dart';
 import 'package:khanya_pos/features/pos/data/sales_repository.dart';
 import 'package:khanya_pos/features/pos/data/till_repository.dart';
@@ -32,6 +33,7 @@ class AppDependencies {
     required this.sessionContext,
     required this.apiClient,
     required this.authRepository,
+    required this.platformRepository,
     required this.productRepository,
     required this.customerRepository,
     required this.inventoryControlRepository,
@@ -67,6 +69,7 @@ class AppDependencies {
     );
     sessionContext.setRefreshCallback(authRepository.refreshAccessToken);
     apiClient.setUnauthorizedHandler(sessionContext.refreshAccessToken);
+    final platformRepository = PlatformRepository(apiClient: apiClient);
     final productRepository = ProductRepository(
       apiClient: apiClient,
       database: database,
@@ -132,6 +135,7 @@ class AppDependencies {
       sessionContext: sessionContext,
       apiClient: apiClient,
       authRepository: authRepository,
+      platformRepository: platformRepository,
       productRepository: productRepository,
       customerRepository: customerRepository,
       inventoryControlRepository: inventoryControlRepository,
@@ -157,6 +161,7 @@ class AppDependencies {
   final SessionContext sessionContext;
   final ApiClient apiClient;
   final AuthRepository authRepository;
+  final PlatformRepository platformRepository;
   final ProductRepository productRepository;
   final CustomerRepository customerRepository;
   final InventoryControlRepository inventoryControlRepository;
