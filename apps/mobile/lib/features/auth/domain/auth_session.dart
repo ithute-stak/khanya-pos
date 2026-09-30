@@ -48,6 +48,7 @@ class AuthSession extends Equatable {
     required this.refreshToken,
     required this.memberships,
     this.isPlatformAdmin = false,
+    this.platformRole,
     this.selectedTenantId,
     this.selectedBranchId,
   });
@@ -59,8 +60,13 @@ class AuthSession extends Equatable {
   final String refreshToken;
   final List<BusinessMembership> memberships;
   final bool isPlatformAdmin;
+  final String? platformRole;
   final String? selectedTenantId;
   final String? selectedBranchId;
+
+  bool get canOperatePlatform =>
+      platformRole == 'platform_super_admin' || platformRole == 'platform_admin';
+  bool get isPlatformSuperAdmin => platformRole == 'platform_super_admin';
 
   AuthSession selectBusiness({required String tenantId, String? branchId}) {
     return AuthSession(
@@ -71,6 +77,7 @@ class AuthSession extends Equatable {
       refreshToken: refreshToken,
       memberships: memberships,
       isPlatformAdmin: isPlatformAdmin,
+      platformRole: platformRole,
       selectedTenantId: tenantId,
       selectedBranchId: branchId,
     );
@@ -85,6 +92,7 @@ class AuthSession extends Equatable {
       refreshToken: refreshToken,
       memberships: memberships,
       isPlatformAdmin: isPlatformAdmin,
+      platformRole: platformRole,
       selectedTenantId: selectedTenantId,
       selectedBranchId: selectedBranchId,
     );
@@ -102,6 +110,7 @@ class AuthSession extends Equatable {
         'display_name': displayName,
         'email': email,
         'is_platform_admin': isPlatformAdmin,
+        'platform_role': platformRole,
         'memberships': memberships.map((membership) => membership.toJson()).toList(),
         'selected_tenant_id': selectedTenantId,
         'selected_branch_id': selectedBranchId,
@@ -122,6 +131,7 @@ class AuthSession extends Equatable {
           .map((value) => BusinessMembership.fromJson(value as Map<String, dynamic>))
           .toList(growable: false),
       isPlatformAdmin: json['is_platform_admin'] == true,
+      platformRole: json['platform_role']?.toString(),
       selectedTenantId: json['selected_tenant_id']?.toString(),
       selectedBranchId: json['selected_branch_id']?.toString(),
     );
@@ -136,6 +146,7 @@ class AuthSession extends Equatable {
         refreshToken,
         memberships,
         isPlatformAdmin,
+        platformRole,
         selectedTenantId,
         selectedBranchId,
       ];

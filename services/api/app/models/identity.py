@@ -17,6 +17,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     display_name: Mapped[str] = mapped_column(String(160))
     password_hash: Mapped[str] = mapped_column(String(512))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    platform_role: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
 
 
 class Tenant(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -32,6 +33,7 @@ class Tenant(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     onboarding_rejection_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    suspension_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class Branch(UUIDPrimaryKeyMixin, TimestampMixin, Base):

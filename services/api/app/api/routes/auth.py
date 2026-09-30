@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import Principal, get_current_principal
 from app.core.config import get_settings
 from app.core.database import get_db
+from app.models.audit import AuditEvent
 from app.models.identity import Branch, MembershipBranch, Tenant, TenantMembership, User, UserSession
+from app.models.platform import PlatformEvent
 from app.schemas.identity import (
     BootstrapRequest,
     LoginRequest,
@@ -20,6 +22,7 @@ from app.schemas.identity import (
     TokenResponse,
 )
 from app.security.permissions import Role
+from app.security.platform_roles import effective_platform_role
 from app.security.tokens import (
     TokenError,
     create_access_token,
@@ -98,7 +101,36 @@ async def signup(
     db: AsyncSession = Depends(get_db),
 ) -> OnboardingResponse:
     try:
-        _, tenant = await _create_business(payload, db, approved=False)
+        user, tenant = await _create_business(payload, db, approved=False)
+        db.add(
+            AuditEvent(
+                tenant_id=tenant.id,
+                branch_id=None,
+                actor_user_id=user.id,
+                actor_name=user.display_name,
+                actor_email=user.email,
+                actor_role=Role.OWNER.value,
+                action="platform.tenant.applied",
+                entity_type="tenant",
+                entity_id=str(tenant.id),
+                summary=f"New Khanya business application: {tenant.name}",
+                details={"business_slug": tenant.slug},
+            )
+        )
+        db.add(
+            PlatformEvent(
+                tenant_id=tenant.id,
+                actor_user_id=user.id,
+                actor_name=user.display_name,
+                actor_email=user.email,
+                actor_role=Role.OWNER.value,
+                event_type="tenant.application.submitted",
+                severity="info",
+                title="New business application",
+                message=f"{tenant.name} submitted a Khanya account application.",
+                details={"business_slug": tenant.slug},
+            )
+        )
         await db.commit()
         return OnboardingResponse(
             tenant_id=tenant.id,
@@ -144,8 +176,8 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    is_platform_admin = user.email.lower() in settings.platform_admin_email_set
-    if not is_platform_admin:
+    platform_role = effective_platform_role(user, settings)
+    if platform_role is None:
         access_result = await db.execute(
             select(TenantMembership.id)
             .join(Tenant, Tenant.id == TenantMembership.tenant_id)
@@ -159,7 +191,7 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
         )
         if access_result.scalar_one_or_none() is None:
             tenant_state_result = await db.execute(
-                select(Tenant.onboarding_status, Tenant.is_active)
+                select(Tenant.onboarding_status, Tenant.is_active, Tenant.suspension_reason)
                 .join(TenantMembership, TenantMembership.tenant_id == Tenant.id)
                 .where(TenantMembership.user_id == user.id)
                 .order_by(TenantMembership.created_at.asc())
@@ -168,16 +200,17 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
             tenant_state = tenant_state_result.first()
             onboarding_status = tenant_state[0] if tenant_state else None
             tenant_active = bool(tenant_state[1]) if tenant_state else False
+            suspension_reason = tenant_state[2] if tenant_state else None
             if onboarding_status == "rejected":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Your Khanya business application was not approved.",
                 )
             if onboarding_status == "approved" and not tenant_active:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Your Khanya business account is suspended. Contact Khanya support for assistance.",
-                )
+                detail = "Your Khanya business account is suspended. Contact Khanya support for assistance."
+                if suspension_reason:
+                    detail = f"Your Khanya business account is suspended: {suspension_reason}"
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Your Khanya business account is still waiting for platform approval.",
@@ -263,11 +296,13 @@ async def me(
                 branch_ids=list(branches_result.scalars().all()),
             )
         )
+    platform_role = effective_platform_role(principal.user, settings)
     return MeResponse(
         user_id=principal.user.id,
         display_name=principal.user.display_name,
         email=principal.user.email,
         phone=principal.user.phone,
-        is_platform_admin=principal.user.email.lower() in settings.platform_admin_email_set,
+        is_platform_admin=platform_role is not None,
+        platform_role=platform_role.value if platform_role else None,
         memberships=memberships,
     )

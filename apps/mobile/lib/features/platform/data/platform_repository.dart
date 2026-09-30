@@ -17,6 +17,27 @@ class PlatformRepository {
         .toList(growable: false);
   }
 
+  Future<List<Map<String, dynamic>>> notifications() async {
+    final response = await _apiClient.dio.get<List<dynamic>>('/platform/notifications');
+    return (response.data ?? const <dynamic>[])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> staff() async {
+    final response = await _apiClient.dio.get<List<dynamic>>('/platform/staff');
+    return (response.data ?? const <dynamic>[])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList(growable: false);
+  }
+
+  Future<void> setStaffRole({required String email, required String? role}) async {
+    await _apiClient.dio.put<void>(
+      '/platform/staff/role',
+      data: <String, dynamic>{'email': email.trim(), 'role': role},
+    );
+  }
+
   Future<List<Map<String, dynamic>>> tenants() async {
     final response = await _apiClient.dio.get<List<dynamic>>('/platform/tenants');
     return (response.data ?? const <dynamic>[])
