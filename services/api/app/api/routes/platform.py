@@ -1,4 +1,5 @@
 from datetime import date, datetime, time, timezone
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -10,7 +11,8 @@ from app.api.deps import Principal, get_current_principal
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.audit import AuditEvent
-from app.models.identity import Branch, Tenant, TenantMembership, User
+from app.models.commerce import Sale
+from app.models.identity import Branch, Device, Tenant, TenantMembership, User
 from app.security.permissions import Role
 
 router = APIRouter()
@@ -18,6 +20,10 @@ settings = get_settings()
 
 
 class RejectionRequest(BaseModel):
+    reason: str = Field(min_length=2, max_length=500)
+
+
+class SuspensionRequest(BaseModel):
     reason: str = Field(min_length=2, max_length=500)
 
 
@@ -46,12 +52,88 @@ async def _owner_for_tenant(db: AsyncSession, tenant_id: UUID) -> User | None:
     return result.scalar_one_or_none()
 
 
+async def _set_tenant_access(db: AsyncSession, tenant_id: UUID, *, active: bool) -> None:
+    memberships = (
+        await db.execute(select(TenantMembership).where(TenantMembership.tenant_id == tenant_id))
+    ).scalars().all()
+    for membership in memberships:
+        membership.is_active = active
+    branches = (
+        await db.execute(select(Branch).where(Branch.tenant_id == tenant_id))
+    ).scalars().all()
+    for branch in branches:
+        branch.is_active = active
+
+
+def _today_bounds() -> tuple[datetime, datetime]:
+    today = datetime.now(timezone.utc).date()
+    return (
+        datetime.combine(today, time.min, tzinfo=timezone.utc),
+        datetime.combine(today, time.max, tzinfo=timezone.utc),
+    )
+
+
+def _tenant_status(tenant: Tenant) -> str:
+    if tenant.onboarding_status == "approved" and not tenant.is_active:
+        return "suspended"
+    return tenant.onboarding_status
+
+
+async def _tenant_day_metrics(
+    db: AsyncSession,
+    tenant_id: UUID,
+    start: datetime,
+    end: datetime,
+) -> dict[str, object]:
+    activity = (
+        await db.execute(
+            select(
+                func.count(AuditEvent.id),
+                func.count(distinct(AuditEvent.actor_user_id)),
+                func.max(AuditEvent.occurred_at),
+            ).where(
+                AuditEvent.tenant_id == tenant_id,
+                AuditEvent.occurred_at >= start,
+                AuditEvent.occurred_at <= end,
+            )
+        )
+    ).one()
+    sales = (
+        await db.execute(
+            select(func.count(Sale.id), func.coalesce(func.sum(Sale.total), 0)).where(
+                Sale.tenant_id == tenant_id,
+                Sale.status == "completed",
+                Sale.completed_at >= start,
+                Sale.completed_at <= end,
+            )
+        )
+    ).one()
+    active_devices = await db.scalar(
+        select(func.count(Device.id)).where(
+            Device.tenant_id == tenant_id,
+            Device.is_active.is_(True),
+            Device.last_seen_at.is_not(None),
+            Device.last_seen_at >= start,
+            Device.last_seen_at <= end,
+        )
+    )
+    return {
+        "activity_events": activity[0] or 0,
+        "active_users": activity[1] or 0,
+        "last_activity_at": activity[2],
+        "transactions": sales[0] or 0,
+        "gross_sales": sales[1] or Decimal("0.00"),
+        "active_devices": active_devices or 0,
+    }
+
+
 @router.get("/summary")
 async def platform_summary(
     _: Principal = Depends(require_platform_admin),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
-    today_start = datetime.combine(datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc)
+    today_start, today_end = _today_bounds()
+    total = await db.scalar(select(func.count(Tenant.id)))
     pending = await db.scalar(select(func.count(Tenant.id)).where(Tenant.onboarding_status == "pending"))
     approved = await db.scalar(select(func.count(Tenant.id)).where(Tenant.onboarding_status == "approved"))
     active = await db.scalar(
@@ -60,18 +142,45 @@ async def platform_summary(
             Tenant.is_active.is_(True),
         )
     )
+    suspended = await db.scalar(
+        select(func.count(Tenant.id)).where(
+            Tenant.onboarding_status == "approved",
+            Tenant.is_active.is_(False),
+        )
+    )
     events_today = await db.scalar(
         select(func.count(AuditEvent.id)).where(AuditEvent.occurred_at >= today_start)
     )
     active_tenants_today = await db.scalar(
         select(func.count(distinct(AuditEvent.tenant_id))).where(AuditEvent.occurred_at >= today_start)
     )
+    sales_today = (
+        await db.execute(
+            select(func.count(Sale.id), func.coalesce(func.sum(Sale.total), 0)).where(
+                Sale.status == "completed",
+                Sale.completed_at >= today_start,
+                Sale.completed_at <= today_end,
+            )
+        )
+    ).one()
+    active_devices_today = await db.scalar(
+        select(func.count(Device.id)).where(
+            Device.is_active.is_(True),
+            Device.last_seen_at.is_not(None),
+            Device.last_seen_at >= today_start,
+        )
+    )
     return {
+        "total_tenants": total or 0,
         "pending_applications": pending or 0,
         "approved_tenants": approved or 0,
         "active_tenants": active or 0,
+        "suspended_tenants": suspended or 0,
         "activity_events_today": events_today or 0,
         "active_tenants_today": active_tenants_today or 0,
+        "transactions_today": sales_today[0] or 0,
+        "gross_sales_today": sales_today[1] or Decimal("0.00"),
+        "active_devices_today": active_devices_today or 0,
     }
 
 
@@ -112,9 +221,15 @@ async def list_platform_tenants(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, object]]:
     statement = select(Tenant).order_by(Tenant.created_at.desc())
-    if onboarding_status:
+    if onboarding_status == "suspended":
+        statement = statement.where(
+            Tenant.onboarding_status == "approved",
+            Tenant.is_active.is_(False),
+        )
+    elif onboarding_status:
         statement = statement.where(Tenant.onboarding_status == onboarding_status)
     result = await db.execute(statement)
+    today_start, today_end = _today_bounds()
     items: list[dict[str, object]] = []
     for tenant in result.scalars().all():
         owner = await _owner_for_tenant(db, tenant.id)
@@ -130,12 +245,14 @@ async def list_platform_tenants(
                 Branch.is_active.is_(True),
             )
         )
+        metrics = await _tenant_day_metrics(db, tenant.id, today_start, today_end)
         items.append(
             {
                 "tenant_id": tenant.id,
                 "business_name": tenant.name,
                 "business_slug": tenant.slug,
                 "is_active": tenant.is_active,
+                "status": _tenant_status(tenant),
                 "onboarding_status": tenant.onboarding_status,
                 "created_at": tenant.created_at,
                 "reviewed_at": tenant.onboarding_reviewed_at,
@@ -144,6 +261,7 @@ async def list_platform_tenants(
                 "owner_email": owner.email if owner else None,
                 "active_users": user_count or 0,
                 "active_branches": branch_count or 0,
+                **metrics,
             }
         )
     return items
@@ -166,17 +284,7 @@ async def approve_tenant(
     tenant.onboarding_reviewed_at = datetime.now(timezone.utc)
     tenant.onboarding_reviewed_by = principal.user.id
     tenant.onboarding_rejection_reason = None
-
-    memberships = (
-        await db.execute(select(TenantMembership).where(TenantMembership.tenant_id == tenant.id))
-    ).scalars().all()
-    for membership in memberships:
-        membership.is_active = True
-    branches = (
-        await db.execute(select(Branch).where(Branch.tenant_id == tenant.id))
-    ).scalars().all()
-    for branch in branches:
-        branch.is_active = True
+    await _set_tenant_access(db, tenant.id, active=True)
 
     db.add(
         AuditEvent(
@@ -213,17 +321,7 @@ async def reject_tenant(
     tenant.onboarding_reviewed_at = datetime.now(timezone.utc)
     tenant.onboarding_reviewed_by = principal.user.id
     tenant.onboarding_rejection_reason = payload.reason.strip()
-
-    memberships = (
-        await db.execute(select(TenantMembership).where(TenantMembership.tenant_id == tenant.id))
-    ).scalars().all()
-    for membership in memberships:
-        membership.is_active = False
-    branches = (
-        await db.execute(select(Branch).where(Branch.tenant_id == tenant.id))
-    ).scalars().all()
-    for branch in branches:
-        branch.is_active = False
+    await _set_tenant_access(db, tenant.id, active=False)
 
     db.add(
         AuditEvent(
@@ -244,6 +342,83 @@ async def reject_tenant(
     return {"tenant_id": tenant.id, "status": "rejected", "message": "Business application rejected"}
 
 
+@router.post("/tenants/{tenant_id}/suspend")
+async def suspend_tenant(
+    tenant_id: UUID,
+    payload: SuspensionRequest,
+    principal: Principal = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    tenant = await db.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Business not found")
+    if tenant.onboarding_status != "approved":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only approved businesses can be suspended",
+        )
+    if not tenant.is_active:
+        return {"tenant_id": tenant.id, "status": "suspended", "message": "Business is already suspended"}
+
+    tenant.is_active = False
+    await _set_tenant_access(db, tenant.id, active=False)
+    db.add(
+        AuditEvent(
+            tenant_id=tenant.id,
+            branch_id=None,
+            actor_user_id=principal.user.id,
+            actor_name=principal.user.display_name,
+            actor_email=principal.user.email,
+            actor_role="platform_admin",
+            action="platform.tenant.suspended",
+            entity_type="tenant",
+            entity_id=str(tenant.id),
+            summary=f"Platform suspended {tenant.name}",
+            details={"reason": payload.reason.strip()},
+        )
+    )
+    await db.commit()
+    return {"tenant_id": tenant.id, "status": "suspended", "message": "Business suspended"}
+
+
+@router.post("/tenants/{tenant_id}/reactivate")
+async def reactivate_tenant(
+    tenant_id: UUID,
+    principal: Principal = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    tenant = await db.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Business not found")
+    if tenant.onboarding_status != "approved":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only approved businesses can be reactivated",
+        )
+    if tenant.is_active:
+        return {"tenant_id": tenant.id, "status": "approved", "message": "Business is already active"}
+
+    tenant.is_active = True
+    await _set_tenant_access(db, tenant.id, active=True)
+    db.add(
+        AuditEvent(
+            tenant_id=tenant.id,
+            branch_id=None,
+            actor_user_id=principal.user.id,
+            actor_name=principal.user.display_name,
+            actor_email=principal.user.email,
+            actor_role="platform_admin",
+            action="platform.tenant.reactivated",
+            entity_type="tenant",
+            entity_id=str(tenant.id),
+            summary=f"Platform reactivated {tenant.name}",
+            details={},
+        )
+    )
+    await db.commit()
+    return {"tenant_id": tenant.id, "status": "approved", "message": "Business reactivated"}
+
+
 @router.get("/activity/daily")
 async def daily_tenant_activity(
     day: date | None = None,
@@ -257,32 +432,31 @@ async def daily_tenant_activity(
 
     rows: list[dict[str, object]] = []
     for tenant in tenants:
-        aggregate = (
-            await db.execute(
-                select(
-                    func.count(AuditEvent.id),
-                    func.count(distinct(AuditEvent.actor_user_id)),
-                    func.max(AuditEvent.occurred_at),
-                ).where(
-                    AuditEvent.tenant_id == tenant.id,
-                    AuditEvent.occurred_at >= start,
-                    AuditEvent.occurred_at <= end,
-                )
+        metrics = await _tenant_day_metrics(db, tenant.id, start, end)
+        branch_count = await db.scalar(
+            select(func.count(Branch.id)).where(
+                Branch.tenant_id == tenant.id,
+                Branch.is_active.is_(True),
             )
-        ).one()
+        )
         rows.append(
             {
                 "tenant_id": tenant.id,
                 "business_name": tenant.name,
-                "status": tenant.onboarding_status,
+                "status": _tenant_status(tenant),
                 "is_active": tenant.is_active,
                 "day": target_day,
-                "activity_events": aggregate[0] or 0,
-                "active_users": aggregate[1] or 0,
-                "last_activity_at": aggregate[2],
+                "active_branches": branch_count or 0,
+                **metrics,
             }
         )
-    rows.sort(key=lambda item: int(item["activity_events"]), reverse=True)
+    rows.sort(
+        key=lambda item: (
+            int(item["transactions"]),
+            int(item["activity_events"]),
+        ),
+        reverse=True,
+    )
     return rows
 
 
