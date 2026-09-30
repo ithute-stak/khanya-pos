@@ -2,7 +2,11 @@ from app.main import app
 
 
 def test_platform_onboarding_routes_are_registered() -> None:
-    paths = {route.path for route in app.routes}
+    paths = {
+        path
+        for route in app.routes
+        if (path := getattr(route, "path", None)) is not None
+    }
     assert "/api/v1/auth/signup" in paths
     assert "/api/v1/platform/summary" in paths
     assert "/api/v1/platform/onboarding/notifications" in paths
