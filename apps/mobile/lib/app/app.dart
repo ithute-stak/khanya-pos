@@ -110,9 +110,11 @@ class _AppView extends StatelessWidget {
         BlocListener<SessionBloc, SessionState>(
           listener: (context, state) {
             if (state is SessionAuthenticated) {
-              if (state.session.selectedTenantId != null) {
+              if (!state.session.isPlatformAdmin && state.session.selectedTenantId != null) {
                 context.read<SyncBloc>().add(const SyncRequested());
                 context.read<RealtimeBloc>().add(const RealtimeActivated());
+              } else {
+                context.read<RealtimeBloc>().add(const RealtimeStopped());
               }
             } else if (state is SessionUnauthenticated) {
               context.read<RealtimeBloc>().add(const RealtimeStopped());
@@ -124,7 +126,9 @@ class _AppView extends StatelessWidget {
               previous.isNetworkAvailable != current.isNetworkAvailable && current.isNetworkAvailable,
           listener: (context, state) {
             final sessionState = context.read<SessionBloc>().state;
-            if (sessionState is SessionAuthenticated && sessionState.session.selectedTenantId != null) {
+            if (sessionState is SessionAuthenticated &&
+                !sessionState.session.isPlatformAdmin &&
+                sessionState.session.selectedTenantId != null) {
               context.read<SyncBloc>().add(const SyncRequested());
               context.read<RealtimeBloc>().add(const RealtimeActivated());
             }
@@ -154,10 +158,10 @@ class _SessionGate extends StatelessWidget {
           return const KhanyaLoadingView(message: 'Restoring your secure workspace…');
         }
         if (state is SessionAuthenticated) {
+          if (state.session.isPlatformAdmin) {
+            return const PlatformAdminPage();
+          }
           if (state.session.selectedTenantId == null || state.session.selectedBranchId == null) {
-            if (state.session.isPlatformAdmin && state.session.memberships.isEmpty) {
-              return const PlatformAdminPage();
-            }
             return BusinessContextPage(state: state);
           }
           return child;
