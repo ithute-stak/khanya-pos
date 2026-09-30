@@ -150,6 +150,7 @@ class AuthRepository {
       accessToken: currentPair.accessToken,
       refreshToken: currentPair.refreshToken,
       memberships: memberships,
+      isPlatformAdmin: data['is_platform_admin'] == true,
       selectedTenantId: selectedMembership?.tenantId,
       selectedBranchId: selectedBranchId,
     );
