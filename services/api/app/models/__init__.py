@@ -1,6 +1,7 @@
 from app.models.accounting import Account, AccountingSettings, JournalEntry, JournalLine
 from app.models.audit import AuditEvent
 from app.models.base import Base
+from app.models.catalog_public import PublicCatalogListing, PublicCatalogSettings
 from app.models.commerce import (
     BranchProductStock,
     Payment,
@@ -36,10 +37,12 @@ from app.models.purchasing import (
 from app.models.returns import SaleReturn, SaleReturnLine
 from app.models.subscriptions import TenantSubscription
 from app.models.till import TillCashMovement, TillShift
+from app.models.workforce import AttendanceShift
 
 __all__ = [
     "Account",
     "AccountingSettings",
+    "AttendanceShift",
     "AuditEvent",
     "Base",
     "Branch",
@@ -62,6 +65,8 @@ __all__ = [
     "Product",
     "ProductCategory",
     "Promotion",
+    "PublicCatalogListing",
+    "PublicCatalogSettings",
     "Purchase",
     "PurchaseLine",
     "PurchaseOrder",
