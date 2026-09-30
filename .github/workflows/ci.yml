@@ -59,7 +59,17 @@ jobs:
       - name: Verify schema matches models
         run: alembic check
       - name: Unit tests
-        run: pytest -q
+        run: |
+          set -o pipefail
+          pytest -q 2>&1 | tee pytest-unit.log
+      - name: Upload backend failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: khanya-backend-failure-diagnostics
+          path: services/api/pytest-unit.log
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Financial database integration tests
         env:
           RUN_INTEGRATION_TESTS: "1"
@@ -103,7 +113,17 @@ jobs:
       - name: Generate Drift code
         run: dart run build_runner build
       - name: Analyze
-        run: flutter analyze
+        run: |
+          set -o pipefail
+          flutter analyze 2>&1 | tee flutter-analyze.log
+      - name: Upload Flutter failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: khanya-flutter-failure-diagnostics
+          path: apps/mobile/flutter-analyze.log
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Test
         run: flutter test
       - name: Generate Android production runner

@@ -10,7 +10,15 @@ from app.api.deps import Principal, get_current_principal
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.identity import Branch, MembershipBranch, Tenant, TenantMembership, User, UserSession
-from app.schemas.identity import BootstrapRequest, LoginRequest, MeResponse, MembershipSummary, RefreshRequest, TokenResponse
+from app.schemas.identity import (
+    BootstrapRequest,
+    LoginRequest,
+    MeResponse,
+    MembershipSummary,
+    OnboardingResponse,
+    RefreshRequest,
+    TokenResponse,
+)
 from app.security.permissions import Role
 from app.security.tokens import (
     TokenError,
@@ -44,29 +52,77 @@ async def _issue_session(db: AsyncSession, user: User) -> TokenResponse:
     )
 
 
-@router.post("/bootstrap", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def bootstrap(payload: BootstrapRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+async def _create_business(
+    payload: BootstrapRequest,
+    db: AsyncSession,
+    *,
+    approved: bool,
+) -> tuple[User, Tenant]:
     user = User(
         email=payload.email.strip().lower(),
         phone=payload.phone,
         display_name=payload.owner_name.strip(),
         password_hash=hash_password(payload.password),
     )
-    tenant = Tenant(name=payload.business_name.strip(), slug=payload.business_slug.strip().lower())
+    tenant = Tenant(
+        name=payload.business_name.strip(),
+        slug=payload.business_slug.strip().lower(),
+        is_active=approved,
+        onboarding_status="approved" if approved else "pending",
+    )
+    db.add_all([user, tenant])
+    await db.flush()
+    branch = Branch(
+        tenant_id=tenant.id,
+        name=payload.branch_name.strip(),
+        code=payload.branch_code.strip().upper(),
+        location=payload.branch_location,
+        is_main=True,
+        is_active=approved,
+    )
+    membership = TenantMembership(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        role=Role.OWNER.value,
+        is_active=approved,
+    )
+    db.add_all([branch, membership])
+    await db.flush()
+    db.add(MembershipBranch(membership_id=membership.id, branch_id=branch.id))
+    return user, tenant
+
+
+@router.post("/signup", response_model=OnboardingResponse, status_code=status.HTTP_201_CREATED)
+async def signup(
+    payload: BootstrapRequest,
+    db: AsyncSession = Depends(get_db),
+) -> OnboardingResponse:
     try:
-        db.add_all([user, tenant])
-        await db.flush()
-        branch = Branch(
+        _, tenant = await _create_business(payload, db, approved=False)
+        await db.commit()
+        return OnboardingResponse(
             tenant_id=tenant.id,
-            name=payload.branch_name.strip(),
-            code=payload.branch_code.strip().upper(),
-            location=payload.branch_location,
-            is_main=True,
+            business_name=tenant.name,
+            status="pending",
+            message="Your Khanya account was submitted and is waiting for platform approval.",
         )
-        membership = TenantMembership(tenant_id=tenant.id, user_id=user.id, role=Role.OWNER.value)
-        db.add_all([branch, membership])
-        await db.flush()
-        db.add(MembershipBranch(membership_id=membership.id, branch_id=branch.id))
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Business slug, email, phone, or branch code is already in use",
+        ) from exc
+
+
+@router.post("/bootstrap", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+async def bootstrap(payload: BootstrapRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    if settings.app_env.lower() == "production":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bootstrap is disabled in production; use /auth/signup",
+        )
+    try:
+        user, _ = await _create_business(payload, db, approved=True)
         tokens = await _issue_session(db, user)
         await db.commit()
         return tokens
@@ -87,6 +143,38 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
     user = result.scalar_one_or_none()
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    is_platform_admin = user.email.lower() in settings.platform_admin_email_set
+    if not is_platform_admin:
+        access_result = await db.execute(
+            select(TenantMembership.id)
+            .join(Tenant, Tenant.id == TenantMembership.tenant_id)
+            .where(
+                TenantMembership.user_id == user.id,
+                TenantMembership.is_active.is_(True),
+                Tenant.is_active.is_(True),
+                Tenant.onboarding_status == "approved",
+            )
+            .limit(1)
+        )
+        if access_result.scalar_one_or_none() is None:
+            pending_result = await db.execute(
+                select(Tenant.onboarding_status)
+                .join(TenantMembership, TenantMembership.tenant_id == Tenant.id)
+                .where(TenantMembership.user_id == user.id)
+                .limit(1)
+            )
+            onboarding_status = pending_result.scalar_one_or_none()
+            if onboarding_status == "rejected":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Your Khanya business application was not approved.",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your Khanya business account is still waiting for platform approval.",
+            )
+
     tokens = await _issue_session(db, user)
     await db.commit()
     return tokens
@@ -146,7 +234,12 @@ async def me(
     memberships_result = await db.execute(
         select(TenantMembership, Tenant)
         .join(Tenant, Tenant.id == TenantMembership.tenant_id)
-        .where(TenantMembership.user_id == principal.user.id, TenantMembership.is_active.is_(True))
+        .where(
+            TenantMembership.user_id == principal.user.id,
+            TenantMembership.is_active.is_(True),
+            Tenant.is_active.is_(True),
+            Tenant.onboarding_status == "approved",
+        )
     )
     memberships: list[MembershipSummary] = []
     for membership, tenant in memberships_result.all():
@@ -167,5 +260,6 @@ async def me(
         display_name=principal.user.display_name,
         email=principal.user.email,
         phone=principal.user.phone,
+        is_platform_admin=principal.user.email.lower() in settings.platform_admin_email_set,
         memberships=memberships,
     )

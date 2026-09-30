@@ -10,12 +10,17 @@ import 'package:khanya_pos/core/connectivity/connectivity_bloc.dart';
 import 'package:khanya_pos/core/realtime/realtime_bloc.dart';
 import 'package:khanya_pos/core/sync/sync_bloc.dart';
 import 'package:khanya_pos/features/accounting/data/accounting_repository.dart';
+import 'package:khanya_pos/features/auth/data/auth_repository.dart';
 import 'package:khanya_pos/features/auth/presentation/bloc/session_bloc.dart';
 import 'package:khanya_pos/features/auth/presentation/business_context_page.dart';
+import 'package:khanya_pos/features/auth/presentation/landing_page.dart';
 import 'package:khanya_pos/features/auth/presentation/login_page.dart';
+import 'package:khanya_pos/features/auth/presentation/signup_page.dart';
 import 'package:khanya_pos/features/customers/data/customer_repository.dart';
 import 'package:khanya_pos/features/devices/data/device_repository.dart';
 import 'package:khanya_pos/features/inventory/data/inventory_control_repository.dart';
+import 'package:khanya_pos/features/platform/data/platform_repository.dart';
+import 'package:khanya_pos/features/platform/presentation/platform_admin_page.dart';
 import 'package:khanya_pos/features/pos/data/held_sales_repository.dart';
 import 'package:khanya_pos/features/pos/data/till_repository.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
@@ -43,6 +48,8 @@ class _KhanyaPosAppState extends State<KhanyaPosApp> {
     final dependencies = widget.dependencies;
     return MultiRepositoryProvider(
       providers: [
+        RepositoryProvider<AuthRepository>.value(value: dependencies.authRepository),
+        RepositoryProvider<PlatformRepository>.value(value: dependencies.platformRepository),
         RepositoryProvider.value(value: dependencies.productRepository),
         RepositoryProvider<CustomerRepository>.value(value: dependencies.customerRepository),
         RepositoryProvider<InventoryControlRepository>.value(value: dependencies.inventoryControlRepository),
@@ -103,8 +110,12 @@ class _AppView extends StatelessWidget {
         BlocListener<SessionBloc, SessionState>(
           listener: (context, state) {
             if (state is SessionAuthenticated) {
-              context.read<SyncBloc>().add(const SyncRequested());
-              context.read<RealtimeBloc>().add(const RealtimeActivated());
+              if (!state.session.isPlatformAdmin && state.session.selectedTenantId != null) {
+                context.read<SyncBloc>().add(const SyncRequested());
+                context.read<RealtimeBloc>().add(const RealtimeActivated());
+              } else {
+                context.read<RealtimeBloc>().add(const RealtimeStopped());
+              }
             } else if (state is SessionUnauthenticated) {
               context.read<RealtimeBloc>().add(const RealtimeStopped());
             }
@@ -114,7 +125,10 @@ class _AppView extends StatelessWidget {
           listenWhen: (previous, current) =>
               previous.isNetworkAvailable != current.isNetworkAvailable && current.isNetworkAvailable,
           listener: (context, state) {
-            if (context.read<SessionBloc>().state is SessionAuthenticated) {
+            final sessionState = context.read<SessionBloc>().state;
+            if (sessionState is SessionAuthenticated &&
+                !sessionState.session.isPlatformAdmin &&
+                sessionState.session.selectedTenantId != null) {
               context.read<SyncBloc>().add(const SyncRequested());
               context.read<RealtimeBloc>().add(const RealtimeActivated());
             }
@@ -144,13 +158,60 @@ class _SessionGate extends StatelessWidget {
           return const KhanyaLoadingView(message: 'Restoring your secure workspace…');
         }
         if (state is SessionAuthenticated) {
+          if (state.session.isPlatformAdmin) {
+            return const PlatformAdminPage();
+          }
           if (state.session.selectedTenantId == null || state.session.selectedBranchId == null) {
             return BusinessContextPage(state: state);
           }
           return child;
         }
-        return const LoginPage();
+        return const _PublicGateway();
       },
     );
+  }
+}
+
+enum _PublicView { landing, login, signup }
+
+class _PublicGateway extends StatefulWidget {
+  const _PublicGateway();
+
+  @override
+  State<_PublicGateway> createState() => _PublicGatewayState();
+}
+
+class _PublicGatewayState extends State<_PublicGateway> {
+  _PublicView _view = _PublicView.landing;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (_view) {
+      case _PublicView.landing:
+        return LandingPage(
+          onSignIn: () => setState(() => _view = _PublicView.login),
+          onCreateAccount: () => setState(() => _view = _PublicView.signup),
+        );
+      case _PublicView.login:
+        return Stack(
+          children: [
+            const LoginPage(),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: IconButton.filledTonal(
+                  onPressed: () => setState(() => _view = _PublicView.landing),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  tooltip: 'Back to home',
+                ),
+              ),
+            ),
+          ],
+        );
+      case _PublicView.signup:
+        return SignupPage(
+          onBackToSignIn: () => setState(() => _view = _PublicView.login),
+        );
+    }
   }
 }

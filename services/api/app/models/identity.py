@@ -26,6 +26,12 @@ class Tenant(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(200))
     slug: Mapped[str] = mapped_column(String(80), index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    onboarding_status: Mapped[str] = mapped_column(String(24), default="approved", nullable=False, index=True)
+    onboarding_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    onboarding_reviewed_by: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    onboarding_rejection_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class Branch(UUIDPrimaryKeyMixin, TimestampMixin, Base):

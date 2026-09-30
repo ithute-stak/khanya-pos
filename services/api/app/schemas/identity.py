@@ -17,6 +17,13 @@ class BootstrapRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
+class OnboardingResponse(BaseModel):
+    tenant_id: UUID
+    business_name: str
+    status: str
+    message: str
+
+
 class LoginRequest(BaseModel):
     identifier: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=8, max_length=128)
@@ -70,6 +77,7 @@ class MeResponse(BaseModel):
     display_name: str
     email: str
     phone: str | None
+    is_platform_admin: bool = False
     memberships: list[MembershipSummary]
 
 

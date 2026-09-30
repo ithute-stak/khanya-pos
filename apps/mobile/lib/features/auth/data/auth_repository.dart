@@ -5,6 +5,20 @@ import 'package:khanya_pos/core/security/token_store.dart';
 import 'package:khanya_pos/core/session/session_context.dart';
 import 'package:khanya_pos/features/auth/domain/auth_session.dart';
 
+class OnboardingSubmission {
+  const OnboardingSubmission({
+    required this.tenantId,
+    required this.businessName,
+    required this.status,
+    required this.message,
+  });
+
+  final String tenantId;
+  final String businessName;
+  final String status;
+  final String message;
+}
+
 class AuthRepository {
   AuthRepository({
     required ApiClient apiClient,
@@ -20,6 +34,41 @@ class AuthRepository {
   final TokenStore _tokenStore;
   final SessionStore _sessionStore;
   final SessionContext _sessionContext;
+
+  Future<OnboardingSubmission> signup({
+    required String businessName,
+    required String businessSlug,
+    required String branchName,
+    required String branchCode,
+    String? branchLocation,
+    required String ownerName,
+    required String email,
+    String? phone,
+    required String password,
+  }) async {
+    final response = await _apiClient.dio.post<Map<String, dynamic>>(
+      '/auth/signup',
+      data: {
+        'business_name': businessName.trim(),
+        'business_slug': businessSlug.trim().toLowerCase(),
+        'branch_name': branchName.trim(),
+        'branch_code': branchCode.trim().toUpperCase(),
+        'branch_location': branchLocation?.trim().isEmpty == true ? null : branchLocation?.trim(),
+        'owner_name': ownerName.trim(),
+        'email': email.trim().toLowerCase(),
+        'phone': phone?.trim().isEmpty == true ? null : phone?.trim(),
+        'password': password,
+      },
+      options: Options(extra: {'skipAuthRefresh': true}),
+    );
+    final data = response.data!;
+    return OnboardingSubmission(
+      tenantId: data['tenant_id'].toString(),
+      businessName: data['business_name'].toString(),
+      status: data['status'].toString(),
+      message: data['message'].toString(),
+    );
+  }
 
   Future<AuthSession> login({required String identifier, required String password}) async {
     final response = await _apiClient.dio.post<Map<String, dynamic>>(
@@ -150,6 +199,7 @@ class AuthRepository {
       accessToken: currentPair.accessToken,
       refreshToken: currentPair.refreshToken,
       memberships: memberships,
+      isPlatformAdmin: data['is_platform_admin'] == true,
       selectedTenantId: selectedMembership?.tenantId,
       selectedBranchId: selectedBranchId,
     );

@@ -47,6 +47,7 @@ class AuthSession extends Equatable {
     required this.accessToken,
     required this.refreshToken,
     required this.memberships,
+    this.isPlatformAdmin = false,
     this.selectedTenantId,
     this.selectedBranchId,
   });
@@ -57,6 +58,7 @@ class AuthSession extends Equatable {
   final String accessToken;
   final String refreshToken;
   final List<BusinessMembership> memberships;
+  final bool isPlatformAdmin;
   final String? selectedTenantId;
   final String? selectedBranchId;
 
@@ -68,6 +70,7 @@ class AuthSession extends Equatable {
       accessToken: accessToken,
       refreshToken: refreshToken,
       memberships: memberships,
+      isPlatformAdmin: isPlatformAdmin,
       selectedTenantId: tenantId,
       selectedBranchId: branchId,
     );
@@ -81,6 +84,7 @@ class AuthSession extends Equatable {
       accessToken: accessToken,
       refreshToken: refreshToken,
       memberships: memberships,
+      isPlatformAdmin: isPlatformAdmin,
       selectedTenantId: selectedTenantId,
       selectedBranchId: selectedBranchId,
     );
@@ -97,6 +101,7 @@ class AuthSession extends Equatable {
         'user_id': userId,
         'display_name': displayName,
         'email': email,
+        'is_platform_admin': isPlatformAdmin,
         'memberships': memberships.map((membership) => membership.toJson()).toList(),
         'selected_tenant_id': selectedTenantId,
         'selected_branch_id': selectedBranchId,
@@ -116,6 +121,7 @@ class AuthSession extends Equatable {
       memberships: (json['memberships'] as List<dynamic>? ?? const [])
           .map((value) => BusinessMembership.fromJson(value as Map<String, dynamic>))
           .toList(growable: false),
+      isPlatformAdmin: json['is_platform_admin'] == true,
       selectedTenantId: json['selected_tenant_id']?.toString(),
       selectedBranchId: json['selected_branch_id']?.toString(),
     );
@@ -129,6 +135,7 @@ class AuthSession extends Equatable {
         accessToken,
         refreshToken,
         memberships,
+        isPlatformAdmin,
         selectedTenantId,
         selectedBranchId,
       ];
