@@ -18,9 +18,10 @@ import 'package:khanya_pos/features/auth/presentation/login_page.dart';
 import 'package:khanya_pos/features/auth/presentation/signup_page.dart';
 import 'package:khanya_pos/features/customers/data/customer_repository.dart';
 import 'package:khanya_pos/features/devices/data/device_repository.dart';
+import 'package:khanya_pos/features/growth/data/growth_repository.dart';
 import 'package:khanya_pos/features/inventory/data/inventory_control_repository.dart';
 import 'package:khanya_pos/features/platform/data/platform_repository.dart';
-import 'package:khanya_pos/features/platform/presentation/platform_admin_page.dart';
+import 'package:khanya_pos/features/platform/presentation/platform_admin_shell_page.dart';
 import 'package:khanya_pos/features/pos/data/held_sales_repository.dart';
 import 'package:khanya_pos/features/pos/data/till_repository.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
@@ -50,6 +51,7 @@ class _KhanyaPosAppState extends State<KhanyaPosApp> {
       providers: [
         RepositoryProvider<AuthRepository>.value(value: dependencies.authRepository),
         RepositoryProvider<PlatformRepository>.value(value: dependencies.platformRepository),
+        RepositoryProvider<GrowthRepository>.value(value: dependencies.growthRepository),
         RepositoryProvider.value(value: dependencies.productRepository),
         RepositoryProvider<CustomerRepository>.value(value: dependencies.customerRepository),
         RepositoryProvider<InventoryControlRepository>.value(value: dependencies.inventoryControlRepository),
@@ -64,9 +66,7 @@ class _KhanyaPosAppState extends State<KhanyaPosApp> {
         RepositoryProvider<AccountingRepository>.value(value: dependencies.accountingRepository),
         RepositoryProvider<BusinessSettingsRepository>.value(value: dependencies.businessSettingsRepository),
         RepositoryProvider<DeviceRepository>.value(value: dependencies.deviceRepository),
-        RepositoryProvider<PosHardwareSettingsRepository>.value(
-          value: dependencies.hardwareSettingsRepository,
-        ),
+        RepositoryProvider<PosHardwareSettingsRepository>.value(value: dependencies.hardwareSettingsRepository),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -159,7 +159,7 @@ class _SessionGate extends StatelessWidget {
         }
         if (state is SessionAuthenticated) {
           if (state.session.isPlatformAdmin) {
-            return const PlatformAdminPage();
+            return const PlatformAdminShellPage();
           }
           if (state.session.selectedTenantId == null || state.session.selectedBranchId == null) {
             return BusinessContextPage(state: state);
@@ -209,9 +209,7 @@ class _PublicGatewayState extends State<_PublicGateway> {
           ],
         );
       case _PublicView.signup:
-        return SignupPage(
-          onBackToSignIn: () => setState(() => _view = _PublicView.login),
-        );
+        return SignupPage(onBackToSignIn: () => setState(() => _view = _PublicView.login));
     }
   }
 }
