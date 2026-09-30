@@ -15,6 +15,7 @@ import 'package:khanya_pos/features/devices/data/device_repository.dart';
 import 'package:khanya_pos/features/documents/data/document_repository.dart';
 import 'package:khanya_pos/features/documents/data/receipt_file_store.dart';
 import 'package:khanya_pos/features/expenses/data/expense_repository.dart';
+import 'package:khanya_pos/features/growth/data/growth_repository.dart';
 import 'package:khanya_pos/features/inventory/data/inventory_control_repository.dart';
 import 'package:khanya_pos/features/platform/data/platform_repository.dart';
 import 'package:khanya_pos/features/pos/data/held_sales_repository.dart';
@@ -34,6 +35,7 @@ class AppDependencies {
     required this.apiClient,
     required this.authRepository,
     required this.platformRepository,
+    required this.growthRepository,
     required this.productRepository,
     required this.customerRepository,
     required this.inventoryControlRepository,
@@ -70,6 +72,7 @@ class AppDependencies {
     sessionContext.setRefreshCallback(authRepository.refreshAccessToken);
     apiClient.setUnauthorizedHandler(sessionContext.refreshAccessToken);
     final platformRepository = PlatformRepository(apiClient: apiClient);
+    final growthRepository = GrowthRepository(apiClient: apiClient);
     final productRepository = ProductRepository(
       apiClient: apiClient,
       database: database,
@@ -136,6 +139,7 @@ class AppDependencies {
       apiClient: apiClient,
       authRepository: authRepository,
       platformRepository: platformRepository,
+      growthRepository: growthRepository,
       productRepository: productRepository,
       customerRepository: customerRepository,
       inventoryControlRepository: inventoryControlRepository,
@@ -162,6 +166,7 @@ class AppDependencies {
   final ApiClient apiClient;
   final AuthRepository authRepository;
   final PlatformRepository platformRepository;
+  final GrowthRepository growthRepository;
   final ProductRepository productRepository;
   final CustomerRepository customerRepository;
   final InventoryControlRepository inventoryControlRepository;
