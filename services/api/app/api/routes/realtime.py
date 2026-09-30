@@ -57,4 +57,6 @@ async def tenant_events(websocket: WebSocket, tenant_id: UUID) -> None:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
+        pass
+    finally:
         connection_manager.disconnect(tenant_id, websocket)
