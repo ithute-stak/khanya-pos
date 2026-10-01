@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:khanya_pos/features/customers/domain/customer_models.dart';
 import 'package:khanya_pos/features/pos/data/sales_repository.dart';
 import 'package:khanya_pos/features/pos/domain/cart.dart';
+import 'package:khanya_pos/features/pos/domain/checkout_benefits.dart';
 
 sealed class CheckoutEvent extends Equatable {
   const CheckoutEvent();
@@ -51,6 +52,8 @@ class CheckoutState extends Equatable {
     this.customer,
     this.immediatePaymentMinor,
     this.cashTenderedMinor,
+    this.saleTotalMinor,
+    this.discountMinor = 0,
   });
 
   final CheckoutStatus status;
@@ -61,8 +64,11 @@ class CheckoutState extends Equatable {
   final CustomerSummary? customer;
   final int? immediatePaymentMinor;
   final int? cashTenderedMinor;
+  final int? saleTotalMinor;
+  final int discountMinor;
 
-  int get totalMinor => lines.fold(0, (total, line) => total + line.lineTotalMinor);
+  int get subtotalMinor => lines.fold(0, (total, line) => total + line.lineTotalMinor);
+  int get totalMinor => saleTotalMinor ?? subtotalMinor;
   int get paidMinor => immediatePaymentMinor ?? totalMinor;
   int get balanceDueMinor => totalMinor - paidMinor;
   int? get cashChangeMinor {
@@ -81,6 +87,8 @@ class CheckoutState extends Equatable {
         customer,
         immediatePaymentMinor,
         cashTenderedMinor,
+        saleTotalMinor,
+        discountMinor,
       ];
 }
 
@@ -98,7 +106,13 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
   ) async {
     if (state.status == CheckoutStatus.submitting || event.lines.isEmpty) return;
     final lines = List<CartLine>.unmodifiable(event.lines);
-    final totalMinor = lines.fold<int>(0, (total, line) => total + line.lineTotalMinor);
+    final subtotalMinor = lines.fold<int>(0, (total, line) => total + line.lineTotalMinor);
+    final benefits = CheckoutBenefitsStore.validFor(
+      subtotalMinor: subtotalMinor,
+      customerId: event.customer?.id,
+    );
+    final totalMinor = benefits?.totalMinor ?? subtotalMinor;
+    final discountMinor = benefits?.discountMinor ?? 0;
     final paidMinor = event.immediatePaymentMinor ?? totalMinor;
     final creditMinor = totalMinor - paidMinor;
 
@@ -111,6 +125,8 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         customer: event.customer,
         immediatePaymentMinor: paidMinor,
         cashTenderedMinor: event.cashTenderedMinor,
+        saleTotalMinor: totalMinor,
+        discountMinor: discountMinor,
       ));
       return;
     }
@@ -121,6 +137,8 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         lines: lines,
         paymentMethod: event.paymentMethod,
         immediatePaymentMinor: paidMinor,
+        saleTotalMinor: totalMinor,
+        discountMinor: discountMinor,
       ));
       return;
     }
@@ -132,6 +150,8 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         paymentMethod: event.paymentMethod,
         customer: event.customer,
         immediatePaymentMinor: paidMinor,
+        saleTotalMinor: totalMinor,
+        discountMinor: discountMinor,
       ));
       return;
     }
@@ -146,6 +166,8 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         customer: event.customer,
         immediatePaymentMinor: paidMinor,
         cashTenderedMinor: event.cashTenderedMinor,
+        saleTotalMinor: totalMinor,
+        discountMinor: discountMinor,
       ));
       return;
     }
@@ -157,6 +179,8 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
       customer: event.customer,
       immediatePaymentMinor: paidMinor,
       cashTenderedMinor: event.cashTenderedMinor,
+      saleTotalMinor: totalMinor,
+      discountMinor: discountMinor,
     ));
     try {
       final submission = await _repository.submitSale(
@@ -173,6 +197,8 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         customer: event.customer,
         immediatePaymentMinor: paidMinor,
         cashTenderedMinor: event.cashTenderedMinor,
+        saleTotalMinor: totalMinor,
+        discountMinor: discountMinor,
       ));
     } catch (error) {
       emit(CheckoutState(
@@ -183,6 +209,8 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         customer: event.customer,
         immediatePaymentMinor: paidMinor,
         cashTenderedMinor: event.cashTenderedMinor,
+        saleTotalMinor: totalMinor,
+        discountMinor: discountMinor,
       ));
     }
   }
