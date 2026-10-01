@@ -15,6 +15,7 @@ from app.api.routes import (
     inventory_controls,
     platform,
     products,
+    purchase_orders,
     purchases,
     realtime,
     receivables,
@@ -25,6 +26,7 @@ from app.api.routes import (
     suppliers,
     tenants,
     till,
+    workforce,
 )
 
 api_router = APIRouter()
@@ -34,6 +36,7 @@ api_router.include_router(platform.router, prefix="/platform", tags=["platform"]
 api_router.include_router(subscriptions.router, prefix="/subscriptions", tags=["subscriptions"])
 api_router.include_router(tenants.router, prefix="/tenants", tags=["tenants"])
 api_router.include_router(staff.router, prefix="/staff", tags=["staff"])
+api_router.include_router(workforce.router, prefix="/workforce", tags=["staff", "workforce"])
 api_router.include_router(devices.router, prefix="/devices", tags=["devices"])
 api_router.include_router(products.router, prefix="/products", tags=["products"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
@@ -44,6 +47,7 @@ api_router.include_router(customers.router, prefix="/customers", tags=["customer
 api_router.include_router(receivables.router, prefix="/customers", tags=["customers", "accounting"])
 api_router.include_router(suppliers.router, prefix="/suppliers", tags=["suppliers"])
 api_router.include_router(purchases.router, prefix="/purchases", tags=["purchases"])
+api_router.include_router(purchase_orders.router, prefix="/purchase-orders", tags=["purchases", "procurement"])
 api_router.include_router(expenses.router, prefix="/expenses", tags=["expenses"])
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(growth.router, prefix="/growth", tags=["growth", "business-os"])
