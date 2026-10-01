@@ -18,6 +18,7 @@ from app.api.routes import (
     realtime,
     receivables,
     reports,
+    retail_checkout,
     retail_ops,
     sales,
     staff,
@@ -45,6 +46,7 @@ api_router.include_router(receivables.router, prefix="/customers", tags=["custom
 api_router.include_router(suppliers.router, prefix="/suppliers", tags=["suppliers"])
 api_router.include_router(purchases.router, prefix="/purchases", tags=["purchases"])
 api_router.include_router(retail_ops.router, prefix="/retail", tags=["retail"])
+api_router.include_router(retail_checkout.router, prefix="/retail", tags=["retail"])
 api_router.include_router(expenses.router, prefix="/expenses", tags=["expenses"])
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(accounting.router, prefix="/accounting", tags=["accounting"])
