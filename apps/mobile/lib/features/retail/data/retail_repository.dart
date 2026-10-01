@@ -116,7 +116,7 @@ class RetailRepository {
   Future<List<Map<String, dynamic>>> purchaseOrders({String? status}) async {
     final response = await _apiClient.dio.get<List<dynamic>>(
       '/retail/purchase-orders',
-      queryParameters: {if (status != null) 'status': status},
+      queryParameters: {'status': ?status},
     );
     return (response.data ?? const <dynamic>[])
         .map((value) => Map<String, dynamic>.from(value as Map))
