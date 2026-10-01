@@ -11,6 +11,7 @@ from app.models.returns import SaleReturn, SaleReturnLine
 from app.models.till import TillShift
 from app.schemas.returns import SaleReturnRequest
 from app.services.accounting import PostingLine, payment_account_code, post_journal
+from app.services.growth import adjust_loyalty_for_return
 from app.services.idempotency import acquire_operation_lock
 from app.services.outbox import enqueue_event
 from app.services.pricing import line_total as calculate_line_total
@@ -211,6 +212,7 @@ async def sale_detail(
         "status": sale.status,
         "total": money(sale.total),
         "subtotal": money(sale.subtotal),
+        "discount_total": money(sale.discount_total),
         "tax_total": money(sale.tax_total),
         "balance_due": money(sale.balance_due),
         "payment_status": sale.payment_status,
@@ -370,9 +372,6 @@ async def process_sale_return(
 
         original_cost_total = calculate_line_total(unit_cost(line.unit_cost), line.quantity)
         if requested_quantity == available:
-            # The last return takes exact monetary remainders. This prevents
-            # repeated partial-return rounding from stranding cents in tax,
-            # inventory, COGS or revenue accounts.
             amount = money(line.line_total - prior_amount)
             tax = money(line.tax_total - prior_tax)
             cost = money(original_cost_total - prior_cost)
@@ -399,9 +398,6 @@ async def process_sale_return(
             f"A refund method is required for {refunded_amount} that must be paid back to the customer"
         )
 
-    # Cash refunds must belong to an open drawer. Locking the shift row also
-    # serializes against shift close so a refund cannot commit invisibly after
-    # the drawer has already been reconciled.
     if refunded_amount > 0 and refund_method == "cash":
         cash_shift = (
             await db.execute(
@@ -507,6 +503,16 @@ async def process_sale_return(
     if sale.balance_due == 0:
         sale.payment_status = "paid"
 
+    loyalty_points_adjusted = await adjust_loyalty_for_return(
+        db,
+        tenant_id=tenant_id,
+        sale_id=sale.id,
+        customer_id=sale.customer_id,
+        sale_total=sale.total,
+        sale_return_id=sale_return.id,
+        return_total=return_total,
+    )
+
     accounting_lines: list[PostingLine] = []
     net_revenue = money(return_total - tax_total)
     if net_revenue > 0:
@@ -565,6 +571,7 @@ async def process_sale_return(
             "receivable_reduction": str(receivable_reduction),
             "refunded_amount": str(refunded_amount),
             "refund_method": refund_method,
+            "loyalty_points_adjusted": loyalty_points_adjusted,
         },
     )
 
