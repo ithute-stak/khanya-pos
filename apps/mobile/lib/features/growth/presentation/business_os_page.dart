@@ -193,7 +193,7 @@ class _BusinessOsPageState extends State<BusinessOsPage> with SingleTickerProvid
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           DropdownButtonFormField<String>(
-            value: _selectedCustomerId,
+            initialValue: _selectedCustomerId,
             decoration: const InputDecoration(labelText: 'Customer', border: OutlineInputBorder()),
             items: customerItems,
             onChanged: (value) {
@@ -291,7 +291,7 @@ class _BusinessOsPageState extends State<BusinessOsPage> with SingleTickerProvid
                 TextField(controller: name, decoration: const InputDecoration(labelText: 'Name')),
                 TextField(controller: code, decoration: const InputDecoration(labelText: 'Code')),
                 DropdownButtonFormField<String>(
-                  value: type,
+                  initialValue: type,
                   items: const [
                     DropdownMenuItem(value: 'percentage', child: Text('Percentage')),
                     DropdownMenuItem(value: 'fixed', child: Text('Fixed amount')),
@@ -342,7 +342,7 @@ class _BusinessOsPageState extends State<BusinessOsPage> with SingleTickerProvid
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   DropdownButtonFormField<String>(
-                    value: type,
+                    initialValue: type,
                     items: const [
                       DropdownMenuItem(value: 'quotation', child: Text('Quotation')),
                       DropdownMenuItem(value: 'invoice', child: Text('Invoice')),
@@ -351,7 +351,7 @@ class _BusinessOsPageState extends State<BusinessOsPage> with SingleTickerProvid
                     decoration: const InputDecoration(labelText: 'Document type'),
                   ),
                   DropdownButtonFormField<String>(
-                    value: customerId,
+                    initialValue: customerId,
                     decoration: const InputDecoration(labelText: 'Existing customer (optional)'),
                     items: _customers
                         .map((customer) => DropdownMenuItem<String>(
@@ -419,7 +419,7 @@ class _BusinessOsPageState extends State<BusinessOsPage> with SingleTickerProvid
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
-                  value: type,
+                  initialValue: type,
                   items: const [
                     DropdownMenuItem(value: 'earn', child: Text('Earn')),
                     DropdownMenuItem(value: 'redeem', child: Text('Redeem')),
@@ -494,7 +494,7 @@ class _Section extends StatelessWidget {
                 ],
               ),
             ),
-            if (action != null) action!,
+            ?action,
           ],
         ),
         const SizedBox(height: 24),
