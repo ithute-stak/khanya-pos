@@ -97,12 +97,6 @@ def _allocate_line_discounts(
     subtotal: Decimal,
     discount_total: Decimal,
 ) -> dict[UUID, Decimal]:
-    """Allocate a header discount to sale lines without losing rounding cents.
-
-    SaleLine.line_total remains the gross line amount while discount_total stores
-    the exact allocated share. Returns use the net line amount so a discounted
-    sale can never refund more than the customer actually paid/owed.
-    """
     if discount_total <= 0 or subtotal <= 0:
         return {product_id: Decimal("0.00") for product_id in product_ids}
 
@@ -261,6 +255,7 @@ async def complete_sale(
         qty = requested[product_id]
         current_cost = unit_cost(product.cost_price)
         gross_line_total = line_total(product.selling_price, qty)
+        allocated_discount = line_discounts[product_id]
         db.add(
             SaleLine(
                 sale_id=sale.id,
@@ -268,9 +263,9 @@ async def complete_sale(
                 quantity=qty,
                 unit_price=money(product.selling_price),
                 unit_cost=current_cost,
-                discount_total=line_discounts[product_id],
+                discount_total=allocated_discount,
                 tax_total=Decimal("0.00"),
-                line_total=gross_line_total,
+                line_total=money(gross_line_total - allocated_discount),
             )
         )
 
