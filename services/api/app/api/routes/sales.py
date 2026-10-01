@@ -122,6 +122,8 @@ async def complete_pos_sale(
         "sale_number": sale.sale_number,
         "client_operation_id": sale.client_operation_id,
         "customer_id": sale.customer_id,
+        "subtotal": sale.subtotal,
+        "discount_total": sale.discount_total,
         "total": sale.total,
         "balance_due": sale.balance_due,
         "status": sale.status,
