@@ -9,6 +9,7 @@ from app.api.routes import (
     devices,
     documents,
     expenses,
+    growth,
     health,
     inventory,
     inventory_controls,
@@ -45,6 +46,7 @@ api_router.include_router(suppliers.router, prefix="/suppliers", tags=["supplier
 api_router.include_router(purchases.router, prefix="/purchases", tags=["purchases"])
 api_router.include_router(expenses.router, prefix="/expenses", tags=["expenses"])
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
+api_router.include_router(growth.router, prefix="/growth", tags=["growth", "business-os"])
 api_router.include_router(accounting.router, prefix="/accounting", tags=["accounting"])
 api_router.include_router(accounting_cash_flow.router, prefix="/accounting", tags=["accounting"])
 api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
