@@ -23,6 +23,7 @@ import 'package:khanya_pos/features/pos/data/till_repository.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 import 'package:khanya_pos/features/purchasing/data/purchasing_repository.dart';
 import 'package:khanya_pos/features/reports/data/reports_repository.dart';
+import 'package:khanya_pos/features/retail/data/retail_repository.dart';
 import 'package:khanya_pos/features/settings/data/business_settings_repository.dart';
 import 'package:khanya_pos/features/staff/data/staff_repository.dart';
 
@@ -42,6 +43,7 @@ class AppDependencies {
     required this.heldSalesRepository,
     required this.tillRepository,
     required this.purchasingRepository,
+    required this.retailRepository,
     required this.documentRepository,
     required this.expenseRepository,
     required this.reportsRepository,
@@ -110,6 +112,7 @@ class AppDependencies {
       sessionContext: sessionContext,
       syncService: syncService,
     );
+    final retailRepository = RetailRepository(apiClient: apiClient);
     final documentRepository = DocumentRepository(
       database: database,
       sessionContext: sessionContext,
@@ -144,6 +147,7 @@ class AppDependencies {
       heldSalesRepository: heldSalesRepository,
       tillRepository: tillRepository,
       purchasingRepository: purchasingRepository,
+      retailRepository: retailRepository,
       documentRepository: documentRepository,
       expenseRepository: expenseRepository,
       reportsRepository: reportsRepository,
@@ -170,6 +174,7 @@ class AppDependencies {
   final HeldSalesRepository heldSalesRepository;
   final TillRepository tillRepository;
   final PurchasingRepository purchasingRepository;
+  final RetailRepository retailRepository;
   final DocumentRepository documentRepository;
   final ExpenseRepository expenseRepository;
   final ReportsRepository reportsRepository;
