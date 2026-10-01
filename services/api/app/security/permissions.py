@@ -30,6 +30,8 @@ ALL_PERMISSIONS = frozenset(
         "expenses.write",
         "customers.read",
         "customers.write",
+        "growth.read",
+        "growth.manage",
         "accounting.read",
         "accounting.write",
         "reports.read",
@@ -58,6 +60,8 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
             "expenses.write",
             "customers.read",
             "customers.write",
+            "growth.read",
+            "growth.manage",
             "accounting.read",
             "reports.read",
             "audit.read",
@@ -71,6 +75,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
             "inventory.read",
             "customers.read",
             "customers.write",
+            "growth.read",
         }
     ),
     Role.ACCOUNTANT: frozenset(
@@ -81,6 +86,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
             "purchases.read",
             "expenses.read",
             "customers.read",
+            "growth.read",
             "accounting.read",
             "accounting.write",
             "reports.read",
