@@ -19,6 +19,22 @@ class SaleSubmission {
   final SaleSubmissionStatus status;
 }
 
+class SaleCheckoutBenefits {
+  const SaleCheckoutBenefits({
+    required this.grossTotalMinor,
+    required this.checkoutTotalMinor,
+    this.promotionCode,
+    this.loyaltyPointsToRedeem = 0,
+  });
+
+  final int grossTotalMinor;
+  final int checkoutTotalMinor;
+  final String? promotionCode;
+  final int loyaltyPointsToRedeem;
+
+  int get discountMinor => grossTotalMinor - checkoutTotalMinor;
+}
+
 class SalesRepository {
   SalesRepository({
     ApiClient? apiClient,
@@ -40,6 +56,17 @@ class SalesRepository {
   final SessionContext _sessionContext;
   final SyncService _syncService;
   final Uuid _uuid;
+  SaleCheckoutBenefits? _checkoutBenefits;
+
+  SaleCheckoutBenefits? get checkoutBenefits => _checkoutBenefits;
+
+  void configureCheckoutBenefits(SaleCheckoutBenefits? value) {
+    _checkoutBenefits = value;
+  }
+
+  void clearCheckoutBenefits() {
+    _checkoutBenefits = null;
+  }
 
   Future<SaleSubmission> submitSale({
     required List<CartLine> lines,
@@ -59,13 +86,25 @@ class SalesRepository {
 
     final clientOperationId = _uuid.v4();
     final grossTotalMinor = lines.fold<int>(0, (total, line) => total + line.lineTotalMinor);
-    final totalMinor = checkoutTotalMinor ?? grossTotalMinor;
+    final configuredBenefits = _checkoutBenefits;
+    final applicableBenefits = configuredBenefits != null && configuredBenefits.grossTotalMinor == grossTotalMinor
+        ? configuredBenefits
+        : null;
+    final totalMinor = checkoutTotalMinor ?? applicableBenefits?.checkoutTotalMinor ?? grossTotalMinor;
+    final effectivePromotion = promotionCode ?? applicableBenefits?.promotionCode;
+    final effectiveLoyaltyPoints = loyaltyPointsToRedeem > 0
+        ? loyaltyPointsToRedeem
+        : applicableBenefits?.loyaltyPointsToRedeem ?? 0;
     if (totalMinor < 0 || totalMinor > grossTotalMinor) {
       throw StateError('Checkout total must be between zero and the basket total.');
     }
-    final paidMinor = immediatePaymentMinor ?? totalMinor;
-    if (paidMinor < 0 || paidMinor > totalMinor) {
-      throw StateError('Immediate payment must be between zero and the sale total.');
+    var paidMinor = immediatePaymentMinor ?? totalMinor;
+    if (paidMinor == grossTotalMinor && totalMinor < grossTotalMinor) {
+      paidMinor = totalMinor;
+    }
+    if (paidMinor > totalMinor) paidMinor = totalMinor;
+    if (paidMinor < 0) {
+      throw StateError('Immediate payment cannot be negative.');
     }
     final creditMinor = totalMinor - paidMinor;
     if (creditMinor > 0 && customerId == null) {
@@ -84,12 +123,12 @@ class SalesRepository {
       creditReserved = true;
     }
 
-    final normalizedPromotion = promotionCode?.trim().toUpperCase();
+    final normalizedPromotion = effectivePromotion?.trim().toUpperCase();
     final payload = <String, dynamic>{
       'client_operation_id': clientOperationId,
       'customer_id': customerId,
       'promotion_code': normalizedPromotion == null || normalizedPromotion.isEmpty ? null : normalizedPromotion,
-      'loyalty_points_to_redeem': loyaltyPointsToRedeem,
+      'loyalty_points_to_redeem': effectiveLoyaltyPoints,
       'items': [
         for (final line in lines)
           {'product_id': line.product.id, 'quantity': line.quantity},
