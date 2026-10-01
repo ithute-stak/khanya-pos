@@ -84,6 +84,24 @@ class RetailRepository {
     return response.data ?? const <String, dynamic>{};
   }
 
+  Future<Map<String, dynamic>> previewCheckoutBenefits({
+    required int subtotalMinor,
+    String? customerId,
+    String? promotionCode,
+    int loyaltyPointsToRedeem = 0,
+  }) async {
+    final response = await _apiClient.dio.post<Map<String, dynamic>>(
+      '/retail/checkout/preview',
+      data: {
+        'subtotal': ScaledDecimal.fromMinor(subtotalMinor),
+        'customer_id': customerId,
+        'promotion_code': _nullableText(promotionCode),
+        'loyalty_points_to_redeem': loyaltyPointsToRedeem,
+      },
+    );
+    return response.data ?? const <String, dynamic>{};
+  }
+
   Future<void> adjustLoyalty({
     required String customerId,
     required int pointsDelta,
