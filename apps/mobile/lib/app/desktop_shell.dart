@@ -274,6 +274,12 @@ const _items = <_DesktopNavItem>[
     allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
   ),
   _DesktopNavItem(
+    label: 'Business OS',
+    path: '/business-os',
+    icon: Icons.auto_graph_outlined,
+    allowedRoles: {'owner', 'admin', 'manager'},
+  ),
+  _DesktopNavItem(
     label: 'Accounting',
     path: '/accounting',
     icon: Icons.account_balance_outlined,
