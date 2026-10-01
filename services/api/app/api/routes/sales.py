@@ -7,6 +7,7 @@ from app.api.deps import Principal, TenantContext, get_current_principal, requir
 from app.core.database import get_db
 from app.schemas.commerce import SaleCompleteRequest
 from app.schemas.returns import SaleReturnRequest
+from app.services.growth import GrowthValidationError
 from app.services.sales import (
     InsufficientStockError,
     PaymentMismatchError,
@@ -113,7 +114,7 @@ async def complete_pos_sale(
     except InsufficientStockError as exc:
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except PaymentMismatchError as exc:
+    except (PaymentMismatchError, GrowthValidationError) as exc:
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -122,11 +123,15 @@ async def complete_pos_sale(
         "sale_number": sale.sale_number,
         "client_operation_id": sale.client_operation_id,
         "customer_id": sale.customer_id,
+        "subtotal": sale.subtotal,
+        "discount_total": sale.discount_total,
         "total": sale.total,
         "balance_due": sale.balance_due,
         "status": sale.status,
         "payment_status": sale.payment_status,
         "due_at": sale.due_at,
         "completed_at": sale.completed_at,
+        "loyalty_points_earned": sale.loyalty_points_earned,
+        "loyalty_points_redeemed": sale.loyalty_points_redeemed,
         "idempotent_replay": sale.idempotent_replay,
     }
