@@ -310,6 +310,11 @@ const _items = <_DesktopNavItem>[
     allowedRoles: {'owner', 'admin', 'manager'},
   ),
   _DesktopNavItem(
+    label: 'Workforce',
+    path: '/workforce',
+    icon: Icons.badge_outlined,
+  ),
+  _DesktopNavItem(
     label: 'Workstations',
     path: '/devices',
     icon: Icons.desktop_windows_outlined,
@@ -323,6 +328,12 @@ const _items = <_DesktopNavItem>[
     path: '/purchases',
     icon: Icons.shopping_bag_outlined,
     shortcut: 'F6',
+  ),
+  _DesktopNavItem(
+    label: 'Purchase Orders',
+    path: '/purchase-orders',
+    icon: Icons.fact_check_outlined,
+    allowedRoles: {'owner', 'admin', 'manager', 'stock_controller'},
   ),
   _DesktopNavItem(label: 'Suppliers', path: '/suppliers', icon: Icons.local_shipping_outlined, shortcut: 'F7'),
   _DesktopNavItem(label: 'Receipt Vault', path: '/receipts', icon: Icons.receipt_long_outlined, shortcut: 'F8'),
