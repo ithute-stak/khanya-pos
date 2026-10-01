@@ -268,6 +268,12 @@ const _items = <_DesktopNavItem>[
   _DesktopNavItem(label: 'Sales History', path: '/sales', icon: Icons.history_outlined),
   _DesktopNavItem(label: 'Till & Shift', path: '/till', icon: Icons.price_check_outlined),
   _DesktopNavItem(
+    label: 'Growth & Loyalty',
+    path: '/growth',
+    icon: Icons.loyalty_outlined,
+    allowedRoles: {'owner', 'admin', 'manager', 'accountant'},
+  ),
+  _DesktopNavItem(
     label: 'Reports',
     path: '/reports',
     icon: Icons.analytics_outlined,
