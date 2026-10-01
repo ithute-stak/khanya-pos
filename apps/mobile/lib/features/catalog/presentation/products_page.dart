@@ -44,24 +44,11 @@ class _ProductsViewState extends State<_ProductsView> {
 
   Future<void> _showAddProduct(BuildContext context) async {
     final repository = context.read<ProductRepository>();
-    final width = MediaQuery.sizeOf(context).width;
-    final created = width < 700
-        ? await showModalBottomSheet<bool>(
-            context: context,
-            isScrollControlled: true,
-            useSafeArea: true,
-            showDragHandle: true,
-            builder: (_) => _AddProductForm(repository: repository, asSheet: true),
-          )
-        : await showDialog<bool>(
-            context: context,
-            builder: (_) => Dialog(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 660),
-                child: _AddProductForm(repository: repository),
-              ),
-            ),
-          );
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => _AddProductPage(repository: repository),
+      ),
+    );
 
     if (created == true && context.mounted) {
       context.read<ProductCatalogBloc>().add(const ProductCatalogRefreshRequested());
@@ -575,17 +562,16 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-class _AddProductForm extends StatefulWidget {
-  const _AddProductForm({required this.repository, this.asSheet = false});
+class _AddProductPage extends StatefulWidget {
+  const _AddProductPage({required this.repository});
 
   final ProductRepository repository;
-  final bool asSheet;
 
   @override
-  State<_AddProductForm> createState() => _AddProductFormState();
+  State<_AddProductPage> createState() => _AddProductPageState();
 }
 
-class _AddProductFormState extends State<_AddProductForm> {
+class _AddProductPageState extends State<_AddProductPage> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _sku = TextEditingController();
@@ -655,154 +641,182 @@ class _AddProductFormState extends State<_AddProductForm> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, widget.asSheet ? 0 : 20, 20, 20 + keyboardInset),
-      child: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Add product'),
+        leading: IconButton(
+          tooltip: 'Back to products',
+          onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+      ),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 700;
+            return SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                compact ? 16 : 28,
+                18,
+                compact ? 16 : 28,
+                32,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 900),
+                  child: Form(
+                    key: _formKey,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Add product', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 3),
                         Text(
-                          'Create a product for this business catalogue.',
-                          style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                          'Product details',
+                          style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          'Add the information used at checkout, purchasing and stock control.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+                        Card(
+                          margin: EdgeInsets.zero,
+                          child: Padding(
+                            padding: EdgeInsets.all(compact ? 16 : 22),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                TextFormField(
+                                  controller: _name,
+                                  autofocus: true,
+                                  textInputAction: TextInputAction.next,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Product name',
+                                    prefixIcon: Icon(Icons.inventory_2_outlined),
+                                  ),
+                                  validator: (value) =>
+                                      _requiredText(value, 'Product name', minLength: 2),
+                                ),
+                                const SizedBox(height: 14),
+                                _ResponsiveFields(
+                                  compact: compact,
+                                  left: TextFormField(
+                                    controller: _sku,
+                                    textCapitalization: TextCapitalization.characters,
+                                    textInputAction: TextInputAction.next,
+                                    decoration: const InputDecoration(labelText: 'SKU'),
+                                    validator: (value) => _requiredText(value, 'SKU'),
+                                  ),
+                                  right: TextFormField(
+                                    controller: _barcode,
+                                    textInputAction: TextInputAction.next,
+                                    decoration: const InputDecoration(labelText: 'Barcode (optional)'),
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                _ResponsiveFields(
+                                  compact: compact,
+                                  left: TextFormField(
+                                    controller: _unit,
+                                    textInputAction: TextInputAction.next,
+                                    decoration: const InputDecoration(labelText: 'Unit'),
+                                    validator: (value) => _requiredText(value, 'Unit'),
+                                  ),
+                                  right: TextFormField(
+                                    controller: _sellingPrice,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    textInputAction: TextInputAction.next,
+                                    decoration: const InputDecoration(labelText: 'Selling price (M)'),
+                                    validator: (value) =>
+                                        _nonNegativeNumber(value, 'selling price'),
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                _ResponsiveFields(
+                                  compact: compact,
+                                  left: TextFormField(
+                                    controller: _costPrice,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    textInputAction: TextInputAction.next,
+                                    decoration: const InputDecoration(labelText: 'Cost price (M)'),
+                                    validator: (value) => _nonNegativeNumber(value, 'cost price'),
+                                  ),
+                                  right: TextFormField(
+                                    controller: _reorderLevel,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    textInputAction: TextInputAction.done,
+                                    onFieldSubmitted: (_) => _save(),
+                                    decoration: const InputDecoration(labelText: 'Reorder level'),
+                                    validator: (value) =>
+                                        _nonNegativeNumber(value, 'reorder level'),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                SwitchListTile.adaptive(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: const Text('Track stock'),
+                                  subtitle: const Text(
+                                    'Show on-hand quantity and low-stock warnings for this product.',
+                                  ),
+                                  value: _trackStock,
+                                  onChanged: _saving
+                                      ? null
+                                      : (value) => setState(() => _trackStock = value),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.errorContainer,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              _error!,
+                              style: TextStyle(color: theme.colorScheme.onErrorContainer),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Wrap(
+                            spacing: 12,
+                            runSpacing: 10,
+                            children: [
+                              OutlinedButton(
+                                onPressed: _saving
+                                    ? null
+                                    : () => Navigator.of(context).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              FilledButton.icon(
+                                onPressed: _saving ? null : _save,
+                                icon: _saving
+                                    ? const SizedBox.square(
+                                        dimension: 18,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : const Icon(Icons.save_outlined),
+                                label: Text(_saving ? 'Saving...' : 'Save product'),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  if (!widget.asSheet)
-                    IconButton(
-                      tooltip: 'Close',
-                      onPressed: _saving ? null : () => Navigator.of(context).pop(false),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: _name,
-                autofocus: true,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Product name',
-                  prefixIcon: Icon(Icons.inventory_2_outlined),
-                ),
-                validator: (value) => _requiredText(value, 'Product name', minLength: 2),
-              ),
-              const SizedBox(height: 12),
-              LayoutBuilder(
-                builder: (context, constraints) => _ResponsiveFields(
-                  compact: constraints.maxWidth < 520,
-                  left: TextFormField(
-                    controller: _sku,
-                    textCapitalization: TextCapitalization.characters,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(labelText: 'SKU'),
-                    validator: (value) => _requiredText(value, 'SKU'),
-                  ),
-                  right: TextFormField(
-                    controller: _barcode,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(labelText: 'Barcode (optional)'),
-                  ),
                 ),
               ),
-              const SizedBox(height: 12),
-              LayoutBuilder(
-                builder: (context, constraints) => _ResponsiveFields(
-                  compact: constraints.maxWidth < 520,
-                  left: TextFormField(
-                    controller: _unit,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(labelText: 'Unit'),
-                    validator: (value) => _requiredText(value, 'Unit'),
-                  ),
-                  right: TextFormField(
-                    controller: _sellingPrice,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(labelText: 'Selling price (M)'),
-                    validator: (value) => _nonNegativeNumber(value, 'selling price'),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              LayoutBuilder(
-                builder: (context, constraints) => _ResponsiveFields(
-                  compact: constraints.maxWidth < 520,
-                  left: TextFormField(
-                    controller: _costPrice,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(labelText: 'Cost price (M)'),
-                    validator: (value) => _nonNegativeNumber(value, 'cost price'),
-                  ),
-                  right: TextFormField(
-                    controller: _reorderLevel,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => _save(),
-                    decoration: const InputDecoration(labelText: 'Reorder level'),
-                    validator: (value) => _nonNegativeNumber(value, 'reorder level'),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Track stock'),
-                subtitle: const Text('Show on-hand quantity and low-stock warnings for this product.'),
-                value: _trackStock,
-                onChanged: _saving ? null : (value) => setState(() => _trackStock = value),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(_error!, style: TextStyle(color: theme.colorScheme.onErrorContainer)),
-                ),
-              ],
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _saving ? null : () => Navigator.of(context).pop(false),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _saving ? null : _save,
-                      icon: _saving
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.save_outlined),
-                      label: Text(_saving ? 'Saving...' : 'Save product'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
