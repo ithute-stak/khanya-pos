@@ -89,6 +89,36 @@ def _as_result(sale: Sale, *, replay: bool) -> CompletedSale:
     )
 
 
+def _allocate_line_discounts(
+    *,
+    product_ids: list[UUID],
+    products: dict[UUID, Product],
+    requested: dict[UUID, Decimal],
+    subtotal: Decimal,
+    discount_total: Decimal,
+) -> dict[UUID, Decimal]:
+    """Allocate a header discount to sale lines without losing rounding cents.
+
+    SaleLine.line_total remains the gross line amount while discount_total stores
+    the exact allocated share. Returns use the net line amount so a discounted
+    sale can never refund more than the customer actually paid/owed.
+    """
+    if discount_total <= 0 or subtotal <= 0:
+        return {product_id: Decimal("0.00") for product_id in product_ids}
+
+    allocated: dict[UUID, Decimal] = {}
+    running = Decimal("0.00")
+    for index, product_id in enumerate(product_ids):
+        gross = line_total(products[product_id].selling_price, requested[product_id])
+        if index == len(product_ids) - 1:
+            share = money(discount_total - running)
+        else:
+            share = money(discount_total * gross / subtotal)
+            running = money(running + share)
+        allocated[product_id] = min(gross, max(Decimal("0.00"), share))
+    return allocated
+
+
 async def complete_sale(
     db: AsyncSession,
     *,
@@ -116,8 +146,9 @@ async def complete_sale(
     locked_products: dict[UUID, Product] = {}
     locked_stocks: dict[UUID, BranchProductStock | None] = {}
     subtotal = Decimal("0.00")
+    sorted_product_ids = sorted(requested, key=str)
 
-    for product_id in sorted(requested, key=str):
+    for product_id in sorted_product_ids:
         product_result = await db.execute(
             select(Product)
             .where(Product.id == product_id, Product.tenant_id == tenant_id, Product.is_active.is_(True))
@@ -160,6 +191,13 @@ async def complete_sale(
 
     discount_total = discount_plan.total_discount
     sale_total = money(subtotal - discount_total)
+    line_discounts = _allocate_line_discounts(
+        product_ids=sorted_product_ids,
+        products=locked_products,
+        requested=requested,
+        subtotal=subtotal,
+        discount_total=discount_total,
+    )
     payment_total = money(
         sum((money(payment.amount) for payment in payload.payments), Decimal("0.00"))
     )
@@ -218,10 +256,11 @@ async def complete_sale(
     await db.flush()
 
     cost_of_goods = Decimal("0.00")
-    for product_id in sorted(requested, key=str):
+    for product_id in sorted_product_ids:
         product = locked_products[product_id]
         qty = requested[product_id]
         current_cost = unit_cost(product.cost_price)
+        gross_line_total = line_total(product.selling_price, qty)
         db.add(
             SaleLine(
                 sale_id=sale.id,
@@ -229,9 +268,9 @@ async def complete_sale(
                 quantity=qty,
                 unit_price=money(product.selling_price),
                 unit_cost=current_cost,
-                discount_total=Decimal("0.00"),
+                discount_total=line_discounts[product_id],
                 tax_total=Decimal("0.00"),
-                line_total=line_total(product.selling_price, qty),
+                line_total=gross_line_total,
             )
         )
 
