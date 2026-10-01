@@ -31,6 +31,16 @@ from app.models.purchasing import (
     Supplier,
     SupplierPayment,
 )
+from app.models.retail_ops import (
+    LoyaltyAccount,
+    LoyaltyProgram,
+    LoyaltyTransaction,
+    Promotion,
+    PromotionRedemption,
+    PurchaseOrder,
+    PurchaseOrderLine,
+    TenantNotification,
+)
 from app.models.returns import SaleReturn, SaleReturnLine
 from app.models.subscriptions import TenantSubscription
 from app.models.till import TillCashMovement, TillShift
@@ -50,14 +60,21 @@ __all__ = [
     "Expense",
     "JournalEntry",
     "JournalLine",
+    "LoyaltyAccount",
+    "LoyaltyProgram",
+    "LoyaltyTransaction",
     "MembershipBranch",
     "OutboxEvent",
     "Payment",
     "PlatformEvent",
     "Product",
     "ProductCategory",
+    "Promotion",
+    "PromotionRedemption",
     "Purchase",
     "PurchaseLine",
+    "PurchaseOrder",
+    "PurchaseOrderLine",
     "Sale",
     "SaleLine",
     "SaleReturn",
@@ -71,6 +88,7 @@ __all__ = [
     "SupplierPayment",
     "Tenant",
     "TenantMembership",
+    "TenantNotification",
     "TenantSubscription",
     "TillCashMovement",
     "TillShift",
