@@ -15,6 +15,13 @@ from app.services.customers import (
     CustomerValidationError,
     assert_credit_available,
 )
+from app.services.growth import (
+    LoyaltyApplication,
+    PromotionApplication,
+    record_growth_for_sale,
+    resolve_loyalty_redemption,
+    resolve_promotion,
+)
 from app.services.idempotency import acquire_operation_lock
 from app.services.outbox import enqueue_event
 from app.services.pricing import line_total, money, quantity, unit_cost
@@ -43,12 +50,16 @@ class CompletedSale:
     sale_number: str
     client_operation_id: UUID
     customer_id: UUID | None
+    subtotal: Decimal
+    discount_total: Decimal
     total: Decimal
     balance_due: Decimal
     status: str
     payment_status: str
     due_at: datetime | None
     completed_at: datetime
+    loyalty_points_earned: int = 0
+    loyalty_points_redeemed: int = 0
     idempotent_replay: bool = False
 
 
@@ -63,20 +74,63 @@ async def _existing_sale(db: AsyncSession, tenant_id: UUID, operation_id: UUID) 
     return result.scalar_one_or_none()
 
 
-def _as_result(sale: Sale, *, replay: bool) -> CompletedSale:
+def _as_result(
+    sale: Sale,
+    *,
+    replay: bool,
+    loyalty_points_earned: int = 0,
+    loyalty_points_redeemed: int = 0,
+) -> CompletedSale:
     return CompletedSale(
         id=sale.id,
         sale_number=sale.sale_number,
         client_operation_id=sale.client_operation_id,
         customer_id=sale.customer_id,
+        subtotal=money(sale.subtotal),
+        discount_total=money(sale.discount_total),
         total=money(sale.total),
         balance_due=money(sale.balance_due),
         status=sale.status,
         payment_status=sale.payment_status,
         due_at=sale.due_at,
         completed_at=sale.completed_at,
+        loyalty_points_earned=loyalty_points_earned,
+        loyalty_points_redeemed=loyalty_points_redeemed,
         idempotent_replay=replay,
     )
+
+
+def _allocate_discount(
+    gross_by_product: dict[UUID, Decimal],
+    total_discount: Decimal,
+) -> dict[UUID, Decimal]:
+    allocations = {product_id: Decimal("0.00") for product_id in gross_by_product}
+    total_discount = money(total_discount)
+    if total_discount <= 0:
+        return allocations
+
+    positive = [
+        product_id
+        for product_id in sorted(gross_by_product, key=str)
+        if money(gross_by_product[product_id]) > 0
+    ]
+    gross_total = money(sum((gross_by_product[item] for item in positive), Decimal("0.00")))
+    if not positive or gross_total <= 0:
+        return allocations
+
+    allocated = Decimal("0.00")
+    for product_id in positive[:-1]:
+        amount = money(total_discount * money(gross_by_product[product_id]) / gross_total)
+        amount = min(amount, money(gross_by_product[product_id]))
+        allocations[product_id] = amount
+        allocated = money(allocated + amount)
+
+    last = positive[-1]
+    allocations[last] = min(
+        money(gross_by_product[last]),
+        money(total_discount - allocated),
+    )
+    return allocations
 
 
 async def complete_sale(
@@ -105,6 +159,7 @@ async def complete_sale(
 
     locked_products: dict[UUID, Product] = {}
     locked_stocks: dict[UUID, BranchProductStock | None] = {}
+    gross_by_product: dict[UUID, Decimal] = {}
     subtotal = Decimal("0.00")
 
     for product_id in sorted(requested, key=str):
@@ -133,18 +188,37 @@ async def complete_sale(
             available = quantity(stock.on_hand if stock is not None else Decimal("0"))
             if available < requested[product_id]:
                 raise InsufficientStockError(product.name, available, requested[product_id])
-        subtotal += line_total(product.selling_price, requested[product_id])
+        gross = line_total(product.selling_price, requested[product_id])
+        gross_by_product[product_id] = gross
+        subtotal += gross
 
     subtotal = money(subtotal)
+    promotion: PromotionApplication = await resolve_promotion(
+        db,
+        tenant_id=tenant_id,
+        code=payload.promotion_code,
+        subtotal=subtotal,
+    )
+    after_promotion = money(subtotal - promotion.discount)
+    loyalty: LoyaltyApplication = await resolve_loyalty_redemption(
+        db,
+        tenant_id=tenant_id,
+        customer_id=payload.customer_id,
+        requested_points=payload.loyalty_points_to_redeem,
+        available_total=after_promotion,
+    )
+    total_discount = money(promotion.discount + loyalty.discount)
+    total = money(max(Decimal("0.00"), subtotal - total_discount))
+
     payment_total = money(
         sum((money(payment.amount) for payment in payload.payments), Decimal("0.00"))
     )
-    if payment_total > subtotal:
+    if payment_total > total:
         raise PaymentMismatchError(
-            f"Payments total {payment_total} cannot exceed sale total {subtotal}"
+            f"Payments total {payment_total} cannot exceed sale total {total}"
         )
 
-    balance_due = money(subtotal - payment_total)
+    balance_due = money(total - payment_total)
     customer = None
     if payload.customer_id is not None:
         try:
@@ -182,9 +256,9 @@ async def complete_sale(
         sale_number=_sale_number(),
         status="completed",
         subtotal=subtotal,
-        discount_total=Decimal("0.00"),
+        discount_total=total_discount,
         tax_total=Decimal("0.00"),
-        total=subtotal,
+        total=total,
         balance_due=balance_due,
         payment_status=payment_status,
         due_at=due_at,
@@ -193,11 +267,15 @@ async def complete_sale(
     db.add(sale)
     await db.flush()
 
+    discount_by_product = _allocate_discount(gross_by_product, total_discount)
     cost_of_goods = Decimal("0.00")
     for product_id in sorted(requested, key=str):
         product = locked_products[product_id]
         qty = requested[product_id]
         current_cost = unit_cost(product.cost_price)
+        line_discount = money(discount_by_product[product_id])
+        gross = money(gross_by_product[product_id])
+        net_line_total = money(max(Decimal("0.00"), gross - line_discount))
         db.add(
             SaleLine(
                 sale_id=sale.id,
@@ -205,9 +283,9 @@ async def complete_sale(
                 quantity=qty,
                 unit_price=money(product.selling_price),
                 unit_cost=current_cost,
-                discount_total=Decimal("0.00"),
+                discount_total=line_discount,
                 tax_total=Decimal("0.00"),
-                line_total=line_total(product.selling_price, qty),
+                line_total=net_line_total,
             )
         )
 
@@ -255,6 +333,16 @@ async def complete_sale(
                 reference=payment.reference,
             )
         )
+
+    points_earned, points_redeemed = await record_growth_for_sale(
+        db,
+        tenant_id=tenant_id,
+        sale_id=sale.id,
+        customer_id=sale.customer_id,
+        sale_total=sale.total,
+        promotion=promotion,
+        loyalty=loyalty,
+    )
 
     accounting_lines = [
         PostingLine(
@@ -308,9 +396,14 @@ async def complete_sale(
             "sale_id": str(sale.id),
             "sale_number": sale.sale_number,
             "customer_id": str(sale.customer_id) if sale.customer_id else None,
+            "subtotal": str(sale.subtotal),
+            "discount_total": str(sale.discount_total),
             "total": str(sale.total),
             "balance_due": str(sale.balance_due),
             "payment_status": sale.payment_status,
+            "promotion_code": promotion.promotion.code if promotion.promotion else None,
+            "loyalty_points_earned": points_earned,
+            "loyalty_points_redeemed": points_redeemed,
             "client_operation_id": str(sale.client_operation_id),
         },
     )
@@ -322,4 +415,9 @@ async def complete_sale(
         if existing is not None:
             return _as_result(existing, replay=True)
         raise
-    return _as_result(sale, replay=False)
+    return _as_result(
+        sale,
+        replay=False,
+        loyalty_points_earned=points_earned,
+        loyalty_points_redeemed=points_redeemed,
+    )
