@@ -18,6 +18,12 @@ from app.services.customers import (
 from app.services.idempotency import acquire_operation_lock
 from app.services.outbox import enqueue_event
 from app.services.pricing import line_total, money, quantity, unit_cost
+from app.services.retail_ops import (
+    LoyaltyValidationError,
+    PromotionValidationError,
+    finalize_sale_benefits,
+    prepare_sale_discount,
+)
 
 
 class SaleValidationError(ValueError):
@@ -43,6 +49,8 @@ class CompletedSale:
     sale_number: str
     client_operation_id: UUID
     customer_id: UUID | None
+    subtotal: Decimal
+    discount_total: Decimal
     total: Decimal
     balance_due: Decimal
     status: str
@@ -69,6 +77,8 @@ def _as_result(sale: Sale, *, replay: bool) -> CompletedSale:
         sale_number=sale.sale_number,
         client_operation_id=sale.client_operation_id,
         customer_id=sale.customer_id,
+        subtotal=money(sale.subtotal),
+        discount_total=money(sale.discount_total),
         total=money(sale.total),
         balance_due=money(sale.balance_due),
         status=sale.status,
@@ -136,15 +146,29 @@ async def complete_sale(
         subtotal += line_total(product.selling_price, requested[product_id])
 
     subtotal = money(subtotal)
+    try:
+        discount_plan = await prepare_sale_discount(
+            db,
+            tenant_id=tenant_id,
+            customer_id=payload.customer_id,
+            subtotal=subtotal,
+            promotion_code=payload.promotion_code,
+            loyalty_points_to_redeem=payload.loyalty_points_to_redeem,
+        )
+    except (PromotionValidationError, LoyaltyValidationError) as exc:
+        raise PaymentMismatchError(str(exc)) from exc
+
+    discount_total = discount_plan.total_discount
+    sale_total = money(subtotal - discount_total)
     payment_total = money(
         sum((money(payment.amount) for payment in payload.payments), Decimal("0.00"))
     )
-    if payment_total > subtotal:
+    if payment_total > sale_total:
         raise PaymentMismatchError(
-            f"Payments total {payment_total} cannot exceed sale total {subtotal}"
+            f"Payments total {payment_total} cannot exceed sale total {sale_total}"
         )
 
-    balance_due = money(subtotal - payment_total)
+    balance_due = money(sale_total - payment_total)
     customer = None
     if payload.customer_id is not None:
         try:
@@ -182,9 +206,9 @@ async def complete_sale(
         sale_number=_sale_number(),
         status="completed",
         subtotal=subtotal,
-        discount_total=Decimal("0.00"),
+        discount_total=discount_total,
         tax_total=Decimal("0.00"),
-        total=subtotal,
+        total=sale_total,
         balance_due=balance_due,
         payment_status=payment_status,
         due_at=due_at,
@@ -256,6 +280,14 @@ async def complete_sale(
             )
         )
 
+    loyalty_result = await finalize_sale_benefits(
+        db,
+        tenant_id=tenant_id,
+        user_id=cashier_user_id,
+        sale=sale,
+        plan=discount_plan,
+    )
+
     accounting_lines = [
         PostingLine(
             account_code=payment_account_code(payment.method),
@@ -308,9 +340,15 @@ async def complete_sale(
             "sale_id": str(sale.id),
             "sale_number": sale.sale_number,
             "customer_id": str(sale.customer_id) if sale.customer_id else None,
+            "subtotal": str(sale.subtotal),
+            "discount_total": str(sale.discount_total),
             "total": str(sale.total),
             "balance_due": str(sale.balance_due),
             "payment_status": sale.payment_status,
+            "promotion_code": payload.promotion_code,
+            "loyalty_points_earned": loyalty_result["points_earned"],
+            "loyalty_points_redeemed": loyalty_result["points_redeemed"],
+            "loyalty_points_balance": loyalty_result["points_balance"],
             "client_operation_id": str(sale.client_operation_id),
         },
     )
