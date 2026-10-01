@@ -74,9 +74,7 @@ class SaleCompleteRequest(BaseModel):
         return normalized or None
 
     @model_validator(mode="after")
-    def require_customer_for_credit_or_loyalty(self) -> "SaleCompleteRequest":
-        if not self.payments and self.customer_id is None:
-            raise ValueError("A sale with no immediate payment requires a customer")
+    def require_customer_for_loyalty(self) -> "SaleCompleteRequest":
         if self.loyalty_points_to_redeem > 0 and self.customer_id is None:
             raise ValueError("A customer is required to redeem loyalty points")
         return self
