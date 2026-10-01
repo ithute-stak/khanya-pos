@@ -17,6 +17,9 @@ final class CheckoutSaleRequested extends CheckoutEvent {
     this.customer,
     this.immediatePaymentMinor,
     this.cashTenderedMinor,
+    this.checkoutTotalMinor,
+    this.promotionCode,
+    this.loyaltyPointsToRedeem = 0,
   });
 
   final List<CartLine> lines;
@@ -24,6 +27,9 @@ final class CheckoutSaleRequested extends CheckoutEvent {
   final CustomerSummary? customer;
   final int? immediatePaymentMinor;
   final int? cashTenderedMinor;
+  final int? checkoutTotalMinor;
+  final String? promotionCode;
+  final int loyaltyPointsToRedeem;
 
   @override
   List<Object?> get props => [
@@ -32,6 +38,9 @@ final class CheckoutSaleRequested extends CheckoutEvent {
         customer,
         immediatePaymentMinor,
         cashTenderedMinor,
+        checkoutTotalMinor,
+        promotionCode,
+        loyaltyPointsToRedeem,
       ];
 }
 
@@ -51,6 +60,9 @@ class CheckoutState extends Equatable {
     this.customer,
     this.immediatePaymentMinor,
     this.cashTenderedMinor,
+    this.checkoutTotalMinor,
+    this.promotionCode,
+    this.loyaltyPointsToRedeem = 0,
   });
 
   final CheckoutStatus status;
@@ -61,8 +73,12 @@ class CheckoutState extends Equatable {
   final CustomerSummary? customer;
   final int? immediatePaymentMinor;
   final int? cashTenderedMinor;
+  final int? checkoutTotalMinor;
+  final String? promotionCode;
+  final int loyaltyPointsToRedeem;
 
-  int get totalMinor => lines.fold(0, (total, line) => total + line.lineTotalMinor);
+  int get grossTotalMinor => lines.fold(0, (total, line) => total + line.lineTotalMinor);
+  int get totalMinor => checkoutTotalMinor ?? grossTotalMinor;
   int get paidMinor => immediatePaymentMinor ?? totalMinor;
   int get balanceDueMinor => totalMinor - paidMinor;
   int? get cashChangeMinor {
@@ -81,6 +97,9 @@ class CheckoutState extends Equatable {
         customer,
         immediatePaymentMinor,
         cashTenderedMinor,
+        checkoutTotalMinor,
+        promotionCode,
+        loyaltyPointsToRedeem,
       ];
 }
 
@@ -98,10 +117,22 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
   ) async {
     if (state.status == CheckoutStatus.submitting || event.lines.isEmpty) return;
     final lines = List<CartLine>.unmodifiable(event.lines);
-    final totalMinor = lines.fold<int>(0, (total, line) => total + line.lineTotalMinor);
+    final grossTotalMinor = lines.fold<int>(0, (total, line) => total + line.lineTotalMinor);
+    final totalMinor = event.checkoutTotalMinor ?? grossTotalMinor;
     final paidMinor = event.immediatePaymentMinor ?? totalMinor;
     final creditMinor = totalMinor - paidMinor;
 
+    if (totalMinor < 0 || totalMinor > grossTotalMinor) {
+      emit(CheckoutState(
+        status: CheckoutStatus.failed,
+        errorMessage: 'Discounted total cannot be below zero or above the basket total.',
+        lines: lines,
+        paymentMethod: event.paymentMethod,
+        customer: event.customer,
+        checkoutTotalMinor: totalMinor,
+      ));
+      return;
+    }
     if (paidMinor < 0 || paidMinor > totalMinor) {
       emit(CheckoutState(
         status: CheckoutStatus.failed,
@@ -111,6 +142,7 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         customer: event.customer,
         immediatePaymentMinor: paidMinor,
         cashTenderedMinor: event.cashTenderedMinor,
+        checkoutTotalMinor: totalMinor,
       ));
       return;
     }
@@ -121,6 +153,7 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         lines: lines,
         paymentMethod: event.paymentMethod,
         immediatePaymentMinor: paidMinor,
+        checkoutTotalMinor: totalMinor,
       ));
       return;
     }
@@ -132,6 +165,7 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         paymentMethod: event.paymentMethod,
         customer: event.customer,
         immediatePaymentMinor: paidMinor,
+        checkoutTotalMinor: totalMinor,
       ));
       return;
     }
@@ -146,6 +180,7 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         customer: event.customer,
         immediatePaymentMinor: paidMinor,
         cashTenderedMinor: event.cashTenderedMinor,
+        checkoutTotalMinor: totalMinor,
       ));
       return;
     }
@@ -157,6 +192,9 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
       customer: event.customer,
       immediatePaymentMinor: paidMinor,
       cashTenderedMinor: event.cashTenderedMinor,
+      checkoutTotalMinor: totalMinor,
+      promotionCode: event.promotionCode,
+      loyaltyPointsToRedeem: event.loyaltyPointsToRedeem,
     ));
     try {
       final submission = await _repository.submitSale(
@@ -164,6 +202,9 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         paymentMethod: event.paymentMethod,
         customerId: event.customer?.id,
         immediatePaymentMinor: paidMinor,
+        checkoutTotalMinor: totalMinor,
+        promotionCode: event.promotionCode,
+        loyaltyPointsToRedeem: event.loyaltyPointsToRedeem,
       );
       emit(CheckoutState(
         status: CheckoutStatus.completed,
@@ -173,6 +214,9 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         customer: event.customer,
         immediatePaymentMinor: paidMinor,
         cashTenderedMinor: event.cashTenderedMinor,
+        checkoutTotalMinor: totalMinor,
+        promotionCode: event.promotionCode,
+        loyaltyPointsToRedeem: event.loyaltyPointsToRedeem,
       ));
     } catch (error) {
       emit(CheckoutState(
@@ -183,6 +227,9 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         customer: event.customer,
         immediatePaymentMinor: paidMinor,
         cashTenderedMinor: event.cashTenderedMinor,
+        checkoutTotalMinor: totalMinor,
+        promotionCode: event.promotionCode,
+        loyaltyPointsToRedeem: event.loyaltyPointsToRedeem,
       ));
     }
   }
