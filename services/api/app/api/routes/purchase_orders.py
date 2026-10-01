@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.models.commerce import Product
 from app.models.operations import PurchaseOrder, PurchaseOrderLine
 from app.models.purchasing import Supplier
+from app.security.permissions import role_has_permissions
 from app.services.pricing import money
 
 router = APIRouter()
@@ -104,7 +105,11 @@ async def create_purchase_order(
     found = set(
         (
             await db.execute(
-                select(Product.id).where(Product.tenant_id == context.tenant.id, Product.id.in_(product_ids), Product.is_active.is_(True))
+                select(Product.id).where(
+                    Product.tenant_id == context.tenant.id,
+                    Product.id.in_(product_ids),
+                    Product.is_active.is_(True),
+                )
             )
         ).scalars().all()
     )
@@ -135,14 +140,16 @@ async def create_purchase_order(
     db.add(order)
     await db.flush()
     for line, line_total in calculated:
-        db.add(PurchaseOrderLine(
-            purchase_order_id=order.id,
-            product_id=line.product_id,
-            quantity=line.quantity,
-            unit_cost=money(line.unit_cost),
-            tax_total=money(line.tax_total),
-            line_total=line_total,
-        ))
+        db.add(
+            PurchaseOrderLine(
+                purchase_order_id=order.id,
+                product_id=line.product_id,
+                quantity=line.quantity,
+                unit_cost=money(line.unit_cost),
+                tax_total=money(line.tax_total),
+                line_total=line_total,
+            )
+        )
     await db.commit()
     await db.refresh(order)
     return _po_payload(order)
@@ -163,7 +170,9 @@ async def purchase_order_detail(
         raise HTTPException(status_code=403, detail="Purchase order belongs to another branch")
     lines = (
         await db.execute(
-            select(PurchaseOrderLine).where(PurchaseOrderLine.purchase_order_id == order.id).order_by(PurchaseOrderLine.created_at)
+            select(PurchaseOrderLine)
+            .where(PurchaseOrderLine.purchase_order_id == order.id)
+            .order_by(PurchaseOrderLine.created_at)
         )
     ).scalars().all()
     payload = _po_payload(order)
@@ -206,6 +215,8 @@ async def update_purchase_order_status(
     }
     if target not in transitions.get(order.status, set()):
         raise HTTPException(status_code=409, detail=f"Cannot move purchase order from {order.status} to {target}")
+    if target == "approved" and not role_has_permissions(context.membership.role, frozenset({"purchases.approve"})):
+        raise HTTPException(status_code=403, detail="Purchase order approval requires manager permission")
     order.status = target
     if target == "approved":
         order.approved_by_user_id = principal.user.id
@@ -222,7 +233,9 @@ async def receive_purchase_order_lines(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     order = await db.scalar(
-        select(PurchaseOrder).where(PurchaseOrder.id == order_id, PurchaseOrder.tenant_id == context.tenant.id).with_for_update()
+        select(PurchaseOrder)
+        .where(PurchaseOrder.id == order_id, PurchaseOrder.tenant_id == context.tenant.id)
+        .with_for_update()
     )
     if order is None:
         raise HTTPException(status_code=404, detail="Purchase order not found")
