@@ -23,11 +23,13 @@ import 'package:khanya_pos/features/pos/presentation/pos_page.dart';
 import 'package:khanya_pos/features/pos/presentation/sales_history_page.dart';
 import 'package:khanya_pos/features/pos/presentation/till_page.dart';
 import 'package:khanya_pos/features/purchasing/presentation/new_purchase_page.dart';
+import 'package:khanya_pos/features/purchasing/presentation/purchase_orders_page.dart';
 import 'package:khanya_pos/features/purchasing/presentation/purchases_page.dart';
 import 'package:khanya_pos/features/purchasing/presentation/suppliers_page.dart';
 import 'package:khanya_pos/features/reports/presentation/reports_page.dart';
 import 'package:khanya_pos/features/settings/presentation/business_settings_page.dart';
 import 'package:khanya_pos/features/staff/presentation/staff_page.dart';
+import 'package:khanya_pos/features/workforce/presentation/workforce_page.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
@@ -66,6 +68,7 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) => const CashFlowPage(),
         ),
         GoRoute(path: '/staff', builder: (context, state) => const StaffPage()),
+        GoRoute(path: '/workforce', builder: (context, state) => const WorkforcePage()),
         GoRoute(path: '/devices', builder: (context, state) => const DevicesPage()),
         GoRoute(path: '/products', builder: (context, state) => const ProductsPage()),
         GoRoute(path: '/customers', builder: (context, state) => const CustomersPage()),
@@ -85,6 +88,7 @@ final GoRouter appRouter = GoRouter(
         GoRoute(path: '/inventory/controls', builder: (context, state) => const InventoryControlsPage()),
         GoRoute(path: '/purchases', builder: (context, state) => const PurchasesPage()),
         GoRoute(path: '/purchases/new', builder: (context, state) => const NewPurchasePage()),
+        GoRoute(path: '/purchase-orders', builder: (context, state) => const PurchaseOrdersPage()),
         GoRoute(path: '/suppliers', builder: (context, state) => const SuppliersPage()),
         GoRoute(path: '/receipts', builder: (context, state) => const ReceiptVaultPage()),
         GoRoute(path: '/expenses', builder: (context, state) => const ExpensesPage()),
