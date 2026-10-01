@@ -30,6 +30,11 @@ class _PurchasesView extends StatelessWidget {
         title: const Text('Purchases'),
         actions: [
           IconButton(
+            tooltip: 'Retail operations',
+            onPressed: () => context.push('/retail'),
+            icon: const Icon(Icons.storefront_outlined),
+          ),
+          IconButton(
             tooltip: 'Receipt Vault',
             onPressed: () => context.push('/receipts'),
             icon: const Icon(Icons.receipt_long_outlined),
