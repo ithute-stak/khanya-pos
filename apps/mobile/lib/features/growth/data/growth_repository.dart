@@ -98,8 +98,8 @@ class LoyaltyCustomerSummary {
 class PromotionPreview {
   const PromotionPreview({required this.discountMinor, required this.totalMinor});
   factory PromotionPreview.fromJson(Map<String, dynamic> json) => PromotionPreview(
-        discountMinor: ScaledDecimal.parseMoneyMinor(json['discount']?.toString() ?? '0'),
-        totalMinor: ScaledDecimal.parseMoneyMinor(json['total_after_discount']?.toString() ?? '0'),
+        discountMinor: ScaledDecimal.toMinor(json['discount']),
+        totalMinor: ScaledDecimal.toMinor(json['total_after_discount']),
       );
 
   final int discountMinor;
