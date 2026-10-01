@@ -46,6 +46,9 @@ class SalesRepository {
     required PaymentMethod paymentMethod,
     String? customerId,
     int? immediatePaymentMinor,
+    int? checkoutTotalMinor,
+    String? promotionCode,
+    int loyaltyPointsToRedeem = 0,
   }) async {
     if (lines.isEmpty) throw StateError('The cart is empty');
     final tenantId = _sessionContext.tenantId;
@@ -55,7 +58,11 @@ class SalesRepository {
     }
 
     final clientOperationId = _uuid.v4();
-    final totalMinor = lines.fold<int>(0, (total, line) => total + line.lineTotalMinor);
+    final grossTotalMinor = lines.fold<int>(0, (total, line) => total + line.lineTotalMinor);
+    final totalMinor = checkoutTotalMinor ?? grossTotalMinor;
+    if (totalMinor < 0 || totalMinor > grossTotalMinor) {
+      throw StateError('Checkout total must be between zero and the basket total.');
+    }
     final paidMinor = immediatePaymentMinor ?? totalMinor;
     if (paidMinor < 0 || paidMinor > totalMinor) {
       throw StateError('Immediate payment must be between zero and the sale total.');
@@ -77,9 +84,12 @@ class SalesRepository {
       creditReserved = true;
     }
 
+    final normalizedPromotion = promotionCode?.trim().toUpperCase();
     final payload = <String, dynamic>{
       'client_operation_id': clientOperationId,
       'customer_id': customerId,
+      'promotion_code': normalizedPromotion == null || normalizedPromotion.isEmpty ? null : normalizedPromotion,
+      'loyalty_points_to_redeem': loyaltyPointsToRedeem,
       'items': [
         for (final line in lines)
           {'product_id': line.product.id, 'quantity': line.quantity},
@@ -118,9 +128,6 @@ class SalesRepository {
       rethrow;
     }
 
-    // Use the complete dependency-ordered pipeline. Pending purchases must
-    // reach the server before a sale that depends on their received stock,
-    // and customer receipts must remain after their credit sale.
     await _syncService.flushAll();
     final pending = await _database.getPendingSale(clientOperationId);
     if (pending == null) {
