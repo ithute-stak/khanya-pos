@@ -62,9 +62,21 @@ class SaleCompleteRequest(BaseModel):
     items: list[SaleItemInput] = Field(min_length=1)
     payments: list[PaymentInput] = Field(default_factory=list)
     customer_id: UUID | None = None
+    promotion_code: str | None = Field(default=None, max_length=48)
+    loyalty_points_to_redeem: int = Field(default=0, ge=0)
+
+    @field_validator("promotion_code")
+    @classmethod
+    def normalize_promotion_code(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().upper()
+        return normalized or None
 
     @model_validator(mode="after")
-    def require_customer_for_explicit_zero_payment_credit(self) -> "SaleCompleteRequest":
+    def require_customer_for_credit_or_loyalty(self) -> "SaleCompleteRequest":
         if not self.payments and self.customer_id is None:
             raise ValueError("A sale with no immediate payment requires a customer")
+        if self.loyalty_points_to_redeem > 0 and self.customer_id is None:
+            raise ValueError("A customer is required to redeem loyalty points")
         return self
