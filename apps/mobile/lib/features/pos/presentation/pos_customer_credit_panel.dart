@@ -3,7 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/features/customers/data/customer_repository.dart';
 import 'package:khanya_pos/features/customers/domain/customer_models.dart';
+import 'package:khanya_pos/features/pos/data/sales_repository.dart';
 import 'package:khanya_pos/features/pos/presentation/bloc/pos_credit_cubit.dart';
+import 'package:khanya_pos/features/pos/presentation/checkout_benefits_dialog.dart';
 
 class PosCustomerCreditPanel extends StatelessWidget {
   const PosCustomerCreditPanel({super.key, required this.totalMinor});
@@ -15,6 +17,7 @@ class PosCustomerCreditPanel extends StatelessWidget {
     return BlocBuilder<PosCreditCubit, PosCreditState>(
       builder: (context, state) {
         final customer = state.customer;
+        final effectiveTotal = state.effectiveTotalFor(totalMinor);
         final paidMinor = state.paidMinorFor(totalMinor);
         final creditMinor = state.creditMinorFor(totalMinor);
         final creditAllowed = state.canSubmit(totalMinor);
@@ -46,7 +49,7 @@ class PosCustomerCreditPanel extends StatelessWidget {
                           ),
                           Text(
                             customer == null
-                                ? 'Select a customer for credit or partial-payment sales.'
+                                ? 'Select a customer for credit or loyalty rewards.'
                                 : '${customer.code} • Available credit ${Loti.formatMinor(customer.availableCreditMinor)}',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
@@ -65,6 +68,24 @@ class PosCustomerCreditPanel extends StatelessWidget {
                       ),
                   ],
                 ),
+                const SizedBox(height: 8),
+                _BenefitsSelector(
+                  grossTotalMinor: totalMinor,
+                  customerId: customer?.id,
+                ),
+                if (effectiveTotal != totalMinor) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Discounted total', style: Theme.of(context).textTheme.labelLarge),
+                      Text(
+                        Loti.formatMinor(effectiveTotal),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                    ],
+                  ),
+                ],
                 if (customer != null) ...[
                   const SizedBox(height: 10),
                   Wrap(
@@ -80,8 +101,8 @@ class PosCustomerCreditPanel extends StatelessWidget {
                         label: const Text('Part payment'),
                         selected: state.immediatePaymentMinor != null &&
                             state.immediatePaymentMinor! > 0 &&
-                            state.immediatePaymentMinor! < totalMinor,
-                        onSelected: (_) => _setPartialPayment(context, state),
+                            state.immediatePaymentMinor! < effectiveTotal,
+                        onSelected: (_) => _setPartialPayment(context, state, effectiveTotal),
                       ),
                       ChoiceChip(
                         label: const Text('On credit'),
@@ -135,17 +156,24 @@ class PosCustomerCreditPanel extends StatelessWidget {
       ),
     );
     if (selected != null && context.mounted) {
-      context.read<PosCreditCubit>().selectCustomer(selected);
+      context.read<SalesRepository>().clearCheckoutBenefits();
+      context.read<PosCreditCubit>()
+        ..setCheckoutTotalOverride(null)
+        ..selectCustomer(selected);
     }
   }
 
-  Future<void> _setPartialPayment(BuildContext context, PosCreditState state) async {
-    if (state.customer == null || totalMinor <= 1) return;
+  Future<void> _setPartialPayment(
+    BuildContext context,
+    PosCreditState state,
+    int effectiveTotalMinor,
+  ) async {
+    if (state.customer == null || effectiveTotalMinor <= 1) return;
     final suggested = state.immediatePaymentMinor != null &&
             state.immediatePaymentMinor! > 0 &&
-            state.immediatePaymentMinor! < totalMinor
+            state.immediatePaymentMinor! < effectiveTotalMinor
         ? state.immediatePaymentMinor!
-        : totalMinor ~/ 2;
+        : effectiveTotalMinor ~/ 2;
     final controller = TextEditingController(text: ScaledDecimal.fromMinor(suggested));
     final value = await showDialog<int>(
       context: context,
@@ -157,7 +185,7 @@ class PosCustomerCreditPanel extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Sale total: ${Loti.formatMinor(totalMinor)}'),
+              Text('Sale total: ${Loti.formatMinor(effectiveTotalMinor)}'),
               const SizedBox(height: 12),
               TextField(
                 controller: controller,
@@ -166,7 +194,7 @@ class PosCustomerCreditPanel extends StatelessWidget {
                 decoration: const InputDecoration(labelText: 'Amount paid now (M)'),
                 onSubmitted: (_) {
                   final amount = ScaledDecimal.toMinor(controller.text);
-                  if (amount > 0 && amount < totalMinor) Navigator.of(dialogContext).pop(amount);
+                  if (amount > 0 && amount < effectiveTotalMinor) Navigator.of(dialogContext).pop(amount);
                 },
               ),
               const SizedBox(height: 8),
@@ -185,7 +213,7 @@ class PosCustomerCreditPanel extends StatelessWidget {
           FilledButton(
             onPressed: () {
               final amount = ScaledDecimal.toMinor(controller.text);
-              if (amount <= 0 || amount >= totalMinor) {
+              if (amount <= 0 || amount >= effectiveTotalMinor) {
                 ScaffoldMessenger.of(dialogContext).showSnackBar(
                   const SnackBar(content: Text('Part payment must be greater than zero and less than the sale total.')),
                 );
@@ -202,6 +230,67 @@ class PosCustomerCreditPanel extends StatelessWidget {
     if (value != null && context.mounted) {
       context.read<PosCreditCubit>().setPartialPayment(value);
     }
+  }
+}
+
+class _BenefitsSelector extends StatefulWidget {
+  const _BenefitsSelector({required this.grossTotalMinor, required this.customerId});
+
+  final int grossTotalMinor;
+  final String? customerId;
+
+  @override
+  State<_BenefitsSelector> createState() => _BenefitsSelectorState();
+}
+
+class _BenefitsSelectorState extends State<_BenefitsSelector> {
+  CheckoutBenefits? _selection;
+
+  @override
+  void didUpdateWidget(covariant _BenefitsSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.grossTotalMinor != widget.grossTotalMinor || oldWidget.customerId != widget.customerId) {
+      _clear();
+    }
+  }
+
+  void _clear() {
+    _selection = null;
+    context.read<SalesRepository>().clearCheckoutBenefits();
+    context.read<PosCreditCubit>().setCheckoutTotalOverride(null);
+  }
+
+  Future<void> _choose() async {
+    final result = await showCheckoutBenefitsDialog(
+      context,
+      subtotalMinor: widget.grossTotalMinor,
+      customerId: widget.customerId,
+    );
+    if (!mounted || result == null) return;
+    setState(() => _selection = result);
+    context.read<SalesRepository>().configureCheckoutBenefits(
+          SaleCheckoutBenefits(
+            grossTotalMinor: widget.grossTotalMinor,
+            checkoutTotalMinor: result.totalMinor,
+            promotionCode: result.promotionCode,
+            loyaltyPointsToRedeem: result.loyaltyPoints,
+          ),
+        );
+    context.read<PosCreditCubit>().setCheckoutTotalOverride(result.totalMinor);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selection = _selection;
+    return OutlinedButton.icon(
+      onPressed: widget.grossTotalMinor <= 0 ? null : _choose,
+      icon: const Icon(Icons.loyalty_outlined),
+      label: Text(
+        selection == null || selection.discountMinor <= 0
+            ? 'Promotion & rewards'
+            : 'Benefits: -${Loti.formatMinor(selection.discountMinor)}',
+      ),
+    );
   }
 }
 
