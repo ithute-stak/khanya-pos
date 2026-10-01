@@ -18,6 +18,7 @@ import 'package:khanya_pos/features/auth/presentation/login_page.dart';
 import 'package:khanya_pos/features/auth/presentation/signup_page.dart';
 import 'package:khanya_pos/features/customers/data/customer_repository.dart';
 import 'package:khanya_pos/features/devices/data/device_repository.dart';
+import 'package:khanya_pos/features/growth/data/growth_repository.dart';
 import 'package:khanya_pos/features/inventory/data/inventory_control_repository.dart';
 import 'package:khanya_pos/features/platform/data/platform_repository.dart';
 import 'package:khanya_pos/features/platform/presentation/platform_admin_shell_page.dart';
@@ -52,6 +53,7 @@ class _KhanyaPosAppState extends State<KhanyaPosApp> {
         RepositoryProvider<PlatformRepository>.value(value: dependencies.platformRepository),
         RepositoryProvider.value(value: dependencies.productRepository),
         RepositoryProvider<CustomerRepository>.value(value: dependencies.customerRepository),
+        RepositoryProvider<GrowthRepository>.value(value: dependencies.growthRepository),
         RepositoryProvider<InventoryControlRepository>.value(value: dependencies.inventoryControlRepository),
         RepositoryProvider.value(value: dependencies.salesRepository),
         RepositoryProvider<HeldSalesRepository>.value(value: dependencies.heldSalesRepository),
@@ -179,6 +181,7 @@ class _PublicGateway extends StatefulWidget {
 
   @override
   State<_PublicGateway> createState() => _PublicGatewayState();
+
 }
 
 class _PublicGatewayState extends State<_PublicGateway> {
