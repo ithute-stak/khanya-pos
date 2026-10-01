@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:khanya_pos/features/pos/domain/cart.dart';
@@ -57,7 +58,19 @@ class SaleReceipt {
   final int? balanceDueMinor;
   final int? cashTenderedMinor;
 
-  int get totalMinor => lines.fold(0, (total, line) => total + line.lineTotalMinor);
+  int get grossTotalMinor => lines.fold(0, (total, line) => total + line.lineTotalMinor);
+
+  /// Checkout always supplies both paid-now and balance-due. Their sum is the
+  /// authoritative post-promotion/post-loyalty total. Older receipt callers
+  /// that omit them continue to use the gross basket total.
+  int get totalMinor {
+    final paid = paidNowMinor;
+    final balance = balanceDueMinor;
+    if (paid != null && balance != null) return math.max(0, paid + balance);
+    return grossTotalMinor;
+  }
+
+  int get discountMinor => math.max(0, grossTotalMinor - totalMinor);
   int get paidMinor => paidNowMinor ?? totalMinor;
   int get creditBalanceMinor =>
       balanceDueMinor ?? (totalMinor - paidMinor).clamp(0, totalMinor).toInt();
@@ -88,7 +101,13 @@ PdfPageFormat saleReceiptPageFormat(
   final cashExtraMm = receipt.cashTenderedMinor == null ? 0 : 12;
   final creditExtraMm = receipt.isCreditSale ? 18 : 0;
   final customerExtraMm = receipt.customerName == null ? 0 : 8;
-  final heightMm = (115 + cashExtraMm + creditExtraMm + customerExtraMm + (lineCount * perLineMm))
+  final discountExtraMm = receipt.discountMinor > 0 ? 12 : 0;
+  final heightMm = (115 +
+          cashExtraMm +
+          creditExtraMm +
+          customerExtraMm +
+          discountExtraMm +
+          (lineCount * perLineMm))
       .clamp(140, 2000)
       .toDouble();
   final margin = 4 * PdfPageFormat.mm;
@@ -175,6 +194,11 @@ Future<Uint8List> buildSaleReceiptPdf(
           ),
           pw.Divider(height: 1),
           pw.SizedBox(height: 2 * PdfPageFormat.mm),
+          if (receipt.discountMinor > 0) ...[
+            _receiptPair('Subtotal', formatMalotiMinor(receipt.grossTotalMinor)),
+            _receiptPair('Discount', '-${formatMalotiMinor(receipt.discountMinor)}'),
+            pw.SizedBox(height: 1.5 * PdfPageFormat.mm),
+          ],
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
