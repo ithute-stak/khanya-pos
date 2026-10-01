@@ -27,12 +27,14 @@ class LoyaltyAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "loyalty_accounts"
     __table_args__ = (
         UniqueConstraint("tenant_id", "customer_id", name="uq_loyalty_accounts_tenant_customer"),
-        CheckConstraint("points_balance >= 0", name="loyalty_points_balance_nonnegative"),
         CheckConstraint("lifetime_points_earned >= 0", name="loyalty_lifetime_points_nonnegative"),
     )
 
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
     customer_id: Mapped[UUID] = mapped_column(ForeignKey("customers.id", ondelete="CASCADE"), index=True)
+    # Refunds are allowed to make a balance temporarily negative. This prevents
+    # a customer from keeping points earned on goods that were returned after
+    # those points had already been spent. Future earnings first clear the debt.
     points_balance: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     lifetime_points_earned: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
