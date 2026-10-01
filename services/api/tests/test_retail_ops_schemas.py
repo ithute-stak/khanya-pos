@@ -2,10 +2,9 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI
 from pydantic import ValidationError
 
-from app.api.router import api_router
+from app.api.routes import retail_alerts, retail_checkout, retail_ops
 from app.schemas.commerce import SaleCompleteRequest, SaleItemInput
 from app.schemas.retail_ops import PromotionCreate, PurchaseOrderCreate, PurchaseOrderLineInput
 
@@ -53,14 +52,18 @@ def test_purchase_order_rejects_duplicate_products() -> None:
         )
 
 
+def _paths(router) -> set[str]:
+    return {getattr(route, "path", "") for route in router.routes}
+
+
 def test_retail_routes_are_registered() -> None:
-    app = FastAPI()
-    app.include_router(api_router)
-    paths = {getattr(route, "path", None) for route in app.routes}
-    assert "/retail/promotions" in paths
-    assert "/retail/loyalty/program" in paths
-    assert "/retail/purchase-orders" in paths
-    assert "/retail/labels/preview" in paths
-    assert "/retail/notifications" in paths
-    assert "/retail/checkout/preview" in paths
-    assert "/retail/alerts" in paths
+    ops_paths = _paths(retail_ops.router)
+    checkout_paths = _paths(retail_checkout.router)
+    alert_paths = _paths(retail_alerts.router)
+    assert "/promotions" in ops_paths
+    assert "/loyalty/program" in ops_paths
+    assert "/purchase-orders" in ops_paths
+    assert "/labels/preview" in ops_paths
+    assert "/notifications" in ops_paths
+    assert "/checkout/preview" in checkout_paths
+    assert "/alerts" in alert_paths
