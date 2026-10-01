@@ -29,6 +29,7 @@ from app.models.identity import (
     UserSession,
 )
 from app.models.inventory_controls import Stocktake, StocktakeLine, StockTransfer, StockTransferLine
+from app.models.operations import AttendancePunch, PurchaseOrder, PurchaseOrderLine, StaffShiftSchedule
 from app.models.outbox import OutboxEvent
 from app.models.platform import PlatformEvent
 from app.models.purchasing import (
@@ -46,6 +47,7 @@ from app.models.till import TillCashMovement, TillShift
 __all__ = [
     "Account",
     "AccountingSettings",
+    "AttendancePunch",
     "AuditEvent",
     "Base",
     "Branch",
@@ -72,10 +74,13 @@ __all__ = [
     "Promotion",
     "Purchase",
     "PurchaseLine",
+    "PurchaseOrder",
+    "PurchaseOrderLine",
     "Sale",
     "SaleLine",
     "SaleReturn",
     "SaleReturnLine",
+    "StaffShiftSchedule",
     "StockMovement",
     "Stocktake",
     "StocktakeLine",
