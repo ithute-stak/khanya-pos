@@ -8,6 +8,7 @@ import 'package:khanya_pos/core/storage/app_database.dart';
 import 'package:khanya_pos/core/sync/sync_service.dart';
 import 'package:khanya_pos/features/customers/data/customer_database.dart';
 import 'package:khanya_pos/features/pos/domain/cart.dart';
+import 'package:khanya_pos/features/pos/domain/checkout_benefits.dart';
 import 'package:khanya_pos/features/pos/domain/sales_history.dart';
 import 'package:uuid/uuid.dart';
 
@@ -55,7 +56,12 @@ class SalesRepository {
     }
 
     final clientOperationId = _uuid.v4();
-    final totalMinor = lines.fold<int>(0, (total, line) => total + line.lineTotalMinor);
+    final subtotalMinor = lines.fold<int>(0, (total, line) => total + line.lineTotalMinor);
+    final benefits = CheckoutBenefitsStore.validFor(
+      subtotalMinor: subtotalMinor,
+      customerId: customerId,
+    );
+    final totalMinor = benefits?.totalMinor ?? subtotalMinor;
     final paidMinor = immediatePaymentMinor ?? totalMinor;
     if (paidMinor < 0 || paidMinor > totalMinor) {
       throw StateError('Immediate payment must be between zero and the sale total.');
@@ -80,6 +86,8 @@ class SalesRepository {
     final payload = <String, dynamic>{
       'client_operation_id': clientOperationId,
       'customer_id': customerId,
+      'promotion_code': benefits?.promotionCode,
+      'loyalty_points_to_redeem': benefits?.loyaltyPointsToRedeem ?? 0,
       'items': [
         for (final line in lines)
           {'product_id': line.product.id, 'quantity': line.quantity},
