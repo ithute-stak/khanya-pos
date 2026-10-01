@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:khanya_pos/features/pos/domain/cart.dart';
+import 'package:khanya_pos/features/pos/domain/checkout_benefits.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -29,11 +30,11 @@ class SaleReceiptLine {
 }
 
 class SaleReceipt {
-  const SaleReceipt({
+  SaleReceipt({
     required this.businessName,
     required this.reference,
     required this.issuedAt,
-    required this.lines,
+    required List<SaleReceiptLine> lines,
     required this.paymentMethod,
     required this.syncStatus,
     this.branchId,
@@ -42,7 +43,8 @@ class SaleReceipt {
     this.paidNowMinor,
     this.balanceDueMinor,
     this.cashTenderedMinor,
-  });
+  })  : lines = List<SaleReceiptLine>.unmodifiable(lines),
+        capturedBenefits = _matchingBenefits(lines);
 
   final String businessName;
   final String reference;
@@ -56,8 +58,11 @@ class SaleReceipt {
   final int? paidNowMinor;
   final int? balanceDueMinor;
   final int? cashTenderedMinor;
+  final CheckoutBenefitsSelection? capturedBenefits;
 
-  int get totalMinor => lines.fold(0, (total, line) => total + line.lineTotalMinor);
+  int get subtotalMinor => lines.fold(0, (total, line) => total + line.lineTotalMinor);
+  int get discountMinor => capturedBenefits?.discountMinor ?? 0;
+  int get totalMinor => capturedBenefits?.totalMinor ?? subtotalMinor;
   int get paidMinor => paidNowMinor ?? totalMinor;
   int get creditBalanceMinor =>
       balanceDueMinor ?? (totalMinor - paidMinor).clamp(0, totalMinor).toInt();
@@ -68,6 +73,13 @@ class SaleReceipt {
     if (paymentMethod != PaymentMethod.cash || tendered == null || paidMinor <= 0) return null;
     return tendered > paidMinor ? tendered - paidMinor : 0;
   }
+}
+
+CheckoutBenefitsSelection? _matchingBenefits(List<SaleReceiptLine> lines) {
+  final subtotal = lines.fold<int>(0, (total, line) => total + line.lineTotalMinor);
+  final selection = CheckoutBenefitsStore.current;
+  if (selection == null || selection.subtotalMinor != subtotal) return null;
+  return selection;
 }
 
 String formatMalotiMinor(int minor) {
@@ -88,7 +100,8 @@ PdfPageFormat saleReceiptPageFormat(
   final cashExtraMm = receipt.cashTenderedMinor == null ? 0 : 12;
   final creditExtraMm = receipt.isCreditSale ? 18 : 0;
   final customerExtraMm = receipt.customerName == null ? 0 : 8;
-  final heightMm = (115 + cashExtraMm + creditExtraMm + customerExtraMm + (lineCount * perLineMm))
+  final discountExtraMm = receipt.discountMinor > 0 ? 10 : 0;
+  final heightMm = (115 + cashExtraMm + creditExtraMm + customerExtraMm + discountExtraMm + (lineCount * perLineMm))
       .clamp(140, 2000)
       .toDouble();
   final margin = 4 * PdfPageFormat.mm;
@@ -175,6 +188,15 @@ Future<Uint8List> buildSaleReceiptPdf(
           ),
           pw.Divider(height: 1),
           pw.SizedBox(height: 2 * PdfPageFormat.mm),
+          if (receipt.discountMinor > 0) ...[
+            _receiptPair('Subtotal', formatMalotiMinor(receipt.subtotalMinor)),
+            _receiptPair('Discount', '-${formatMalotiMinor(receipt.discountMinor)}'),
+            if (receipt.capturedBenefits?.promotionCode != null)
+              _receiptPair('Promo', receipt.capturedBenefits!.promotionCode!),
+            if ((receipt.capturedBenefits?.loyaltyPointsToRedeem ?? 0) > 0)
+              _receiptPair('Points', '${receipt.capturedBenefits!.loyaltyPointsToRedeem} redeemed'),
+            pw.SizedBox(height: 1.5 * PdfPageFormat.mm),
+          ],
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
