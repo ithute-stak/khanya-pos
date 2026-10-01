@@ -24,6 +24,8 @@ class CheckoutBenefitsStore {
 
   static CheckoutBenefitsSelection? _selection;
 
+  static CheckoutBenefitsSelection? get current => _selection;
+
   static CheckoutBenefitsSelection? validFor({
     required int subtotalMinor,
     required String? customerId,
