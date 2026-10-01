@@ -51,6 +51,7 @@ async def retail_alerts(
                 "action_path": "/inventory",
                 "read_at": None,
                 "created_at": now,
+                "live_alert": True,
             }
         )
 
@@ -73,6 +74,7 @@ async def retail_alerts(
                 "action_path": "/retail",
                 "read_at": None,
                 "created_at": order.expected_date,
+                "live_alert": True,
             }
         )
 
@@ -95,6 +97,7 @@ async def retail_alerts(
                 "action_path": "/retail",
                 "read_at": None,
                 "created_at": now,
+                "live_alert": True,
             }
         )
 
