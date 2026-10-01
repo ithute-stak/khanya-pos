@@ -194,16 +194,24 @@ class RetailRepository {
   }
 
   Future<List<Map<String, dynamic>>> notifications({bool unreadOnly = false}) async {
-    final response = await _apiClient.dio.get<List<dynamic>>(
-      '/retail/notifications',
-      queryParameters: {'unread_only': unreadOnly, 'limit': 100},
-    );
-    return (response.data ?? const <dynamic>[])
-        .map((value) => Map<String, dynamic>.from(value as Map))
-        .toList(growable: false);
+    final responses = await Future.wait([
+      _apiClient.dio.get<List<dynamic>>(
+        '/retail/notifications',
+        queryParameters: {'unread_only': unreadOnly, 'limit': 100},
+      ),
+      _apiClient.dio.get<List<dynamic>>('/retail/alerts'),
+    ]);
+    final persistent = (responses[0].data ?? const <dynamic>[])
+        .map((value) => Map<String, dynamic>.from(value as Map));
+    final alerts = (responses[1].data ?? const <dynamic>[])
+        .map((value) => Map<String, dynamic>.from(value as Map));
+    final combined = <Map<String, dynamic>>[...alerts, ...persistent];
+    if (!unreadOnly) return combined;
+    return combined.where((item) => item['read_at'] == null).toList(growable: false);
   }
 
   Future<void> markNotificationRead(String notificationId) async {
+    if (notificationId.contains(':')) return;
     await _apiClient.dio.post<Map<String, dynamic>>('/retail/notifications/$notificationId/read');
   }
 
