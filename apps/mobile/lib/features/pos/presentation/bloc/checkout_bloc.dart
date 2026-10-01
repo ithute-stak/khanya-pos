@@ -106,7 +106,10 @@ class CheckoutState extends Equatable {
 class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
   CheckoutBloc(this._repository) : super(const CheckoutState()) {
     on<CheckoutSaleRequested>(_onSaleRequested);
-    on<CheckoutReset>((event, emit) => emit(const CheckoutState()));
+    on<CheckoutReset>((event, emit) {
+      _repository.clearCheckoutBenefits();
+      emit(const CheckoutState());
+    });
   }
 
   final SalesRepository _repository;
@@ -118,9 +121,21 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
     if (state.status == CheckoutStatus.submitting || event.lines.isEmpty) return;
     final lines = List<CartLine>.unmodifiable(event.lines);
     final grossTotalMinor = lines.fold<int>(0, (total, line) => total + line.lineTotalMinor);
-    final totalMinor = event.checkoutTotalMinor ?? grossTotalMinor;
-    final paidMinor = event.immediatePaymentMinor ?? totalMinor;
+    final configuredBenefits = _repository.checkoutBenefits;
+    final benefits = configuredBenefits != null && configuredBenefits.grossTotalMinor == grossTotalMinor
+        ? configuredBenefits
+        : null;
+    final totalMinor = event.checkoutTotalMinor ?? benefits?.checkoutTotalMinor ?? grossTotalMinor;
+    var paidMinor = event.immediatePaymentMinor ?? totalMinor;
+    if (paidMinor == grossTotalMinor && totalMinor < grossTotalMinor) {
+      paidMinor = totalMinor;
+    }
+    if (paidMinor > totalMinor) paidMinor = totalMinor;
     final creditMinor = totalMinor - paidMinor;
+    final promotionCode = event.promotionCode ?? benefits?.promotionCode;
+    final loyaltyPointsToRedeem = event.loyaltyPointsToRedeem > 0
+        ? event.loyaltyPointsToRedeem
+        : benefits?.loyaltyPointsToRedeem ?? 0;
 
     if (totalMinor < 0 || totalMinor > grossTotalMinor) {
       emit(CheckoutState(
@@ -193,8 +208,8 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
       immediatePaymentMinor: paidMinor,
       cashTenderedMinor: event.cashTenderedMinor,
       checkoutTotalMinor: totalMinor,
-      promotionCode: event.promotionCode,
-      loyaltyPointsToRedeem: event.loyaltyPointsToRedeem,
+      promotionCode: promotionCode,
+      loyaltyPointsToRedeem: loyaltyPointsToRedeem,
     ));
     try {
       final submission = await _repository.submitSale(
@@ -203,9 +218,10 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         customerId: event.customer?.id,
         immediatePaymentMinor: paidMinor,
         checkoutTotalMinor: totalMinor,
-        promotionCode: event.promotionCode,
-        loyaltyPointsToRedeem: event.loyaltyPointsToRedeem,
+        promotionCode: promotionCode,
+        loyaltyPointsToRedeem: loyaltyPointsToRedeem,
       );
+      _repository.clearCheckoutBenefits();
       emit(CheckoutState(
         status: CheckoutStatus.completed,
         submission: submission,
@@ -215,8 +231,8 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         immediatePaymentMinor: paidMinor,
         cashTenderedMinor: event.cashTenderedMinor,
         checkoutTotalMinor: totalMinor,
-        promotionCode: event.promotionCode,
-        loyaltyPointsToRedeem: event.loyaltyPointsToRedeem,
+        promotionCode: promotionCode,
+        loyaltyPointsToRedeem: loyaltyPointsToRedeem,
       ));
     } catch (error) {
       emit(CheckoutState(
@@ -228,8 +244,8 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         immediatePaymentMinor: paidMinor,
         cashTenderedMinor: event.cashTenderedMinor,
         checkoutTotalMinor: totalMinor,
-        promotionCode: event.promotionCode,
-        loyaltyPointsToRedeem: event.loyaltyPointsToRedeem,
+        promotionCode: promotionCode,
+        loyaltyPointsToRedeem: loyaltyPointsToRedeem,
       ));
     }
   }
