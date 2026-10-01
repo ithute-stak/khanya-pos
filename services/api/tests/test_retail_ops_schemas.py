@@ -2,6 +2,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from fastapi import FastAPI
 from pydantic import ValidationError
 
 from app.api.router import api_router
@@ -53,9 +54,13 @@ def test_purchase_order_rejects_duplicate_products() -> None:
 
 
 def test_retail_routes_are_registered() -> None:
-    paths = {route.path for route in api_router.routes}
+    app = FastAPI()
+    app.include_router(api_router)
+    paths = {getattr(route, "path", None) for route in app.routes}
     assert "/retail/promotions" in paths
     assert "/retail/loyalty/program" in paths
     assert "/retail/purchase-orders" in paths
     assert "/retail/labels/preview" in paths
     assert "/retail/notifications" in paths
+    assert "/retail/checkout/preview" in paths
+    assert "/retail/alerts" in paths
