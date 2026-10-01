@@ -25,6 +25,7 @@ import 'package:khanya_pos/features/purchasing/presentation/new_purchase_page.da
 import 'package:khanya_pos/features/purchasing/presentation/purchases_page.dart';
 import 'package:khanya_pos/features/purchasing/presentation/suppliers_page.dart';
 import 'package:khanya_pos/features/reports/presentation/reports_page.dart';
+import 'package:khanya_pos/features/retail/presentation/retail_operations_page.dart';
 import 'package:khanya_pos/features/settings/presentation/business_settings_page.dart';
 import 'package:khanya_pos/features/staff/presentation/staff_page.dart';
 
@@ -50,6 +51,7 @@ final GoRouter appRouter = GoRouter(
         ),
         GoRoute(path: '/till', builder: (context, state) => const TillPage()),
         GoRoute(path: '/reports', builder: (context, state) => const ReportsPage()),
+        GoRoute(path: '/retail', builder: (context, state) => const RetailOperationsPage()),
         GoRoute(path: '/accounting', builder: (context, state) => const AccountingPage()),
         GoRoute(
           path: '/accounting/statements',
