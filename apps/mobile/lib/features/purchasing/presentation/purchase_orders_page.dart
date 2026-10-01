@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:khanya_pos/features/auth/presentation/bloc/session_bloc.dart';
 import 'package:khanya_pos/features/purchasing/data/purchase_order_repository.dart';
 
 class PurchaseOrdersPage extends StatefulWidget {
@@ -17,6 +18,18 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
   List<Map<String, dynamic>> _products = const [];
 
   PurchaseOrderRepository get _repository => context.read<PurchaseOrderRepository>();
+
+  bool get _canApprove {
+    final state = context.read<SessionBloc>().state;
+    if (state is! SessionAuthenticated) return false;
+    final tenantId = state.session.selectedTenantId;
+    for (final membership in state.session.memberships) {
+      if (membership.tenantId == tenantId) {
+        return {'owner', 'admin', 'manager'}.contains(membership.role);
+      }
+    }
+    return false;
+  }
 
   @override
   void initState() {
@@ -138,7 +151,8 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
     }
     if (status == 'submitted') {
       return [
-        FilledButton.tonal(onPressed: () => _transition(order, 'approved'), child: const Text('Approve')),
+        if (_canApprove)
+          FilledButton.tonal(onPressed: () => _transition(order, 'approved'), child: const Text('Approve')),
         TextButton(onPressed: () => _transition(order, 'cancelled'), child: const Text('Cancel')),
       ];
     }
