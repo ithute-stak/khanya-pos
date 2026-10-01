@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/features/growth/data/growth_repository.dart';
 
 class GrowthPage extends StatefulWidget {
@@ -249,9 +248,10 @@ class _PromotionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final useText = item.maxUses == null ? '${item.useCount} uses' : '${item.useCount}/${item.maxUses} uses';
+    final badge = item.code.length <= 2 ? item.code : item.code.substring(0, 2);
     return Card(
       child: ListTile(
-        leading: CircleAvatar(child: Text(item.code.characters.take(2).toString())),
+        leading: CircleAvatar(child: Text(badge)),
         title: Text(item.name),
         subtitle: Text(
           '${item.code} • ${item.discountType == 'percentage' ? '${item.discountValue}%' : 'M ${item.discountValue}'} off • minimum M ${item.minSubtotal} • $useText',
