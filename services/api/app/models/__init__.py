@@ -11,6 +11,13 @@ from app.models.commerce import (
     StockMovement,
 )
 from app.models.customers import Customer, CustomerPayment, CustomerPaymentAllocation
+from app.models.growth import (
+    LoyaltyAccount,
+    LoyaltyLedger,
+    LoyaltyProgram,
+    Promotion,
+    PromotionUsage,
+)
 from app.models.identity import (
     Branch,
     Device,
@@ -50,12 +57,17 @@ __all__ = [
     "Expense",
     "JournalEntry",
     "JournalLine",
+    "LoyaltyAccount",
+    "LoyaltyLedger",
+    "LoyaltyProgram",
     "MembershipBranch",
     "OutboxEvent",
     "Payment",
     "PlatformEvent",
     "Product",
     "ProductCategory",
+    "Promotion",
+    "PromotionUsage",
     "Purchase",
     "PurchaseLine",
     "Sale",
