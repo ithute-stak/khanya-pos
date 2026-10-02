@@ -21,6 +21,7 @@ from app.schemas.commerce import (
     ProductUnitCreate,
     ProductUpdate,
 )
+from app.services.outbox import enqueue_event
 from app.services.pricing import money, quantity
 
 router = APIRouter()
@@ -60,10 +61,19 @@ async def _create_master(
     tenant_id: UUID,
     name: str,
     duplicate_message: str,
+    event_type: str,
 ) -> dict[str, object]:
     row = model(tenant_id=tenant_id, name=name.strip())
     try:
         db.add(row)
+        await db.flush()
+        enqueue_event(
+            db,
+            tenant_id=tenant_id,
+            aggregate_id=row.id,
+            event_type=event_type,
+            payload={"id": str(row.id), "name": row.name},
+        )
         await db.commit()
         await db.refresh(row)
     except IntegrityError as exc:
@@ -103,6 +113,7 @@ async def create_category(
         tenant_id=context.tenant.id,
         name=payload.name,
         duplicate_message="Category already exists",
+        event_type="product.category_created",
     )
 
 
@@ -126,6 +137,7 @@ async def create_brand(
         tenant_id=context.tenant.id,
         name=payload.name,
         duplicate_message="Brand already exists",
+        event_type="product.brand_created",
     )
 
 
@@ -149,6 +161,7 @@ async def create_unit(
         tenant_id=context.tenant.id,
         name=payload.name,
         duplicate_message="Unit already exists",
+        event_type="product.unit_created",
     )
 
 
@@ -256,6 +269,20 @@ async def create_product(
     )
     try:
         db.add(product)
+        await db.flush()
+        enqueue_event(
+            db,
+            tenant_id=context.tenant.id,
+            branch_id=context.branch.id if context.branch is not None else None,
+            aggregate_id=product.id,
+            event_type="product.created",
+            payload={
+                "product_id": str(product.id),
+                "name": product.name,
+                "sku": product.sku,
+                "barcode": product.barcode,
+            },
+        )
         await db.commit()
         await db.refresh(product)
     except IntegrityError as exc:
@@ -413,6 +440,21 @@ async def update_product(
     product.is_active = payload.is_active
 
     try:
+        await db.flush()
+        enqueue_event(
+            db,
+            tenant_id=context.tenant.id,
+            branch_id=context.branch.id if context.branch is not None else None,
+            aggregate_id=product.id,
+            event_type="product.updated",
+            payload={
+                "product_id": str(product.id),
+                "name": product.name,
+                "sku": product.sku,
+                "barcode": product.barcode,
+                "is_active": product.is_active,
+            },
+        )
         await db.commit()
         await db.refresh(product)
     except IntegrityError as exc:
