@@ -219,9 +219,32 @@ class _DesktopSystemStatus extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 4),
-            Text(
-              realtime.connected ? 'Realtime connected' : 'Realtime reconnecting',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            Row(
+              children: [
+                Icon(
+                  realtime.connected ? Icons.bolt : Icons.bolt_outlined,
+                  size: 15,
+                  color: realtime.connected ? scheme.primary : scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    realtime.statusLabel,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                  ),
+                ),
+                if (!realtime.connected)
+                  IconButton(
+                    tooltip: 'Reconnect realtime',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => context
+                        .read<RealtimeBloc>()
+                        .add(const RealtimeReconnectNowRequested()),
+                    icon: const Icon(Icons.refresh_rounded, size: 17),
+                  ),
+              ],
             ),
           ],
         ),
