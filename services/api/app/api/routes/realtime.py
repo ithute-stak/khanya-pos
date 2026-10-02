@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -53,9 +54,30 @@ async def tenant_events(websocket: WebSocket, tenant_id: UUID) -> None:
             return
 
     await connection_manager.connect(tenant_id, websocket)
+    await websocket.send_json(
+        {
+            "type": "socket.ready",
+            "tenant_id": str(tenant_id),
+            "user_id": str(user_id),
+            "connected_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
     try:
         while True:
-            await websocket.receive_text()
+            raw = await websocket.receive_text()
+            try:
+                message = json.loads(raw)
+            except json.JSONDecodeError:
+                message = {"type": raw}
+
+            if message.get("type") == "ping":
+                await websocket.send_json(
+                    {
+                        "type": "pong",
+                        "received_at": datetime.now(timezone.utc).isoformat(),
+                        "sent_at": message.get("sent_at"),
+                    }
+                )
     except WebSocketDisconnect:
         pass
     finally:
