@@ -1,5 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -22,6 +24,7 @@ import 'package:khanya_pos/features/pos/presentation/held_sales_dialog.dart';
 import 'package:khanya_pos/features/pos/presentation/pos_customer_credit_panel.dart';
 import 'package:khanya_pos/features/pos/printing/receipt_printer.dart';
 import 'package:khanya_pos/features/pos/printing/sale_receipt.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 Future<void> _submitCheckout(BuildContext context, CartState cart) async {
   final checkout = context.read<CheckoutBloc>().state;
@@ -627,9 +630,17 @@ class _ProductBrowser extends StatelessWidget {
               decoration: InputDecoration(
                 hintText: 'Scan barcode or search product',
                 prefixIcon: const Icon(Icons.qr_code_scanner),
-                suffixIcon: searchController.text.isEmpty
-                    ? const Icon(Icons.search)
-                    : IconButton(
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (Platform.isAndroid)
+                      IconButton(
+                        tooltip: 'Scan with camera',
+                        onPressed: () => _scanBarcode(context, state),
+                        icon: const Icon(Icons.camera_alt_outlined),
+                      ),
+                    if (searchController.text.isNotEmpty)
+                      IconButton(
                         tooltip: 'Clear search (Esc)',
                         onPressed: () {
                           searchController.clear();
@@ -637,7 +648,14 @@ class _ProductBrowser extends StatelessWidget {
                           searchFocusNode.requestFocus();
                         },
                         icon: const Icon(Icons.close),
+                      )
+                    else
+                      const Padding(
+                        padding: EdgeInsets.only(right: 12),
+                        child: Icon(Icons.search),
                       ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -686,6 +704,23 @@ class _ProductBrowser extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _scanBarcode(
+    BuildContext context,
+    ProductCatalogState state,
+  ) async {
+    if (!Platform.isAndroid) return;
+    final code = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const _BarcodeScannerPage(),
+      ),
+    );
+    if (!context.mounted || code == null || code.trim().isEmpty) return;
+    searchController.text = code.trim();
+    context.read<ProductCatalogBloc>().add(ProductCatalogQueryChanged(code.trim()));
+    _handleSubmitted(context, state, code);
   }
 
   void _handleSubmitted(BuildContext context, ProductCatalogState state, String value) {
@@ -766,6 +801,97 @@ class _SellableProductCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BarcodeScannerPage extends StatefulWidget {
+  const _BarcodeScannerPage();
+
+  @override
+  State<_BarcodeScannerPage> createState() => _BarcodeScannerPageState();
+}
+
+class _BarcodeScannerPageState extends State<_BarcodeScannerPage> {
+  final MobileScannerController _controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+  );
+  bool _handled = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_handled) return;
+    for (final barcode in capture.barcodes) {
+      final value = barcode.rawValue?.trim();
+      if (value == null || value.isEmpty) continue;
+      _handled = true;
+      Navigator.of(context).pop(value);
+      return;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Scan barcode'),
+        actions: [
+          IconButton(
+            tooltip: 'Toggle torch',
+            onPressed: _controller.toggleTorch,
+            icon: const Icon(Icons.flashlight_on_outlined),
+          ),
+          IconButton(
+            tooltip: 'Switch camera',
+            onPressed: _controller.switchCamera,
+            icon: const Icon(Icons.cameraswitch_outlined),
+          ),
+        ],
+      ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          MobileScanner(
+            controller: _controller,
+            onDetect: _onDetect,
+          ),
+          IgnorePointer(
+            child: Center(
+              child: Container(
+                width: 280,
+                height: 150,
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 3,
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+            ),
+          ),
+          const Align(
+            alignment: Alignment.bottomCenter,
+            child: SafeArea(
+              minimum: EdgeInsets.all(24),
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Text(
+                    'Place the product barcode inside the frame. Khanya will add the matching product automatically.',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
