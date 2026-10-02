@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:khanya_pos/core/branding/ithute_brand.dart';
 import 'package:khanya_pos/core/branding/khanya_brand.dart';
 
 class LandingPage extends StatelessWidget {
@@ -94,7 +95,9 @@ class LandingPage extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 44),
+                        const SizedBox(height: 34),
+                        const Center(child: IthuteProductBadge()),
+                        const SizedBox(height: 24),
                         Card(
                           color: scheme.primaryContainer.withValues(alpha: 0.55),
                           child: Padding(

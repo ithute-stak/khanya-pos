@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:khanya_pos/core/branding/ithute_brand.dart';
 import 'package:khanya_pos/core/branding/khanya_brand.dart';
 import 'package:khanya_pos/features/auth/presentation/bloc/session_bloc.dart';
 
@@ -110,6 +111,8 @@ class _BrandPanel extends StatelessWidget {
                 height: 1.45,
               ),
         ),
+        const SizedBox(height: 18),
+        const IthuteProductBadge(),
       ],
     );
   }
