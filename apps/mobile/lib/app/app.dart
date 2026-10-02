@@ -104,6 +104,7 @@ class _KhanyaPosAppState extends State<KhanyaPosApp> {
               client: dependencies.realtimeClient,
               sessionContext: dependencies.sessionContext,
               productRepository: dependencies.productRepository,
+              customerRepository: dependencies.customerRepository,
             ),
           ),
         ],
