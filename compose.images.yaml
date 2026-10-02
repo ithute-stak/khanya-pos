@@ -36,8 +36,24 @@ services:
     volumes:
       - minio_data:/data
 
+  migrate:
+    image: ghcr.io/ithute-stak/khanya-pos-api:${KHANYA_IMAGE_TAG:?KHANYA_IMAGE_TAG must be an exact tested release SHA}
+    restart: "no"
+    env_file: ${KHANYA_ENV_FILE:-.env}
+    environment:
+      APP_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://khanya:${POSTGRES_PASSWORD}@db:5432/khanya}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-http://minio:9000}
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   api:
-    image: ghcr.io/ithute-stak/khanya-pos-api:${KHANYA_IMAGE_TAG:-latest}
+    image: ghcr.io/ithute-stak/khanya-pos-api:${KHANYA_IMAGE_TAG:?KHANYA_IMAGE_TAG must be an exact tested release SHA}
     restart: unless-stopped
     env_file: ${KHANYA_ENV_FILE:-.env}
     environment:
@@ -48,8 +64,8 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-http://minio:9000}
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       minio:
@@ -74,7 +90,7 @@ services:
           - khanya-api
 
   outbox-worker:
-    image: ghcr.io/ithute-stak/khanya-pos-api:${KHANYA_IMAGE_TAG:-latest}
+    image: ghcr.io/ithute-stak/khanya-pos-api:${KHANYA_IMAGE_TAG:?KHANYA_IMAGE_TAG must be an exact tested release SHA}
     restart: unless-stopped
     env_file: ${KHANYA_ENV_FILE:-.env}
     environment:
