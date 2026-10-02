@@ -83,9 +83,10 @@ class _InventoryControlsPageState extends State<InventoryControlsPage> {
   }
 
   Future<void> _openTransfer() async {
-    final result = await showDialog<_TransferDraft>(
-      context: context,
-      builder: (_) => _TransferDialog(products: _products, branches: _branches),
+    final result = await Navigator.of(context).push<_TransferDraft>(
+      MaterialPageRoute(
+        builder: (_) => TransferStockPage(products: _products, branches: _branches),
+      ),
     );
     if (result == null || !mounted) return;
     await _run(
@@ -100,9 +101,10 @@ class _InventoryControlsPageState extends State<InventoryControlsPage> {
   }
 
   Future<void> _openStocktake() async {
-    final result = await showDialog<_CountDraft>(
-      context: context,
-      builder: (_) => _StocktakeDialog(products: _products),
+    final result = await Navigator.of(context).push<_CountDraft>(
+      MaterialPageRoute(
+        builder: (_) => StocktakePage(products: _products),
+      ),
     );
     if (result == null || !mounted) return;
     await _run(
@@ -116,9 +118,10 @@ class _InventoryControlsPageState extends State<InventoryControlsPage> {
   }
 
   Future<void> _openWriteOff() async {
-    final result = await showDialog<_WriteOffDraft>(
-      context: context,
-      builder: (_) => _WriteOffDialog(products: _products),
+    final result = await Navigator.of(context).push<_WriteOffDraft>(
+      MaterialPageRoute(
+        builder: (_) => WriteOffStockPage(products: _products),
+      ),
     );
     if (result == null || !mounted) return;
     await _run(
@@ -339,16 +342,16 @@ class _WriteOffDraft {
   final String reason;
 }
 
-class _TransferDialog extends StatefulWidget {
-  const _TransferDialog({required this.products, required this.branches});
+class TransferStockPage extends StatefulWidget {
+  const TransferStockPage({super.key, required this.products, required this.branches});
   final List<ProductSummary> products;
   final List<InventoryBranch> branches;
 
   @override
-  State<_TransferDialog> createState() => _TransferDialogState();
+  State<TransferStockPage> createState() => _TransferStockPageState();
 }
 
-class _TransferDialogState extends State<_TransferDialog> {
+class _TransferStockPageState extends State<TransferStockPage> {
   ProductSummary? product;
   InventoryBranch? branch;
   final quantity = TextEditingController();
@@ -363,61 +366,98 @@ class _TransferDialogState extends State<_TransferDialog> {
     super.dispose();
   }
 
+  void _submit() {
+    final qty = ScaledDecimal.toMilli(quantity.text);
+    if (product == null || branch == null || qty <= 0 || reason.text.trim().length < 2) return;
+    Navigator.pop(
+      context,
+      _TransferDraft(
+        product!,
+        branch!.id,
+        qty,
+        reason.text.trim(),
+        reference.text.trim().isEmpty ? null : reference.text.trim(),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Transfer stock'),
-        content: SizedBox(
-          width: 520,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<ProductSummary>(
-                  initialValue: product,
-                  decoration: const InputDecoration(labelText: 'Product'),
-                  items: widget.products.map((p) => DropdownMenuItem(value: p, child: Text('${p.name} (${p.sku})'))).toList(),
-                  onChanged: (value) => setState(() => product = value),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<InventoryBranch>(
-                  initialValue: branch,
-                  decoration: const InputDecoration(labelText: 'Destination branch'),
-                  items: widget.branches.map((b) => DropdownMenuItem(value: b, child: Text('${b.name} (${b.code})'))).toList(),
-                  onChanged: (value) => setState(() => branch = value),
-                ),
-                const SizedBox(height: 12),
-                TextField(controller: quantity, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Quantity')),
-                const SizedBox(height: 12),
-                TextField(controller: reason, decoration: const InputDecoration(labelText: 'Reason')),
-                const SizedBox(height: 12),
-                TextField(controller: reference, decoration: const InputDecoration(labelText: 'Reference (optional)')),
-              ],
+  Widget build(BuildContext context) => _InventoryFormScaffold(
+        title: 'Transfer stock',
+        subtitle: 'Move tracked stock from the current branch to another branch.',
+        icon: Icons.swap_horiz_rounded,
+        actionLabel: 'Transfer stock',
+        onSubmit: _submit,
+        child: Column(
+          children: [
+            DropdownButtonFormField<ProductSummary>(
+              initialValue: product,
+              decoration: const InputDecoration(
+                labelText: 'Product',
+                prefixIcon: Icon(Icons.inventory_2_outlined),
+              ),
+              items: widget.products
+                  .map((p) => DropdownMenuItem(
+                        value: p,
+                        child: Text('${p.name} (${p.sku})'),
+                      ))
+                  .toList(),
+              onChanged: (value) => setState(() => product = value),
             ),
-          ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<InventoryBranch>(
+              initialValue: branch,
+              decoration: const InputDecoration(
+                labelText: 'Destination branch',
+                prefixIcon: Icon(Icons.store_outlined),
+              ),
+              items: widget.branches
+                  .map((b) => DropdownMenuItem(
+                        value: b,
+                        child: Text('${b.name} (${b.code})'),
+                      ))
+                  .toList(),
+              onChanged: (value) => setState(() => branch = value),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: quantity,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Quantity',
+                prefixIcon: Icon(Icons.numbers_outlined),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reason,
+              decoration: const InputDecoration(
+                labelText: 'Reason',
+                prefixIcon: Icon(Icons.notes_outlined),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reference,
+              decoration: const InputDecoration(
+                labelText: 'Reference (optional)',
+                prefixIcon: Icon(Icons.tag_outlined),
+              ),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              final qty = ScaledDecimal.toMilli(quantity.text);
-              if (product == null || branch == null || qty <= 0 || reason.text.trim().length < 2) return;
-              Navigator.pop(context, _TransferDraft(product!, branch!.id, qty, reason.text.trim(), reference.text.trim().isEmpty ? null : reference.text.trim()));
-            },
-            child: const Text('Transfer'),
-          ),
-        ],
       );
 }
 
-class _StocktakeDialog extends StatefulWidget {
-  const _StocktakeDialog({required this.products});
+class StocktakePage extends StatefulWidget {
+  const StocktakePage({super.key, required this.products});
   final List<ProductSummary> products;
 
   @override
-  State<_StocktakeDialog> createState() => _StocktakeDialogState();
+  State<StocktakePage> createState() => _StocktakePageState();
 }
 
-class _StocktakeDialogState extends State<_StocktakeDialog> {
+class _StocktakePageState extends State<StocktakePage> {
   ProductSummary? product;
   final count = TextEditingController();
   final reason = TextEditingController(text: 'Physical stock count');
@@ -431,52 +471,84 @@ class _StocktakeDialogState extends State<_StocktakeDialog> {
     super.dispose();
   }
 
+  void _submit() {
+    final qty = ScaledDecimal.toMilli(count.text);
+    if (product == null || qty < 0 || reason.text.trim().length < 2) return;
+    Navigator.pop(
+      context,
+      _CountDraft(
+        product!,
+        qty,
+        reason.text.trim(),
+        reference.text.trim().isEmpty ? null : reference.text.trim(),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Post physical count'),
-        content: SizedBox(
-          width: 520,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<ProductSummary>(
-                initialValue: product,
-                decoration: const InputDecoration(labelText: 'Product'),
-                items: widget.products.map((p) => DropdownMenuItem(value: p, child: Text('${p.name} • System ${ScaledDecimal.fromMilli(p.onHandMilli ?? 0)}'))).toList(),
-                onChanged: (value) => setState(() => product = value),
+  Widget build(BuildContext context) => _InventoryFormScaffold(
+        title: 'Physical stocktake',
+        subtitle: 'Enter the counted quantity and let Khanya reconcile the variance.',
+        icon: Icons.fact_check_outlined,
+        actionLabel: 'Post count',
+        onSubmit: _submit,
+        child: Column(
+          children: [
+            DropdownButtonFormField<ProductSummary>(
+              initialValue: product,
+              decoration: const InputDecoration(
+                labelText: 'Product',
+                prefixIcon: Icon(Icons.inventory_2_outlined),
               ),
-              const SizedBox(height: 12),
-              TextField(controller: count, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Physical count')),
-              const SizedBox(height: 12),
-              TextField(controller: reason, decoration: const InputDecoration(labelText: 'Reason')),
-              const SizedBox(height: 12),
-              TextField(controller: reference, decoration: const InputDecoration(labelText: 'Count reference (optional)')),
-            ],
-          ),
+              items: widget.products
+                  .map((p) => DropdownMenuItem(
+                        value: p,
+                        child: Text(
+                          '${p.name} • System ${ScaledDecimal.fromMilli(p.onHandMilli ?? 0)}',
+                        ),
+                      ))
+                  .toList(),
+              onChanged: (value) => setState(() => product = value),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: count,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Physical count',
+                prefixIcon: Icon(Icons.numbers_outlined),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reason,
+              decoration: const InputDecoration(
+                labelText: 'Reason',
+                prefixIcon: Icon(Icons.notes_outlined),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reference,
+              decoration: const InputDecoration(
+                labelText: 'Count reference (optional)',
+                prefixIcon: Icon(Icons.tag_outlined),
+              ),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              final qty = ScaledDecimal.toMilli(count.text);
-              if (product == null || qty < 0 || reason.text.trim().length < 2) return;
-              Navigator.pop(context, _CountDraft(product!, qty, reason.text.trim(), reference.text.trim().isEmpty ? null : reference.text.trim()));
-            },
-            child: const Text('Post count'),
-          ),
-        ],
       );
 }
 
-class _WriteOffDialog extends StatefulWidget {
-  const _WriteOffDialog({required this.products});
+class WriteOffStockPage extends StatefulWidget {
+  const WriteOffStockPage({super.key, required this.products});
   final List<ProductSummary> products;
 
   @override
-  State<_WriteOffDialog> createState() => _WriteOffDialogState();
+  State<WriteOffStockPage> createState() => _WriteOffStockPageState();
 }
 
-class _WriteOffDialogState extends State<_WriteOffDialog> {
+class _WriteOffStockPageState extends State<WriteOffStockPage> {
   ProductSummary? product;
   String type = 'damage';
   final quantity = TextEditingController();
@@ -489,49 +561,161 @@ class _WriteOffDialogState extends State<_WriteOffDialog> {
     super.dispose();
   }
 
+  void _submit() {
+    final qty = ScaledDecimal.toMilli(quantity.text);
+    if (product == null || qty <= 0 || reason.text.trim().length < 2) return;
+    Navigator.pop(
+      context,
+      _WriteOffDraft(product!, qty, type, reason.text.trim()),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Write off stock'),
-        content: SizedBox(
-          width: 520,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<ProductSummary>(
-                initialValue: product,
-                decoration: const InputDecoration(labelText: 'Product'),
-                items: widget.products.map((p) => DropdownMenuItem(value: p, child: Text('${p.name} (${ScaledDecimal.fromMilli(p.onHandMilli ?? 0)} ${p.unit})'))).toList(),
-                onChanged: (value) => setState(() => product = value),
+  Widget build(BuildContext context) => _InventoryFormScaffold(
+        title: 'Damage / expiry',
+        subtitle: 'Write unusable stock out with a clear reason and audit trail.',
+        icon: Icons.delete_sweep_outlined,
+        actionLabel: 'Write off stock',
+        onSubmit: _submit,
+        child: Column(
+          children: [
+            DropdownButtonFormField<ProductSummary>(
+              initialValue: product,
+              decoration: const InputDecoration(
+                labelText: 'Product',
+                prefixIcon: Icon(Icons.inventory_2_outlined),
               ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: type,
-                decoration: const InputDecoration(labelText: 'Write-off type'),
-                items: const [
-                  DropdownMenuItem(value: 'damage', child: Text('Damaged stock')),
-                  DropdownMenuItem(value: 'expiry', child: Text('Expired stock')),
-                ],
-                onChanged: (value) => setState(() => type = value ?? 'damage'),
+              items: widget.products
+                  .map((p) => DropdownMenuItem(
+                        value: p,
+                        child: Text(
+                          '${p.name} (${ScaledDecimal.fromMilli(p.onHandMilli ?? 0)} ${p.unit})',
+                        ),
+                      ))
+                  .toList(),
+              onChanged: (value) => setState(() => product = value),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: type,
+              decoration: const InputDecoration(
+                labelText: 'Write-off type',
+                prefixIcon: Icon(Icons.warning_amber_outlined),
               ),
-              const SizedBox(height: 12),
-              TextField(controller: quantity, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Quantity to remove')),
-              const SizedBox(height: 12),
-              TextField(controller: reason, decoration: const InputDecoration(labelText: 'Reason / note')),
-            ],
-          ),
+              items: const [
+                DropdownMenuItem(value: 'damage', child: Text('Damaged stock')),
+                DropdownMenuItem(value: 'expiry', child: Text('Expired stock')),
+              ],
+              onChanged: (value) => setState(() => type = value ?? 'damage'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: quantity,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Quantity to remove',
+                prefixIcon: Icon(Icons.numbers_outlined),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reason,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Reason / note',
+                alignLabelWithHint: true,
+                prefixIcon: Icon(Icons.notes_outlined),
+              ),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              final qty = ScaledDecimal.toMilli(quantity.text);
-              if (product == null || qty <= 0 || reason.text.trim().length < 2) return;
-              Navigator.pop(context, _WriteOffDraft(product!, qty, type, reason.text.trim()));
-            },
-            child: const Text('Write off'),
-          ),
-        ],
       );
+}
+
+class _InventoryFormScaffold extends StatelessWidget {
+  const _InventoryFormScaffold({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.actionLabel,
+    required this.onSubmit,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String actionLabel;
+  final VoidCallback onSubmit;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final horizontal = constraints.maxWidth >= 760 ? 28.0 : 16.0;
+            return ListView(
+              padding: EdgeInsets.fromLTRB(horizontal, 20, horizontal, 110),
+              children: [
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CircleAvatar(
+                              radius: 24,
+                              child: Icon(icon),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: theme.textTheme.headlineSmall?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    subtitle,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        child,
+                        const SizedBox(height: 24),
+                        FilledButton.icon(
+                          onPressed: onSubmit,
+                          icon: const Icon(Icons.check_circle_outline),
+                          label: Text(actionLabel),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
 }
 
 IconData _movementIcon(String type) => switch (type) {
