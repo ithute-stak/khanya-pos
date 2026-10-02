@@ -360,8 +360,7 @@ class _MobileNavigationCard extends StatelessWidget {
                   foregroundColor: scheme.onPrimaryContainer,
                   child: Icon(item.icon, size: 20),
                 ),
-                const Spacer(),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Text(
                   item.label,
                   maxLines: 2,
