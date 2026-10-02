@@ -14,6 +14,7 @@ from app.models.identity import Branch, MembershipBranch, Tenant, TenantMembersh
 from app.models.platform import PlatformEvent
 from app.schemas.identity import (
     BootstrapRequest,
+    BranchSummary,
     LoginRequest,
     MeResponse,
     MembershipSummary,
@@ -285,15 +286,20 @@ async def me(
     memberships: list[MembershipSummary] = []
     for membership, tenant in memberships_result.all():
         branches_result = await db.execute(
-            select(MembershipBranch.branch_id).where(MembershipBranch.membership_id == membership.id)
+            select(Branch)
+            .join(MembershipBranch, MembershipBranch.branch_id == Branch.id)
+            .where(MembershipBranch.membership_id == membership.id)
+            .order_by(Branch.is_main.desc(), Branch.name.asc())
         )
+        branches = list(branches_result.scalars().all())
         memberships.append(
             MembershipSummary(
                 tenant_id=tenant.id,
                 tenant_name=tenant.name,
                 tenant_slug=tenant.slug,
                 role=Role(membership.role),
-                branch_ids=list(branches_result.scalars().all()),
+                branch_ids=[branch.id for branch in branches],
+                branches=[BranchSummary.model_validate(branch) for branch in branches],
             )
         )
     platform_role = effective_platform_role(principal.user, settings)
