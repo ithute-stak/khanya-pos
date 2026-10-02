@@ -69,7 +69,7 @@ class _LandingPageState extends State<LandingPage> {
                       children: [
                         Row(
                           children: [
-                            const KhanyaLogo(height: 48, borderRadius: 12),
+                            const KhanyaBrandTitle(compact: true),
                             const SizedBox(width: 10),
                             if (!compact)
                               const Expanded(
@@ -164,23 +164,25 @@ class _WelcomeStep extends StatelessWidget {
         children: [
           const SizedBox(height: 8),
           Container(
-            width: 86,
-            height: 86,
-            padding: const EdgeInsets.all(10),
+            width: 122,
+            height: 122,
+            padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(30),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0x14062F68),
-                  blurRadius: 22,
+                  color: Color(0x16062F68),
+                  blurRadius: 24,
                   offset: Offset(0, 10),
                 ),
               ],
             ),
-            child: const IthuteMark(size: 66),
+            child: const KhanyaMark(size: 108, radius: 24),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
+          const IthuteProductBadge(compact: true),
+          const SizedBox(height: 16),
           Text(
             'Welcome to Khanya',
             textAlign: TextAlign.center,
