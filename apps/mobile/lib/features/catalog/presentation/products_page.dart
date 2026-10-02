@@ -4,6 +4,8 @@ import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/features/catalog/data/product_repository.dart';
 import 'package:khanya_pos/features/catalog/domain/product_summary.dart';
 import 'package:khanya_pos/features/catalog/presentation/bloc/product_catalog_bloc.dart';
+import 'package:khanya_pos/features/catalog/presentation/catalog_masters_page.dart';
+import 'package:khanya_pos/features/catalog/presentation/product_detail_page.dart';
 
 class ProductsPage extends StatelessWidget {
   const ProductsPage({super.key});
@@ -39,6 +41,28 @@ class _ProductsViewState extends State<_ProductsView> {
         return products.where((product) => product.isLowStock).toList(growable: false);
       case _ProductFilter.tracked:
         return products.where((product) => product.tracksStock).toList(growable: false);
+    }
+  }
+
+  Future<void> _openProduct(BuildContext context, ProductSummary product) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => ProductDetailPage(product: product),
+      ),
+    );
+    if (context.mounted) {
+      context.read<ProductCatalogBloc>().add(const ProductCatalogRefreshRequested());
+    }
+  }
+
+  Future<void> _openCatalogSetup(BuildContext context) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => const CatalogMastersPage(),
+      ),
+    );
+    if (context.mounted) {
+      context.read<ProductCatalogBloc>().add(const ProductCatalogRefreshRequested());
     }
   }
 
@@ -88,6 +112,7 @@ class _ProductsViewState extends State<_ProductsView> {
                       tracked: tracked,
                       refreshing: state.isRefreshing,
                       onAdd: () => _showAddProduct(context),
+                      onSetup: () => _openCatalogSetup(context),
                       onRefresh: () => context
                           .read<ProductCatalogBloc>()
                           .add(const ProductCatalogRefreshRequested()),
@@ -117,8 +142,10 @@ class _ProductsViewState extends State<_ProductsView> {
                                       padding: const EdgeInsets.fromLTRB(14, 10, 14, 96),
                                       itemCount: products.length,
                                       separatorBuilder: (_, __) => const SizedBox(height: 10),
-                                      itemBuilder: (_, index) =>
-                                          _MobileProductCard(product: products[index]),
+                                      itemBuilder: (_, index) => GestureDetector(
+                                        onTap: () => _openProduct(context, products[index]),
+                                        child: _MobileProductCard(product: products[index]),
+                                      ),
                                     )
                                   : GridView.builder(
                                       padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
@@ -129,8 +156,10 @@ class _ProductsViewState extends State<_ProductsView> {
                                         mainAxisSpacing: 14,
                                       ),
                                       itemCount: products.length,
-                                      itemBuilder: (_, index) =>
-                                          _DesktopProductCard(product: products[index]),
+                                      itemBuilder: (_, index) => GestureDetector(
+                                        onTap: () => _openProduct(context, products[index]),
+                                        child: _DesktopProductCard(product: products[index]),
+                                      ),
                                     ),
                             ),
                     ),
@@ -153,6 +182,7 @@ class _ProductsHeader extends StatelessWidget {
     required this.tracked,
     required this.refreshing,
     required this.onAdd,
+    required this.onSetup,
     required this.onRefresh,
   });
 
@@ -162,6 +192,7 @@ class _ProductsHeader extends StatelessWidget {
   final int tracked;
   final bool refreshing;
   final VoidCallback onAdd;
+  final VoidCallback onSetup;
   final VoidCallback onRefresh;
 
   @override
@@ -186,6 +217,12 @@ class _ProductsHeader extends StatelessWidget {
                 ],
               ),
             ),
+            IconButton.filledTonal(
+              tooltip: 'Catalog setup',
+              onPressed: onSetup,
+              icon: const Icon(Icons.tune_rounded),
+            ),
+            const SizedBox(width: 8),
             IconButton.filledTonal(
               tooltip: 'Refresh products',
               onPressed: refreshing ? null : onRefresh,
@@ -580,9 +617,53 @@ class _AddProductPageState extends State<_AddProductPage> {
   final _sellingPrice = TextEditingController();
   final _costPrice = TextEditingController(text: '0.00');
   final _reorderLevel = TextEditingController(text: '0');
+  List<CatalogMasterItem> _categories = const [];
+  List<CatalogMasterItem> _brands = const [];
+  List<CatalogMasterItem> _units = const [];
+  String _categoryId = '';
+  String _brandId = '';
+  String _unitId = '';
+  bool _loadingMasters = true;
   bool _trackStock = true;
   bool _saving = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMasters();
+  }
+
+  Future<void> _loadMasters() async {
+    try {
+      final results = await Future.wait([
+        widget.repository.categories(),
+        widget.repository.brands(),
+        widget.repository.units(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _categories = results[0];
+        _brands = results[1];
+        _units = results[2];
+        _loadingMasters = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingMasters = false);
+    }
+  }
+
+  void _applyUnit(String value) {
+    setState(() => _unitId = value);
+    if (value.isEmpty) return;
+    for (final unit in _units) {
+      if (unit.id == value) {
+        _unit.text = unit.name;
+        break;
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -621,6 +702,9 @@ class _AddProductPageState extends State<_AddProductPage> {
         name: _name.text,
         sku: _sku.text,
         barcode: _barcode.text,
+        categoryId: _categoryId.isEmpty ? null : _categoryId,
+        brandId: _brandId.isEmpty ? null : _brandId,
+        unitId: _unitId.isEmpty ? null : _unitId,
         unit: _unit.text,
         sellingPrice: _sellingPrice.text,
         costPrice: _costPrice.text,
@@ -715,6 +799,59 @@ class _AddProductPageState extends State<_AddProductPage> {
                                     decoration: const InputDecoration(labelText: 'Barcode (optional)'),
                                   ),
                                 ),
+                                const SizedBox(height: 14),
+                                if (_loadingMasters)
+                                  const LinearProgressIndicator()
+                                else ...[
+                                  DropdownButtonFormField<String>(
+                                    initialValue: _categoryId,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Category',
+                                      prefixIcon: Icon(Icons.category_outlined),
+                                    ),
+                                    items: [
+                                      const DropdownMenuItem(value: '', child: Text('No category')),
+                                      ..._categories.map(
+                                        (item) => DropdownMenuItem(value: item.id, child: Text(item.name)),
+                                      ),
+                                    ],
+                                    onChanged: _saving
+                                        ? null
+                                        : (value) => setState(() => _categoryId = value ?? ''),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: _brandId,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Brand',
+                                      prefixIcon: Icon(Icons.sell_outlined),
+                                    ),
+                                    items: [
+                                      const DropdownMenuItem(value: '', child: Text('No brand')),
+                                      ..._brands.map(
+                                        (item) => DropdownMenuItem(value: item.id, child: Text(item.name)),
+                                      ),
+                                    ],
+                                    onChanged: _saving
+                                        ? null
+                                        : (value) => setState(() => _brandId = value ?? ''),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  DropdownButtonFormField<String>(
+                                    initialValue: _unitId,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Saved unit',
+                                      prefixIcon: Icon(Icons.straighten_outlined),
+                                    ),
+                                    items: [
+                                      DropdownMenuItem(value: '', child: Text('Manual: ${_unit.text}')),
+                                      ..._units.map(
+                                        (item) => DropdownMenuItem(value: item.id, child: Text(item.name)),
+                                      ),
+                                    ],
+                                    onChanged: _saving ? null : (value) => _applyUnit(value ?? ''),
+                                  ),
+                                ],
                                 const SizedBox(height: 14),
                                 _ResponsiveFields(
                                   compact: compact,
