@@ -45,7 +45,7 @@ flutter:
     - assets/branding/
 
 flutter_launcher_icons:
-  android: true
+  android: "khanya_launcher"
   ios: false
   image_path: assets/branding/khanya_pos_app_icon.jpg
   min_sdk_android: 21
