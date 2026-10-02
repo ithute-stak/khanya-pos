@@ -269,7 +269,7 @@ class _PlatformAdminPageState extends State<PlatformAdminPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Khanya Platform Administration'),
+        title: const Text('Business Approvals & Platform'),
         actions: [
           if (_pending.isNotEmpty) Chip(label: Text('${_pending.length} pending')),
           IconButton(onPressed: _loading ? null : _load, icon: const Icon(Icons.refresh_rounded), tooltip: 'Refresh'),
@@ -295,9 +295,9 @@ class _PlatformAdminPageState extends State<PlatformAdminPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Platform overview', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: KhanyaBrand.navy, fontWeight: FontWeight.w900)),
+                            Text('Business approvals', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: KhanyaBrand.navy, fontWeight: FontWeight.w900)),
                             const SizedBox(height: 4),
-                            Text('Monitor Khanya without entering tenant workspaces.', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.black54)),
+                            Text('Review new Khanya business registrations first, then monitor the wider platform.', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.black54)),
                           ],
                         ),
                       ),
@@ -313,21 +313,6 @@ class _PlatformAdminPageState extends State<PlatformAdminPage> {
                     ),
                   ],
                   const SizedBox(height: 20),
-                  Wrap(
-                    spacing: 14,
-                    runSpacing: 14,
-                    children: [
-                      _MetricCard(icon: Icons.business_outlined, label: 'Total businesses', value: '${_summary['total_tenants'] ?? 0}'),
-                      _MetricCard(icon: Icons.pending_actions_outlined, label: 'Pending approval', value: '${_summary['pending_applications'] ?? 0}'),
-                      _MetricCard(icon: Icons.check_circle_outline, label: 'Active businesses', value: '${_summary['active_tenants'] ?? 0}'),
-                      _MetricCard(icon: Icons.pause_circle_outline, label: 'Suspended', value: '${_summary['suspended_tenants'] ?? 0}'),
-                      _MetricCard(icon: Icons.receipt_long_outlined, label: 'Transactions today', value: '${_summary['transactions_today'] ?? 0}'),
-                      _MetricCard(icon: Icons.payments_outlined, label: 'Sales today', value: _money(_summary['gross_sales_today'])),
-                      _MetricCard(icon: Icons.devices_outlined, label: 'Active devices', value: '${_summary['active_devices_today'] ?? 0}'),
-                      _MetricCard(icon: Icons.notifications_outlined, label: 'Platform events', value: '${_summary['platform_events_today'] ?? 0}'),
-                    ],
-                  ),
-                  const SizedBox(height: 30),
                   _sectionTitle(context, 'Account approvals', _pending.isEmpty ? null : '${_pending.length} waiting'),
                   const SizedBox(height: 12),
                   if (_pending.isEmpty)
@@ -343,6 +328,22 @@ class _PlatformAdminPageState extends State<PlatformAdminPage> {
                             onReject: () => _reject(application),
                           ),
                         )),
+                  const SizedBox(height: 30),                  _sectionTitle(context, 'Platform overview', null),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 14,
+                    children: [
+                      _MetricCard(icon: Icons.business_outlined, label: 'Total businesses', value: '${_summary['total_tenants'] ?? 0}'),
+                      _MetricCard(icon: Icons.pending_actions_outlined, label: 'Pending approval', value: '${_summary['pending_applications'] ?? 0}'),
+                      _MetricCard(icon: Icons.check_circle_outline, label: 'Active businesses', value: '${_summary['active_tenants'] ?? 0}'),
+                      _MetricCard(icon: Icons.pause_circle_outline, label: 'Suspended', value: '${_summary['suspended_tenants'] ?? 0}'),
+                      _MetricCard(icon: Icons.receipt_long_outlined, label: 'Transactions today', value: '${_summary['transactions_today'] ?? 0}'),
+                      _MetricCard(icon: Icons.payments_outlined, label: 'Sales today', value: _money(_summary['gross_sales_today'])),
+                      _MetricCard(icon: Icons.devices_outlined, label: 'Active devices', value: '${_summary['active_devices_today'] ?? 0}'),
+                      _MetricCard(icon: Icons.notifications_outlined, label: 'Platform events', value: '${_summary['platform_events_today'] ?? 0}'),
+                    ],
+                  ),
                   const SizedBox(height: 30),
                   _sectionTitle(context, 'Businesses', null),
                   const SizedBox(height: 12),
