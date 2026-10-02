@@ -43,6 +43,10 @@ final GoRouter appRouter = GoRouter(
       routes: [
         GoRoute(path: '/', builder: (context, state) => const DashboardPage()),
         GoRoute(path: '/more', builder: (context, state) => const MobileMorePage()),
+        GoRoute(
+          path: '/workspace',
+          builder: (context, state) => const WorkspaceSwitcherPage(),
+        ),
         GoRoute(path: '/sync', builder: (context, state) => const SyncCentrePage()),
         GoRoute(path: '/platform-admin', builder: (context, state) => const PlatformAdminPage()),
         GoRoute(path: '/platform-admin/subscriptions', builder: (context, state) => const PlatformSubscriptionsPage()),
