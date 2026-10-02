@@ -22,6 +22,7 @@ fi
 
 python3 - "$MANIFEST" <<'PY'
 from pathlib import Path
+import re
 import sys
 
 manifest = Path(sys.argv[1])
@@ -33,16 +34,31 @@ if permission not in text:
     if marker not in text:
         raise SystemExit("Could not locate the Android <manifest> declaration")
     text = text.replace(marker, f"{marker}\n    {permission}", 1)
-    manifest.write_text(text, encoding="utf-8")
 
-if permission not in manifest.read_text(encoding="utf-8"):
+# The Dart package remains khanya_pos internally, but the installed app must
+# present the commercial product name to users.
+text, count = re.subn(
+    r'android:label="[^"]*"',
+    'android:label="Khanya"',
+    text,
+    count=1,
+)
+if count != 1:
+    raise SystemExit("Could not set the Android application label to Khanya")
+
+manifest.write_text(text, encoding="utf-8")
+
+rendered = manifest.read_text(encoding="utf-8")
+if permission not in rendered:
     raise SystemExit("INTERNET permission is missing from the release manifest")
+if 'android:label="Khanya"' not in rendered:
+    raise SystemExit("Android application label was not set to Khanya")
 PY
 
-echo "==> Applying Khanya POS launcher icon"
+echo "==> Applying Khanya launcher icon"
 dart run flutter_launcher_icons -f flutter_launcher_icons_android.yaml
 
 echo "==> Applying Khanya POS native splash branding"
 dart run flutter_native_splash:create
 
-echo "Android release networking and Khanya branding are configured."
+echo "Android app name, release networking, Khanya launcher icon, and splash branding are configured."
