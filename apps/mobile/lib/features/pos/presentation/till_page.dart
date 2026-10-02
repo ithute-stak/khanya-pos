@@ -169,13 +169,13 @@ class _CurrentTillSection extends StatelessWidget {
   }
 
   Future<void> _openTill(BuildContext context) async {
-    final openingFloat = await _showOpenTillDialog(context);
+    final openingFloat = await _openTillFlow(context);
     if (openingFloat == null || !context.mounted) return;
     context.read<TillBloc>().add(TillOpened(openingFloat));
   }
 
   Future<void> _cashMovement(BuildContext context, String movementType) async {
-    final request = await _showCashMovementDialog(context, movementType: movementType);
+    final request = await _cashMovementFlow(context, movementType: movementType);
     if (request == null || !context.mounted) return;
     context.read<TillBloc>().add(
           TillCashMovementRecorded(
@@ -187,7 +187,7 @@ class _CurrentTillSection extends StatelessWidget {
   }
 
   Future<void> _closeTill(BuildContext context, TillShiftSummary shift) async {
-    final request = await _showCloseTillDialog(context, shift: shift);
+    final request = await _closeTillFlow(context, shift: shift);
     if (request == null || !context.mounted) return;
     context.read<TillBloc>().add(
           TillClosed(countedCashMinor: request.countedCashMinor, note: request.note),
@@ -552,256 +552,384 @@ class _CloseTillRequest {
   final String? note;
 }
 
-Future<int?> _showOpenTillDialog(BuildContext context) async {
-  final controller = TextEditingController(text: '0.00');
-  try {
-    return await showDialog<int>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) {
-          String? error;
-          return AlertDialog(
-            icon: const Icon(Icons.lock_open_outlined, size: 38),
-            title: const Text('Open till shift'),
-            content: SizedBox(
-              width: 420,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text('Enter the physical cash already inside the drawer before sales begin.'),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: controller,
-                    autofocus: true,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
-                    decoration: InputDecoration(
-                      labelText: 'Opening float',
-                      prefixText: 'M ',
-                      errorText: error,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final amount = _parseMoney(controller.text);
-                  if (amount == null || amount < 0) {
-                    setState(() => error = 'Enter a valid amount of zero or more.');
-                    return;
-                  }
-                  Navigator.of(dialogContext).pop(amount);
-                },
-                child: const Text('Open Till'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  } finally {
-    controller.dispose();
-  }
+Future<int?> _openTillFlow(BuildContext context) {
+  return Navigator.of(context).push<int>(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => const _OpenTillPage(),
+    ),
+  );
 }
 
-Future<_CashMovementRequest?> _showCashMovementDialog(
+Future<_CashMovementRequest?> _cashMovementFlow(
   BuildContext context, {
   required String movementType,
-}) async {
-  final amountController = TextEditingController();
-  final reasonController = TextEditingController();
-  final paidIn = movementType == 'paid_in';
-  try {
-    return await showDialog<_CashMovementRequest>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) {
-          String? amountError;
-          String? reasonError;
-          return AlertDialog(
-            icon: Icon(paidIn ? Icons.add_circle_outline : Icons.remove_circle_outline, size: 38),
-            title: Text(paidIn ? 'Cash paid in' : 'Cash paid out'),
-            content: SizedBox(
-              width: 430,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: amountController,
-                    autofocus: true,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
-                    decoration: InputDecoration(
-                      labelText: 'Amount',
-                      prefixText: 'M ',
-                      errorText: amountError,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: reasonController,
-                    maxLength: 240,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      labelText: 'Reason',
-                      hintText: paidIn ? 'e.g. Extra change float' : 'e.g. Petty cash purchase',
-                      errorText: reasonError,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final amount = _parseMoney(amountController.text);
-                  final reason = reasonController.text.trim();
-                  var valid = true;
-                  if (amount == null || amount <= 0) {
-                    amountError = 'Enter an amount greater than zero.';
-                    valid = false;
-                  }
-                  if (reason.length < 2) {
-                    reasonError = 'Enter a reason for this drawer movement.';
-                    valid = false;
-                  }
-                  if (!valid) {
-                    setState(() {});
-                    return;
-                  }
-                  Navigator.of(dialogContext).pop(
-                        _CashMovementRequest(amountMinor: amount!, reason: reason),
-                      );
-                },
-                child: Text(paidIn ? 'Record Cash In' : 'Record Cash Out'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  } finally {
-    amountController.dispose();
-    reasonController.dispose();
-  }
+}) {
+  return Navigator.of(context).push<_CashMovementRequest>(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => _CashMovementPage(movementType: movementType),
+    ),
+  );
 }
 
-Future<_CloseTillRequest?> _showCloseTillDialog(
+Future<_CloseTillRequest?> _closeTillFlow(
   BuildContext context, {
   required TillShiftSummary shift,
-}) async {
-  final countController = TextEditingController(text: ScaledDecimal.fromMinor(shift.expectedCashMinor));
-  final noteController = TextEditingController();
-  var countedMinor = shift.expectedCashMinor;
-  try {
-    return await showDialog<_CloseTillRequest>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) {
-          final variance = countedMinor - shift.expectedCashMinor;
-          String? error;
-          return AlertDialog(
-            icon: const Icon(Icons.fact_check_outlined, size: 38),
-            title: const Text('Count & close till'),
-            content: SizedBox(
-              width: 470,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _DialogAmountRow(label: 'Expected cash', amountMinor: shift.expectedCashMinor),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: countController,
-                    autofocus: true,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
-                    onChanged: (value) {
-                      final parsed = _parseMoney(value);
-                      setState(() {
-                        countedMinor = parsed ?? 0;
-                      });
-                    },
-                    decoration: InputDecoration(
-                      labelText: 'Physical cash counted',
-                      prefixText: 'M ',
-                      errorText: error,
+}) {
+  return Navigator.of(context).push<_CloseTillRequest>(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => _CloseTillPage(shift: shift),
+    ),
+  );
+}
+
+class _OpenTillPage extends StatefulWidget {
+  const _OpenTillPage();
+
+  @override
+  State<_OpenTillPage> createState() => _OpenTillPageState();
+}
+
+class _OpenTillPageState extends State<_OpenTillPage> {
+  late final TextEditingController _controller;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '0.00');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final amount = _parseMoney(_controller.text);
+    if (amount == null || amount < 0) {
+      setState(() => _error = 'Enter a valid opening float.');
+      return;
+    }
+    Navigator.of(context).pop(amount);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Open till shift')),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 36),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 620),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Opening float',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  _DialogAmountRow(
-                    label: variance == 0
-                        ? 'Variance - balanced'
-                        : variance > 0
-                            ? 'Variance - over'
-                            : 'Variance - short',
-                    amountMinor: variance.abs(),
-                    emphasize: variance != 0,
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: noteController,
-                    maxLength: 500,
-                    minLines: 2,
-                    maxLines: 4,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      labelText: 'Closing note (optional)',
-                      hintText: 'Explain any shortage, overage or handover detail.',
+                    const SizedBox(height: 6),
+                    Text(
+                      'Enter the cash physically placed in the drawer before sales begin.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 22),
+                    TextField(
+                      controller: _controller,
+                      autofocus: true,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _submit(),
+                      decoration: InputDecoration(
+                        labelText: 'Opening float',
+                        prefixText: 'M ',
+                        errorText: _error,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      height: 50,
+                      child: FilledButton.icon(
+                        onPressed: _submit,
+                        icon: const Icon(Icons.lock_open_outlined),
+                        label: const Text('Open Till'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton.icon(
-                onPressed: () {
-                  final amount = _parseMoney(countController.text);
-                  if (amount == null || amount < 0) {
-                    setState(() => error = 'Enter the cash physically counted in the drawer.');
-                    return;
-                  }
-                  Navigator.of(dialogContext).pop(
-                        _CloseTillRequest(
-                          countedCashMinor: amount,
-                          note: noteController.text.trim().isEmpty ? null : noteController.text.trim(),
-                        ),
-                      );
-                },
-                icon: const Icon(Icons.lock_outline),
-                label: const Text('Close Till'),
-              ),
-            ],
-          );
-        },
+          ],
+        ),
       ),
     );
-  } finally {
-    countController.dispose();
-    noteController.dispose();
   }
 }
 
-class _DialogAmountRow extends StatelessWidget {
-  const _DialogAmountRow({
+class _CashMovementPage extends StatefulWidget {
+  const _CashMovementPage({required this.movementType});
+
+  final String movementType;
+
+  @override
+  State<_CashMovementPage> createState() => _CashMovementPageState();
+}
+
+class _CashMovementPageState extends State<_CashMovementPage> {
+  final _amountController = TextEditingController();
+  final _reasonController = TextEditingController();
+  String? _amountError;
+  String? _reasonError;
+
+  bool get _paidIn => widget.movementType == 'paid_in';
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final amount = _parseMoney(_amountController.text);
+    final reason = _reasonController.text.trim();
+    setState(() {
+      _amountError = amount == null || amount <= 0 ? 'Enter an amount greater than zero.' : null;
+      _reasonError = reason.length < 2 ? 'Enter a reason for this drawer movement.' : null;
+    });
+    if (_amountError != null || _reasonError != null) return;
+
+    Navigator.of(context).pop(
+      _CashMovementRequest(amountMinor: amount!, reason: reason),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(_paidIn ? 'Cash paid in' : 'Cash paid out')),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 36),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 620),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      _paidIn ? 'Record cash entering the drawer' : 'Record cash leaving the drawer',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Khanya keeps this movement with the current shift so the closing cash can reconcile correctly.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                    const SizedBox(height: 22),
+                    TextField(
+                      controller: _amountController,
+                      autofocus: true,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+                      decoration: InputDecoration(
+                        labelText: 'Amount',
+                        prefixText: 'M ',
+                        errorText: _amountError,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _reasonController,
+                      maxLength: 240,
+                      textCapitalization: TextCapitalization.sentences,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _submit(),
+                      decoration: InputDecoration(
+                        labelText: 'Reason',
+                        hintText: _paidIn ? 'e.g. Extra change float' : 'e.g. Petty cash purchase',
+                        errorText: _reasonError,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      height: 50,
+                      child: FilledButton.icon(
+                        onPressed: _submit,
+                        icon: Icon(_paidIn ? Icons.add_circle_outline : Icons.remove_circle_outline),
+                        label: Text(_paidIn ? 'Record Cash In' : 'Record Cash Out'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CloseTillPage extends StatefulWidget {
+  const _CloseTillPage({required this.shift});
+
+  final TillShiftSummary shift;
+
+  @override
+  State<_CloseTillPage> createState() => _CloseTillPageState();
+}
+
+class _CloseTillPageState extends State<_CloseTillPage> {
+  late final TextEditingController _countController;
+  final _noteController = TextEditingController();
+  late int _countedMinor;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _countedMinor = widget.shift.expectedCashMinor;
+    _countController = TextEditingController(
+      text: ScaledDecimal.fromMinor(widget.shift.expectedCashMinor),
+    );
+  }
+
+  @override
+  void dispose() {
+    _countController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final amount = _parseMoney(_countController.text);
+    if (amount == null || amount < 0) {
+      setState(() => _error = 'Enter the cash physically counted in the drawer.');
+      return;
+    }
+    final note = _noteController.text.trim();
+    Navigator.of(context).pop(
+      _CloseTillRequest(
+        countedCashMinor: amount,
+        note: note.isEmpty ? null : note,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final variance = _countedMinor - widget.shift.expectedCashMinor;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Count & close till')),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 36),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 680),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Reconcile the drawer',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Count the cash physically in the drawer. Khanya will calculate any overage or shortage before closing the shift.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                    const SizedBox(height: 20),
+                    _TillAmountRow(
+                      label: 'Expected cash',
+                      amountMinor: widget.shift.expectedCashMinor,
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _countController,
+                      autofocus: true,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+                      onChanged: (value) {
+                        final parsed = _parseMoney(value);
+                        setState(() {
+                          _countedMinor = parsed ?? 0;
+                          _error = null;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Physical cash counted',
+                        prefixText: 'M ',
+                        errorText: _error,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _TillAmountRow(
+                      label: variance == 0
+                          ? 'Variance - balanced'
+                          : variance > 0
+                              ? 'Variance - over'
+                              : 'Variance - short',
+                      amountMinor: variance.abs(),
+                      emphasize: variance != 0,
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _noteController,
+                      maxLength: 500,
+                      minLines: 2,
+                      maxLines: 4,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        labelText: 'Closing note (optional)',
+                        hintText: 'Explain any shortage, overage or handover detail.',
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      height: 50,
+                      child: FilledButton.icon(
+                        onPressed: _submit,
+                        icon: const Icon(Icons.lock_outline),
+                        label: const Text('Close Till'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TillAmountRow extends StatelessWidget {
+  const _TillAmountRow({
     required this.label,
     required this.amountMinor,
     this.emphasize = false,
