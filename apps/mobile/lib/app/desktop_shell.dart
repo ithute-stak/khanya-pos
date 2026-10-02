@@ -130,7 +130,8 @@ int _mobileDestinationIndex(String location) {
 bool _hideMobileNavigation(String location) {
   if (location.startsWith('/sales/')) return true;
   if (location.startsWith('/customers/') && location != '/customers') return true;
-  return location == '/purchases/new' ||
+  return location == '/workspace' ||
+      location == '/purchases/new' ||
       location == '/expenses/new' ||
       location == '/inventory/controls';
 }
@@ -140,7 +141,9 @@ class MobileMorePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final role = _selectedRole(context.watch<SessionBloc>().state);
+    final sessionState = context.watch<SessionBloc>().state;
+    final role = _selectedRole(sessionState);
+    final workspaceLabel = _selectedWorkspaceLabel(sessionState);
     final hiddenPaths = <String>{
       '/',
       '/pos',
@@ -174,7 +177,10 @@ class MobileMorePage extends StatelessWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
             children: [
-              _MobileMoreHeader(role: role),
+              _MobileMoreHeader(
+                role: role,
+                workspaceLabel: workspaceLabel,
+              ),
               const SizedBox(height: 18),
               if (operations.isNotEmpty) ...[
                 _MobileSectionTitle(
@@ -213,9 +219,13 @@ class MobileMorePage extends StatelessWidget {
 }
 
 class _MobileMoreHeader extends StatelessWidget {
-  const _MobileMoreHeader({required this.role});
+  const _MobileMoreHeader({
+    required this.role,
+    required this.workspaceLabel,
+  });
 
   final String? role;
+  final String? workspaceLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -253,7 +263,9 @@ class _MobileMoreHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Open every business tool available to your role.',
+                  workspaceLabel ?? 'Open every business tool available to your role.',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),
@@ -520,7 +532,9 @@ class _DesktopSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final role = _selectedRole(context.watch<SessionBloc>().state);
+    final sessionState = context.watch<SessionBloc>().state;
+    final role = _selectedRole(sessionState);
+    final workspaceLabel = _selectedWorkspaceLabel(sessionState);
     final visibleItems = _items.where((item) => item.isVisibleFor(role)).toList(growable: false);
 
     return SizedBox(
@@ -553,6 +567,18 @@ class _DesktopSidebar extends StatelessWidget {
                         letterSpacing: 1.1,
                       ),
                 ),
+                if (workspaceLabel != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    workspaceLabel,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 Expanded(
                   child: ListView(
@@ -737,6 +763,28 @@ String? _selectedRole(SessionState state) {
   final tenantId = state.session.selectedTenantId;
   for (final membership in state.session.memberships) {
     if (membership.tenantId == tenantId) return membership.role;
+  }
+  return null;
+}
+
+String? _selectedWorkspaceLabel(SessionState state) {
+  if (state is! SessionAuthenticated) return null;
+  final session = state.session;
+  final tenantId = session.selectedTenantId;
+  final branchId = session.selectedBranchId;
+  if (tenantId == null) return null;
+
+  for (final membership in session.memberships) {
+    if (membership.tenantId != tenantId) continue;
+    if (branchId == null) return membership.tenantName;
+    final branch = membership.branchById(branchId);
+    final branchLabel = branch == null
+        ? membership.branchLabel(
+            branchId,
+            fallbackIndex: membership.branchIds.indexOf(branchId),
+          )
+        : membership.branchLabel(branchId);
+    return '${membership.tenantName} • $branchLabel';
   }
   return null;
 }
