@@ -3,9 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:khanya_pos/core/branding/khanya_brand.dart';
 import 'package:khanya_pos/core/connectivity/connectivity_bloc.dart';
+import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/core/realtime/realtime_bloc.dart';
 import 'package:khanya_pos/core/sync/sync_bloc.dart';
 import 'package:khanya_pos/features/auth/presentation/bloc/session_bloc.dart';
+import 'package:khanya_pos/features/pos/data/sales_repository.dart';
+import 'package:khanya_pos/features/pos/domain/sales_history.dart';
+import 'package:khanya_pos/features/reports/data/reports_repository.dart';
+import 'package:khanya_pos/features/reports/domain/sales_summary_report.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -63,6 +68,8 @@ class DashboardPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       const _SystemStatusCard(),
+                      const SizedBox(height: 16),
+                      const _LiveSalesPanel(),
                       const SizedBox(height: 22),
                       Text(
                         'Business tools',
@@ -252,6 +259,245 @@ class _DashboardHero extends StatelessWidget {
       ),
     );
   }
+}
+
+class _LiveSalesPanel extends StatefulWidget {
+  const _LiveSalesPanel();
+
+  @override
+  State<_LiveSalesPanel> createState() => _LiveSalesPanelState();
+}
+
+class _LiveSalesPanelState extends State<_LiveSalesPanel> {
+  bool _loading = true;
+  SalesSummaryReport? _summary;
+  List<SaleHistoryEntry> _recent = const [];
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day);
+    try {
+      final results = await Future.wait<dynamic>([
+        context.read<ReportsRepository>().salesSummary(start: start, end: now),
+        context.read<SalesRepository>().history(),
+      ]);
+      if (!mounted) return;
+      final sales = (results[1] as List<SaleHistoryEntry>)
+          .where((sale) => !sale.completedAt.toLocal().isBefore(start))
+          .take(5)
+          .toList(growable: false);
+      setState(() {
+        _summary = results[0] as SalesSummaryReport;
+        _recent = sales;
+      });
+    } catch (_) {
+      try {
+        final sales = await context.read<SalesRepository>().history();
+        if (!mounted) return;
+        final today = sales
+            .where((sale) => !sale.completedAt.toLocal().isBefore(start))
+            .toList(growable: false);
+        setState(() {
+          _recent = today.take(5).toList(growable: false);
+          _error = 'Live report totals are unavailable. Showing sales recorded on this device/server.';
+        });
+      } catch (_) {
+        if (mounted) {
+          setState(() => _error = 'Today’s sales could not be loaded.');
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = _summary;
+    final fallbackGross = _recent.fold<int>(0, (sum, sale) => sum + sale.totalMinor);
+    final gross = summary?.grossSalesMinor ?? fallbackGross;
+    final count = summary?.saleCount ?? _recent.length;
+    final profit = summary?.grossProfitMinor;
+    final outstanding = summary?.balanceDueMinor;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Today',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Refresh today',
+                  onPressed: _loading ? null : _load,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+            if (_loading) const LinearProgressIndicator(),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _LiveMetric(
+                  label: 'Sales',
+                  value: Loti.formatMinor(gross),
+                  icon: Icons.payments_outlined,
+                ),
+                _LiveMetric(
+                  label: 'Transactions',
+                  value: '$count',
+                  icon: Icons.receipt_long_outlined,
+                ),
+                if (profit != null)
+                  _LiveMetric(
+                    label: 'Gross profit',
+                    value: Loti.formatMinor(profit),
+                    icon: Icons.trending_up_rounded,
+                  ),
+                if (outstanding != null)
+                  _LiveMetric(
+                    label: 'Credit outstanding',
+                    value: Loti.formatMinor(outstanding),
+                    icon: Icons.account_balance_wallet_outlined,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Recent sales',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => context.push('/sales'),
+                  child: const Text('View all'),
+                ),
+              ],
+            ),
+            if (_recent.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('No sales recorded today yet.'),
+              )
+            else
+              for (final sale in _recent)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: Icon(
+                    sale.localOnly ? Icons.cloud_upload_outlined : Icons.receipt_outlined,
+                  ),
+                  title: Text(sale.saleNumber),
+                  subtitle: Text(
+                    sale.syncStatus == null
+                        ? _dashboardTime(sale.completedAt)
+                        : '${_dashboardTime(sale.completedAt)} • ${sale.syncStatus}',
+                  ),
+                  trailing: Text(
+                    Loti.formatMinor(sale.totalMinor),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  onTap: sale.localOnly ? null : () => context.push('/sales/${sale.id}'),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LiveMetric extends StatelessWidget {
+  const _LiveMetric({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 145, maxWidth: 220),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest.withValues(alpha: .45),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(13),
+          child: Row(
+            children: [
+              Icon(icon, color: scheme.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: Theme.of(context).textTheme.bodySmall),
+                    const SizedBox(height: 2),
+                    Text(
+                      value,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _dashboardTime(DateTime value) {
+  final local = value.toLocal();
+  String two(int part) => part.toString().padLeft(2, '0');
+  return '${two(local.hour)}:${two(local.minute)}';
 }
 
 class _SystemStatusCard extends StatelessWidget {

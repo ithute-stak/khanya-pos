@@ -487,6 +487,17 @@ final class AppDatabase extends _$AppDatabase {
         .get();
   }
 
+  Future<List<PendingPurchase>> getPendingPurchases({
+    String? tenantId,
+    String? branchId,
+  }) {
+    final query = select(pendingPurchases);
+    if (tenantId != null) query.where((row) => row.tenantId.equals(tenantId));
+    if (branchId != null) query.where((row) => row.branchId.equals(branchId));
+    query.orderBy([(row) => OrderingTerm.desc(row.createdAt)]);
+    return query.get();
+  }
+
   Future<PendingPurchase?> getPendingPurchase(String clientOperationId) {
     return (select(pendingPurchases)
           ..where((row) => row.clientOperationId.equals(clientOperationId)))
@@ -546,6 +557,17 @@ final class AppDatabase extends _$AppDatabase {
           ..where((row) => row.status.equals('pending') | row.status.equals('syncing'))
           ..orderBy([(row) => OrderingTerm.asc(row.createdAt)]))
         .get();
+  }
+
+  Future<List<PendingExpense>> getPendingExpenses({
+    String? tenantId,
+    String? branchId,
+  }) {
+    final query = select(pendingExpenses);
+    if (tenantId != null) query.where((row) => row.tenantId.equals(tenantId));
+    if (branchId != null) query.where((row) => row.branchId.equals(branchId));
+    query.orderBy([(row) => OrderingTerm.desc(row.createdAt)]);
+    return query.get();
   }
 
   Future<PendingExpense?> getPendingExpense(String clientOperationId) {

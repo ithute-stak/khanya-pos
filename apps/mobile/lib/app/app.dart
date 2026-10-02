@@ -9,6 +9,7 @@ import 'package:khanya_pos/core/branding/ithute_brand.dart';
 import 'package:khanya_pos/core/branding/khanya_brand.dart';
 import 'package:khanya_pos/core/connectivity/connectivity_bloc.dart';
 import 'package:khanya_pos/core/realtime/realtime_bloc.dart';
+import 'package:khanya_pos/core/storage/app_database.dart';
 import 'package:khanya_pos/core/sync/sync_bloc.dart';
 import 'package:khanya_pos/features/accounting/data/accounting_repository.dart';
 import 'package:khanya_pos/features/auth/data/auth_repository.dart';
@@ -17,6 +18,7 @@ import 'package:khanya_pos/features/auth/presentation/business_context_page.dart
 import 'package:khanya_pos/features/auth/presentation/landing_page.dart';
 import 'package:khanya_pos/features/auth/presentation/login_page.dart';
 import 'package:khanya_pos/features/auth/presentation/signup_page.dart';
+import 'package:khanya_pos/features/customers/data/customer_database.dart';
 import 'package:khanya_pos/features/customers/data/customer_repository.dart';
 import 'package:khanya_pos/features/devices/data/device_repository.dart';
 import 'package:khanya_pos/features/growth/data/growth_repository.dart';
@@ -52,6 +54,8 @@ class _KhanyaPosAppState extends State<KhanyaPosApp> {
     final dependencies = widget.dependencies;
     return MultiRepositoryProvider(
       providers: [
+        RepositoryProvider<AppDatabase>.value(value: dependencies.database),
+        RepositoryProvider<CustomerDatabase>.value(value: dependencies.customerDatabase),
         RepositoryProvider<AuthRepository>.value(value: dependencies.authRepository),
         RepositoryProvider<PlatformRepository>.value(value: dependencies.platformRepository),
         RepositoryProvider.value(value: dependencies.productRepository),

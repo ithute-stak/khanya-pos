@@ -492,6 +492,7 @@ class _MobileStatusRow extends StatelessWidget {
 }
 
 const _operationsPaths = <String>{
+  '/sync',
   '/sales',
   '/till',
   '/inventory',
@@ -744,6 +745,7 @@ const _items = <_DesktopNavItem>[
   _DesktopNavItem(label: 'Dashboard', path: '/', icon: Icons.dashboard_outlined, shortcut: 'F1'),
   _DesktopNavItem(label: 'New Sale', path: '/pos', icon: Icons.point_of_sale_outlined, shortcut: 'F2'),
   _DesktopNavItem(label: 'Sales History', path: '/sales', icon: Icons.history_outlined),
+  _DesktopNavItem(label: 'Sync Centre', path: '/sync', icon: Icons.cloud_sync_outlined),
   _DesktopNavItem(label: 'Till & Shift', path: '/till', icon: Icons.price_check_outlined),
   _DesktopNavItem(
     label: 'Reports',
