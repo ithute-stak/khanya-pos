@@ -813,17 +813,31 @@ class _MobileCartBar extends StatelessWidget {
     final cartBloc = context.read<CartBloc>();
     final checkoutBloc = context.read<CheckoutBloc>();
     final creditCubit = context.read<PosCreditCubit>();
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => MultiBlocProvider(
-        providers: [
-          BlocProvider.value(value: cartBloc),
-          BlocProvider.value(value: checkoutBloc),
-          BlocProvider.value(value: creditCubit),
-        ],
-        child: const FractionallySizedBox(heightFactor: 0.92, child: _CartPanel(closeOnComplete: true)),
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: cartBloc),
+            BlocProvider.value(value: checkoutBloc),
+            BlocProvider.value(value: creditCubit),
+          ],
+          child: const _MobileCheckoutPage(),
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileCheckoutPage extends StatelessWidget {
+  const _MobileCheckoutPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Review sale')),
+      body: const SafeArea(
+        child: _CartPanel(closeOnComplete: true),
       ),
     );
   }
