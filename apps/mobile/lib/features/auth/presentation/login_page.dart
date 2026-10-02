@@ -50,8 +50,7 @@ class _LoginPageState extends State<LoginPage> {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 390),
-              child: AutofillGroup(
-                child: Form(
+              child: Form(
                   key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -86,10 +85,8 @@ class _LoginPageState extends State<LoginPage> {
                         controller: _identifierController,
                         enabled: !loading,
                         keyboardType: TextInputType.emailAddress,
-                        autofillHints: const [
-                          AutofillHints.username,
-                          AutofillHints.email,
-                        ],
+                        autocorrect: false,
+                        enableSuggestions: false,
                         textInputAction: TextInputAction.next,
                         decoration: const InputDecoration(
                           labelText: 'Email or phone',
@@ -105,7 +102,8 @@ class _LoginPageState extends State<LoginPage> {
                         controller: _passwordController,
                         enabled: !loading,
                         obscureText: _obscurePassword,
-                        autofillHints: const [AutofillHints.password],
+                        autocorrect: false,
+                        enableSuggestions: false,
                         textInputAction: TextInputAction.done,
                         onFieldSubmitted: (_) => _submit(),
                         decoration: InputDecoration(
@@ -153,7 +151,6 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ],
                   ),
-                ),
               ),
             ),
           ),
