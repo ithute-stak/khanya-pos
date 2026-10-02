@@ -355,11 +355,11 @@ class _PosViewState extends State<_PosView> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Receipt sent to the configured printer.')),
           );
-          return;
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Automatic receipt printing failed. You can print it manually.')),
+          );
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Automatic receipt printing failed. You can print it manually.')),
-        );
       } catch (_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -370,7 +370,7 @@ class _PosViewState extends State<_PosView> {
 
     await Future<void>.delayed(const Duration(milliseconds: 120));
     if (!mounted) return;
-    await _showReceiptDialog(receipt);
+    await _showReceiptPage(receipt);
   }
 
   Future<void> _printReceipt(SaleReceipt receipt) async {
@@ -403,6 +403,18 @@ class _PosViewState extends State<_PosView> {
     if (receipt != null) await _printReceipt(receipt);
   }
 
+  Future<void> _shareReceipt(SaleReceipt receipt) async {
+    try {
+      final hardware = await _readHardwareSettings();
+      await ReceiptPrinter.shareReceipt(receipt, settings: hardware);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to share the receipt PDF. Please try again.')),
+      );
+    }
+  }
+
   Future<void> _openDrawer() async {
     final hardware = await _readHardwareSettings();
     if (!mounted) return;
@@ -429,66 +441,15 @@ class _PosViewState extends State<_PosView> {
     }
   }
 
-  Future<void> _showReceiptDialog(SaleReceipt receipt) async {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        icon: const Icon(Icons.check_circle_outline, size: 38),
-        title: Text(receipt.isCreditSale ? 'Credit sale completed' : 'Sale completed'),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Total: ${Loti.formatMinor(receipt.totalMinor)}'),
-              if (receipt.customerName != null) ...[
-                const SizedBox(height: 6),
-                Text('Customer: ${receipt.customerName}'),
-              ],
-              if (receipt.paidMinor > 0) ...[
-                const SizedBox(height: 6),
-                Text('Payment: ${receipt.paymentMethod.label}'),
-              ],
-              if (receipt.isCreditSale) ...[
-                const SizedBox(height: 6),
-                Text('Paid now: ${Loti.formatMinor(receipt.paidMinor)}'),
-                const SizedBox(height: 6),
-                Text(
-                  'Balance due: ${Loti.formatMinor(receipt.creditBalanceMinor)}',
-                  style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                ),
-              ],
-              if (receipt.cashTenderedMinor != null) ...[
-                const SizedBox(height: 6),
-                Text('Cash received: ${Loti.formatMinor(receipt.cashTenderedMinor!)}'),
-                const SizedBox(height: 6),
-                Text(
-                  'Change due: ${Loti.formatMinor(receipt.cashChangeMinor ?? 0)}',
-                  style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                ),
-              ],
-              const SizedBox(height: 6),
-              Text('Reference: ${receipt.reference}'),
-              const SizedBox(height: 6),
-              Text('Status: ${receipt.syncStatus}'),
-            ],
-          ),
+  Future<void> _showReceiptPage(SaleReceipt receipt) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _CompletedReceiptPage(
+          receipt: receipt,
+          onPrint: () => _printReceipt(receipt),
+          onShare: () => _shareReceipt(receipt),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Done'),
-          ),
-          FilledButton.icon(
-            onPressed: () async {
-              Navigator.of(dialogContext).pop();
-              await _printReceipt(receipt);
-            },
-            icon: const Icon(Icons.print_outlined),
-            label: const Text('Print receipt'),
-          ),
-        ],
       ),
     );
   }
@@ -603,6 +564,187 @@ class _PosViewState extends State<_PosView> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CompletedReceiptPage extends StatelessWidget {
+  const _CompletedReceiptPage({
+    required this.receipt,
+    required this.onPrint,
+    required this.onShare,
+  });
+
+  final SaleReceipt receipt;
+  final Future<void> Function() onPrint;
+  final Future<void> Function() onShare;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(receipt.isCreditSale ? 'Credit sale completed' : 'Sale completed'),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 36),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 680),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    CircleAvatar(
+                      radius: 34,
+                      backgroundColor: scheme.primaryContainer,
+                      foregroundColor: scheme.onPrimaryContainer,
+                      child: const Icon(Icons.check_rounded, size: 38),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      Loti.formatMinor(receipt.totalMinor),
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.displaySmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      receipt.syncStatus,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    Card(
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          children: [
+                            _ReceiptResultRow(label: 'Reference', value: receipt.reference),
+                            if (receipt.customerName != null)
+                              _ReceiptResultRow(label: 'Customer', value: receipt.customerName!),
+                            if (receipt.paidMinor > 0)
+                              _ReceiptResultRow(label: 'Payment', value: receipt.paymentMethod.label),
+                            if (receipt.isCreditSale) ...[
+                              _ReceiptResultRow(
+                                label: 'Paid now',
+                                value: Loti.formatMinor(receipt.paidMinor),
+                              ),
+                              _ReceiptResultRow(
+                                label: 'Balance due',
+                                value: Loti.formatMinor(receipt.creditBalanceMinor),
+                                emphasize: true,
+                              ),
+                            ],
+                            if (receipt.cashTenderedMinor != null) ...[
+                              _ReceiptResultRow(
+                                label: 'Cash received',
+                                value: Loti.formatMinor(receipt.cashTenderedMinor!),
+                              ),
+                              _ReceiptResultRow(
+                                label: 'Change due',
+                                value: Loti.formatMinor(receipt.cashChangeMinor ?? 0),
+                                emphasize: true,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final narrow = constraints.maxWidth < 520;
+                        final print = FilledButton.tonalIcon(
+                          onPressed: onPrint,
+                          icon: const Icon(Icons.print_outlined),
+                          label: const Text('Print receipt'),
+                        );
+                        final share = FilledButton.tonalIcon(
+                          onPressed: onShare,
+                          icon: const Icon(Icons.share_outlined),
+                          label: const Text('Share PDF'),
+                        );
+                        final done = FilledButton.icon(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.add_shopping_cart_rounded),
+                          label: const Text('New sale'),
+                        );
+                        if (narrow) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              done,
+                              const SizedBox(height: 10),
+                              share,
+                              const SizedBox(height: 10),
+                              print,
+                            ],
+                          );
+                        }
+                        return Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          alignment: WrapAlignment.center,
+                          children: [done, share, print],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReceiptResultRow extends StatelessWidget {
+  const _ReceiptResultRow({
+    required this.label,
+    required this.value,
+    this.emphasize = false,
+  });
+
+  final String label;
+  final String value;
+  final bool emphasize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 118,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: emphasize ? FontWeight.w900 : FontWeight.w700,
+                  ),
+            ),
+          ),
+        ],
       ),
     );
   }
