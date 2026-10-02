@@ -39,4 +39,10 @@ if permission not in manifest.read_text(encoding="utf-8"):
     raise SystemExit("INTERNET permission is missing from the release manifest")
 PY
 
-echo "Android release networking is configured."
+echo "==> Applying Khanya POS launcher icon"
+dart run flutter_launcher_icons -f flutter_launcher_icons_android.yaml
+
+echo "==> Applying Khanya POS native splash branding"
+dart run flutter_native_splash:create
+
+echo "Android release networking and Khanya branding are configured."
