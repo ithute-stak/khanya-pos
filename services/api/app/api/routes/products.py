@@ -7,6 +7,7 @@ from app.api.deps import TenantContext, require_permissions
 from app.core.database import get_db
 from app.models.commerce import BranchProductStock, Product, ProductCategory
 from app.schemas.commerce import ProductCategoryCreate, ProductCreate
+from app.services.outbox import enqueue_event
 from app.services.pricing import money, quantity
 
 router = APIRouter()
@@ -21,6 +22,14 @@ async def create_category(
     category = ProductCategory(tenant_id=context.tenant.id, name=payload.name.strip())
     try:
         db.add(category)
+        await db.flush()
+        enqueue_event(
+            db,
+            tenant_id=context.tenant.id,
+            aggregate_id=category.id,
+            event_type="product.category_created",
+            payload={"category_id": str(category.id), "name": category.name},
+        )
         await db.commit()
         await db.refresh(category)
     except IntegrityError as exc:
@@ -76,6 +85,20 @@ async def create_product(
     )
     try:
         db.add(product)
+        await db.flush()
+        enqueue_event(
+            db,
+            tenant_id=context.tenant.id,
+            branch_id=context.branch.id if context.branch is not None else None,
+            aggregate_id=product.id,
+            event_type="product.created",
+            payload={
+                "product_id": str(product.id),
+                "name": product.name,
+                "sku": product.sku,
+                "barcode": product.barcode,
+            },
+        )
         await db.commit()
         await db.refresh(product)
     except IntegrityError as exc:
