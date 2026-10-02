@@ -28,7 +28,7 @@ class _LoginPageState extends State<LoginPage> {
     if (!_formKey.currentState!.validate()) return;
     context.read<SessionBloc>().add(
           SessionLoginRequested(
-            identifier: _identifierController.text,
+            identifier: _identifierController.text.trim(),
             password: _passwordController.text,
           ),
         );
@@ -40,133 +40,118 @@ class _LoginPageState extends State<LoginPage> {
     final loading = state is SessionAuthenticating;
     final error = state is SessionFailure ? state.message : null;
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Scaffold(
-      body: KhanyaBrandedBackground(
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: AutofillGroup(
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Center(
-                          child: KhanyaMark(size: 96, radius: 24),
+      backgroundColor: scheme.surface,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 390),
+              child: AutofillGroup(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Center(
+                        child: KhanyaMark(size: 86, radius: 22),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Khanya',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          color: KhanyaBrand.navy,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -.5,
                         ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Sign in to continue',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 26),
+                      if (error != null) ...[
+                        _ErrorBanner(message: error),
                         const SizedBox(height: 14),
-                        Text(
-                          'Khanya POS',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            color: KhanyaBrand.navy,
-                            fontWeight: FontWeight.w900,
-                          ),
+                      ],
+                      TextFormField(
+                        controller: _identifierController,
+                        enabled: !loading,
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [
+                          AutofillHints.username,
+                          AutofillHints.email,
+                        ],
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(
+                          labelText: 'Email or phone',
+                          prefixIcon: Icon(Icons.person_outline),
                         ),
-                        const SizedBox(height: 4),
-                        const Center(child: IthuteProductBadge(compact: true)),
-                        const SizedBox(height: 24),
-                        Card(
-                          margin: EdgeInsets.zero,
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Text(
-                                  'Sign in',
-                                  style: theme.textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Continue to your business workspace.',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                                if (error != null) ...[
-                                  const SizedBox(height: 14),
-                                  _ErrorBanner(message: error),
-                                ],
-                                const SizedBox(height: 18),
-                                TextFormField(
-                                  controller: _identifierController,
-                                  enabled: !loading,
-                                  keyboardType: TextInputType.emailAddress,
-                                  autofillHints: const [
-                                    AutofillHints.username,
-                                    AutofillHints.email,
-                                  ],
-                                  textInputAction: TextInputAction.next,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Email or phone',
-                                    prefixIcon: Icon(Icons.person_outline),
-                                  ),
-                                  validator: (value) =>
-                                      value == null || value.trim().isEmpty
-                                          ? 'Enter your email or phone number'
-                                          : null,
-                                ),
-                                const SizedBox(height: 12),
-                                TextFormField(
-                                  controller: _passwordController,
-                                  enabled: !loading,
-                                  obscureText: _obscurePassword,
-                                  autofillHints: const [AutofillHints.password],
-                                  textInputAction: TextInputAction.done,
-                                  onFieldSubmitted: (_) => _submit(),
-                                  decoration: InputDecoration(
-                                    labelText: 'Password',
-                                    prefixIcon: const Icon(Icons.lock_outline),
-                                    suffixIcon: IconButton(
-                                      tooltip: _obscurePassword
-                                          ? 'Show password'
-                                          : 'Hide password',
-                                      onPressed: loading
-                                          ? null
-                                          : () => setState(
-                                                () => _obscurePassword =
-                                                    !_obscurePassword,
-                                              ),
-                                      icon: Icon(
-                                        _obscurePassword
-                                            ? Icons.visibility_outlined
-                                            : Icons.visibility_off_outlined,
-                                      ),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                                ? 'Enter your email or phone number'
+                                : null,
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _passwordController,
+                        enabled: !loading,
+                        obscureText: _obscurePassword,
+                        autofillHints: const [AutofillHints.password],
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _submit(),
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            tooltip:
+                                _obscurePassword ? 'Show password' : 'Hide password',
+                            onPressed: loading
+                                ? null
+                                : () => setState(
+                                      () => _obscurePassword = !_obscurePassword,
                                     ),
-                                  ),
-                                  validator: (value) =>
-                                      value == null || value.isEmpty
-                                          ? 'Enter your password'
-                                          : null,
-                                ),
-                                const SizedBox(height: 18),
-                                FilledButton.icon(
-                                  onPressed: loading ? null : _submit,
-                                  icon: loading
-                                      ? const SizedBox.square(
-                                          dimension: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      : const Icon(Icons.login_rounded),
-                                  label:
-                                      Text(loading ? 'Signing in…' : 'Sign in'),
-                                ),
-                              ],
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                        validator: (value) =>
+                            value == null || value.isEmpty
+                                ? 'Enter your password'
+                                : null,
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        height: 50,
+                        child: FilledButton(
+                          onPressed: loading ? null : _submit,
+                          child: loading
+                              ? const SizedBox.square(
+                                  dimension: 19,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Sign in'),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      const Center(
+                        child: IthuteProductBadge(compact: true),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -185,21 +170,24 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.errorContainer,
+        color: scheme.errorContainer,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            Icon(
-              Icons.error_outline,
-              color: Theme.of(context).colorScheme.onErrorContainer,
-            ),
+            Icon(Icons.error_outline, color: scheme.onErrorContainer),
             const SizedBox(width: 10),
-            Expanded(child: Text(message)),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: scheme.onErrorContainer),
+              ),
+            ),
           ],
         ),
       ),
