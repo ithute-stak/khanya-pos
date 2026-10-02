@@ -1,5 +1,44 @@
 import 'package:equatable/equatable.dart';
 
+class BusinessBranch extends Equatable {
+  const BusinessBranch({
+    required this.id,
+    required this.name,
+    required this.code,
+    this.location,
+    this.isMain = false,
+    this.isActive = true,
+  });
+
+  final String id;
+  final String name;
+  final String code;
+  final String? location;
+  final bool isMain;
+  final bool isActive;
+
+  factory BusinessBranch.fromJson(Map<String, dynamic> json) => BusinessBranch(
+        id: json['id'].toString(),
+        name: json['name']?.toString() ?? 'Branch',
+        code: json['code']?.toString() ?? '',
+        location: json['location']?.toString(),
+        isMain: json['is_main'] == true,
+        isActive: json['is_active'] != false,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'code': code,
+        'location': location,
+        'is_main': isMain,
+        'is_active': isActive,
+      };
+
+  @override
+  List<Object?> get props => [id, name, code, location, isMain, isActive];
+}
+
 class BusinessMembership extends Equatable {
   const BusinessMembership({
     required this.tenantId,
@@ -7,6 +46,7 @@ class BusinessMembership extends Equatable {
     required this.tenantSlug,
     required this.role,
     required this.branchIds,
+    this.branches = const [],
   });
 
   final String tenantId;
@@ -14,6 +54,24 @@ class BusinessMembership extends Equatable {
   final String tenantSlug;
   final String role;
   final List<String> branchIds;
+  final List<BusinessBranch> branches;
+
+  BusinessBranch? branchById(String? branchId) {
+    if (branchId == null) return null;
+    for (final branch in branches) {
+      if (branch.id == branchId) return branch;
+    }
+    return null;
+  }
+
+  String branchLabel(String branchId, {int? fallbackIndex}) {
+    final branch = branchById(branchId);
+    if (branch != null) {
+      final code = branch.code.trim();
+      return code.isEmpty ? branch.name : '${branch.name} ($code)';
+    }
+    return fallbackIndex == null ? 'Branch' : 'Branch ${fallbackIndex + 1}';
+  }
 
   factory BusinessMembership.fromJson(Map<String, dynamic> json) {
     return BusinessMembership(
@@ -24,6 +82,10 @@ class BusinessMembership extends Equatable {
       branchIds: (json['branch_ids'] as List<dynamic>? ?? const [])
           .map((value) => value.toString())
           .toList(growable: false),
+      branches: (json['branches'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((value) => BusinessBranch.fromJson(Map<String, dynamic>.from(value)))
+          .toList(growable: false),
     );
   }
 
@@ -33,10 +95,11 @@ class BusinessMembership extends Equatable {
         'tenant_slug': tenantSlug,
         'role': role,
         'branch_ids': branchIds,
+        'branches': branches.map((branch) => branch.toJson()).toList(growable: false),
       };
 
   @override
-  List<Object?> get props => [tenantId, tenantName, tenantSlug, role, branchIds];
+  List<Object?> get props => [tenantId, tenantName, tenantSlug, role, branchIds, branches];
 }
 
 class AuthSession extends Equatable {
