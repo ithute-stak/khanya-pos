@@ -5,6 +5,7 @@ import 'package:khanya_pos/features/accounting/presentation/accounting_page.dart
 import 'package:khanya_pos/features/accounting/presentation/cash_flow_page.dart';
 import 'package:khanya_pos/features/accounting/presentation/financial_statements_page.dart';
 import 'package:khanya_pos/features/accounting/presentation/management_reports_page.dart';
+import 'package:khanya_pos/features/auth/presentation/workspace_switcher_page.dart';
 import 'package:khanya_pos/features/catalog/presentation/products_page.dart';
 import 'package:khanya_pos/features/customers/presentation/customer_detail_page.dart';
 import 'package:khanya_pos/features/customers/presentation/customer_statement_page.dart';
