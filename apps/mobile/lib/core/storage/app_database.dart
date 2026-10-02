@@ -359,6 +359,34 @@ final class AppDatabase extends _$AppDatabase {
         .getSingleOrNull();
   }
 
+  Future<List<PendingSale>> getSalesForHistory({
+    required String tenantId,
+    required String branchId,
+  }) {
+    return (select(pendingSales)
+          ..where((row) =>
+              row.tenantId.equals(tenantId) &
+              row.branchId.equals(branchId))
+          ..orderBy([(row) => OrderingTerm.desc(row.createdAt)]))
+        .get();
+  }
+
+  Future<void> markPendingSaleSynced({
+    required String clientOperationId,
+    required String payloadJson,
+  }) async {
+    final current = await getPendingSale(clientOperationId);
+    if (current == null) return;
+    await (update(pendingSales)
+          ..where((row) => row.clientOperationId.equals(clientOperationId)))
+        .write(PendingSalesCompanion(
+      payloadJson: Value(payloadJson),
+      status: const Value('synced'),
+      lastError: const Value(null),
+      updatedAt: Value(DateTime.now().toUtc()),
+    ));
+  }
+
   Future<void> markPendingSale({
     required String clientOperationId,
     required String status,
