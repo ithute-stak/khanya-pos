@@ -6,7 +6,7 @@ abstract final class KhanyaBrand {
   static const String companyDescriptor = 'Management & Consultancy Services';
   static const String tagline = 'People | Process | Profit | A Brighter Tomorrow';
 
-  static const String appIconAsset = 'assets/branding/khanya_pos_app_icon.png';
+  static const String appIconAsset = 'assets/branding/khanya_pos_app_icon.jpg';
   static const String fullLogoAsset = appIconAsset;
 
   static const Color forest = Color(0xFF006B3C);
