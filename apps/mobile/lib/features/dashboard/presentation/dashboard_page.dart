@@ -279,8 +279,16 @@ class _SystemStatusCard extends StatelessWidget {
             ),
             _StatusItem(
               icon: realtime.connected ? Icons.bolt : Icons.bolt_outlined,
-              label: realtime.connected ? 'Realtime active' : 'Realtime reconnecting',
+              label: realtime.statusLabel,
             ),
+            if (!realtime.connected)
+              FilledButton.tonalIcon(
+                onPressed: () => context
+                    .read<RealtimeBloc>()
+                    .add(const RealtimeReconnectNowRequested()),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Reconnect live'),
+              ),
             FilledButton.tonalIcon(
               onPressed: sync.isSyncing ? null : () => context.read<SyncBloc>().add(const SyncRequested()),
               icon: const Icon(Icons.sync),
