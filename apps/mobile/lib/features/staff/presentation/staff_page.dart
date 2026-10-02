@@ -99,17 +99,17 @@ class _StaffPageState extends State<StaffPage> {
       return;
     }
 
-    final changed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => RepositoryProvider.value(
-        value: context.read<StaffRepository>(),
-        child: _StaffEditorDialog(
-          staff: member,
-          branches: _branches,
-          actorRole: _actorRole,
-          editingSelf: editingSelf,
-          defaultBranchId: _selectedBranchId,
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => RepositoryProvider.value(
+          value: context.read<StaffRepository>(),
+          child: StaffEditorPage(
+            staff: member,
+            branches: _branches,
+            actorRole: _actorRole,
+            editingSelf: editingSelf,
+            defaultBranchId: _selectedBranchId,
+          ),
         ),
       ),
     );
@@ -467,8 +467,9 @@ class _EmptyStaffCard extends StatelessWidget {
   }
 }
 
-class _StaffEditorDialog extends StatefulWidget {
-  const _StaffEditorDialog({
+class StaffEditorPage extends StatefulWidget {
+  const StaffEditorPage({
+    super.key,
     required this.staff,
     required this.branches,
     required this.actorRole,
@@ -483,10 +484,10 @@ class _StaffEditorDialog extends StatefulWidget {
   final String? defaultBranchId;
 
   @override
-  State<_StaffEditorDialog> createState() => _StaffEditorDialogState();
+  State<StaffEditorPage> createState() => _StaffEditorPageState();
 }
 
-class _StaffEditorDialogState extends State<_StaffEditorDialog> {
+class _StaffEditorPageState extends State<StaffEditorPage> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
@@ -508,7 +509,8 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
     _emailController = TextEditingController(text: widget.staff?.email ?? '');
     _phoneController = TextEditingController(text: widget.staff?.phone ?? '');
     _passwordController = TextEditingController();
-    _role = widget.staff?.role ?? (assignable.contains('cashier') ? 'cashier' : assignable.firstOrNull ?? 'cashier');
+    _role = widget.staff?.role ??
+        (assignable.contains('cashier') ? 'cashier' : assignable.firstOrNull ?? 'cashier');
     _branchIds = widget.staff?.branchIds.toSet() ?? <String>{};
     if (_creating && _branchIds.isEmpty && widget.defaultBranchId != null) {
       _branchIds.add(widget.defaultBranchId!);
@@ -531,7 +533,6 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
       setState(() => _error = 'Select at least one branch.');
       return;
     }
-
     setState(() {
       _saving = true;
       _error = null;
@@ -572,140 +573,207 @@ class _StaffEditorDialogState extends State<_StaffEditorDialog> {
   Widget build(BuildContext context) {
     final assignable = _assignableRoles(widget.actorRole);
     final roles = widget.editingSelf ? <String>[_role] : assignable;
+    final theme = Theme.of(context);
 
-    return AlertDialog(
-      title: Text(_creating ? 'Add staff member' : 'Edit staff member'),
-      content: SizedBox(
-        width: 560,
-        child: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: _nameController,
-                  enabled: !_saving,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(labelText: 'Full name'),
-                  validator: (value) => (value?.trim().length ?? 0) < 2 ? 'Enter the staff member name.' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _emailController,
-                  enabled: _creating && !_saving,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Email address'),
-                  validator: (value) {
-                    final text = value?.trim() ?? '';
-                    if (!text.contains('@') || text.length < 3) return 'Enter a valid email address.';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _phoneController,
-                  enabled: !_saving,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Phone (optional)'),
-                ),
-                if (_creating) ...[
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _passwordController,
-                    enabled: !_saving,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Temporary password',
-                      helperText: 'At least 8 characters. The user can sign in with this password.',
-                    ),
-                    validator: (value) {
-                      final text = value ?? '';
-                      if (text.length < 8) return 'Use at least 8 characters.';
-                      return null;
-                    },
-                  ),
-                ],
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _role,
-                  decoration: const InputDecoration(labelText: 'Role'),
-                  items: roles
-                      .map((role) => DropdownMenuItem(value: role, child: Text(_roleLabel(role))))
-                      .toList(growable: false),
-                  onChanged: widget.editingSelf || _saving
-                      ? null
-                      : (value) {
-                          if (value != null) setState(() => _role = value);
-                        },
-                ),
-                const SizedBox(height: 18),
-                Text('Branch access', style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: widget.branches.map((branch) {
-                    return FilterChip(
-                      label: Text(branch.isMain ? '${branch.name} • Main' : branch.name),
-                      selected: _branchIds.contains(branch.id),
-                      onSelected: widget.editingSelf || _saving
-                          ? null
-                          : (selected) {
-                              setState(() {
-                                if (selected) {
-                                  _branchIds.add(branch.id);
-                                } else {
-                                  _branchIds.remove(branch.id);
-                                }
-                              });
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_creating ? 'Add staff member' : 'Edit staff member'),
+      ),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final horizontal = constraints.maxWidth >= 760 ? 28.0 : 16.0;
+            return Form(
+              key: _formKey,
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(horizontal, 20, horizontal, 110),
+                children: [
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 760),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            _creating ? 'Create staff access' : 'Staff profile & access',
+                            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Manage identity, role and branch access from one full screen.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+                          TextFormField(
+                            controller: _nameController,
+                            enabled: !_saving,
+                            textCapitalization: TextCapitalization.words,
+                            textInputAction: TextInputAction.next,
+                            decoration: const InputDecoration(
+                              labelText: 'Full name',
+                              prefixIcon: Icon(Icons.person_outline),
+                            ),
+                            validator: (value) =>
+                                (value?.trim().length ?? 0) < 2 ? 'Enter the staff member name.' : null,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _emailController,
+                            enabled: _creating && !_saving,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            decoration: const InputDecoration(
+                              labelText: 'Email address',
+                              prefixIcon: Icon(Icons.email_outlined),
+                            ),
+                            validator: (value) {
+                              final text = value?.trim() ?? '';
+                              if (!text.contains('@') || text.length < 3) {
+                                return 'Enter a valid email address.';
+                              }
+                              return null;
                             },
-                    );
-                  }).toList(growable: false),
-                ),
-                if (!_creating) ...[
-                  const SizedBox(height: 14),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Active staff membership'),
-                    subtitle: Text(
-                      widget.editingSelf
-                          ? 'You cannot deactivate your own membership.'
-                          : 'Inactive staff cannot access this business.',
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _phoneController,
+                            enabled: !_saving,
+                            keyboardType: TextInputType.phone,
+                            textInputAction: TextInputAction.next,
+                            decoration: const InputDecoration(
+                              labelText: 'Phone (optional)',
+                              prefixIcon: Icon(Icons.phone_outlined),
+                            ),
+                          ),
+                          if (_creating) ...[
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _passwordController,
+                              enabled: !_saving,
+                              obscureText: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Temporary password',
+                                helperText: 'At least 8 characters. The user can sign in with this password.',
+                                prefixIcon: Icon(Icons.lock_outline),
+                              ),
+                              validator: (value) {
+                                final text = value ?? '';
+                                if (text.length < 8) return 'Use at least 8 characters.';
+                                return null;
+                              },
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            initialValue: _role,
+                            decoration: const InputDecoration(
+                              labelText: 'Role',
+                              prefixIcon: Icon(Icons.manage_accounts_outlined),
+                            ),
+                            items: roles
+                                .map((role) => DropdownMenuItem(
+                                      value: role,
+                                      child: Text(_roleLabel(role)),
+                                    ))
+                                .toList(growable: false),
+                            onChanged: widget.editingSelf || _saving
+                                ? null
+                                : (value) {
+                                    if (value != null) setState(() => _role = value);
+                                  },
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            'Branch access',
+                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Choose every branch this staff member can access.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: widget.branches.map((branch) {
+                              return FilterChip(
+                                label: Text(branch.isMain ? '${branch.name} • Main' : branch.name),
+                                selected: _branchIds.contains(branch.id),
+                                onSelected: widget.editingSelf || _saving
+                                    ? null
+                                    : (selected) {
+                                        setState(() {
+                                          if (selected) {
+                                            _branchIds.add(branch.id);
+                                          } else {
+                                            _branchIds.remove(branch.id);
+                                          }
+                                        });
+                                      },
+                              );
+                            }).toList(growable: false),
+                          ),
+                          if (!_creating) ...[
+                            const SizedBox(height: 18),
+                            SwitchListTile.adaptive(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Active staff membership'),
+                              subtitle: Text(
+                                widget.editingSelf
+                                    ? 'You cannot deactivate your own membership.'
+                                    : 'Inactive staff cannot access this business.',
+                              ),
+                              value: _isActive,
+                              onChanged: widget.editingSelf || _saving
+                                  ? null
+                                  : (value) => setState(() => _isActive = value),
+                            ),
+                          ],
+                          if (_error != null) ...[
+                            const SizedBox(height: 14),
+                            Card(
+                              color: theme.colorScheme.errorContainer,
+                              child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Text(
+                                  _error!,
+                                  style: TextStyle(color: theme.colorScheme.onErrorContainer),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 24),
+                          FilledButton.icon(
+                            onPressed: _saving ? null : _save,
+                            icon: _saving
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : Icon(_creating ? Icons.person_add_alt_1 : Icons.save_outlined),
+                            label: Text(
+                              _saving
+                                  ? 'Saving…'
+                                  : _creating
+                                      ? 'Create staff'
+                                      : 'Save changes',
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    value: _isActive,
-                    onChanged: widget.editingSelf || _saving ? null : (value) => setState(() => _isActive = value),
                   ),
                 ],
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    _error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
-                  ),
-                ],
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton.icon(
-          onPressed: _saving ? null : _save,
-          icon: _saving
-              ? const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Icon(_creating ? Icons.person_add_alt_1 : Icons.save_outlined),
-          label: Text(_creating ? 'Create staff' : 'Save changes'),
-        ),
-      ],
     );
   }
 }

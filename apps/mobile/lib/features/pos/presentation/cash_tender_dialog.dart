@@ -6,23 +6,24 @@ Future<int?> showCashTenderDialog(
   BuildContext context, {
   required int totalMinor,
 }) {
-  return showDialog<int>(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => CashTenderDialog(totalMinor: totalMinor),
+  return Navigator.of(context).push<int>(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => CashTenderPage(totalMinor: totalMinor),
+    ),
   );
 }
 
-class CashTenderDialog extends StatefulWidget {
-  const CashTenderDialog({super.key, required this.totalMinor});
+class CashTenderPage extends StatefulWidget {
+  const CashTenderPage({super.key, required this.totalMinor});
 
   final int totalMinor;
 
   @override
-  State<CashTenderDialog> createState() => _CashTenderDialogState();
+  State<CashTenderPage> createState() => _CashTenderPageState();
 }
 
-class _CashTenderDialogState extends State<CashTenderDialog> {
+class _CashTenderPageState extends State<CashTenderPage> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
   late int _tenderedMinor;
@@ -77,96 +78,118 @@ class _CashTenderDialogState extends State<CashTenderDialog> {
     final quickAmounts = buildQuickTenderAmounts(widget.totalMinor);
     final shortfall = widget.totalMinor - _tenderedMinor;
 
-    return AlertDialog(
-      icon: const Icon(Icons.payments_outlined, size: 38),
-      title: const Text('Cash payment'),
-      content: SizedBox(
-        width: 430,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: scheme.primaryContainer.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    const Text('Amount due'),
-                    const Spacer(),
-                    Text(
-                      Loti.formatMinor(widget.totalMinor),
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
-              onChanged: _onChanged,
-              onSubmitted: (_) => _complete(),
-              decoration: const InputDecoration(
-                labelText: 'Cash received',
-                prefixText: 'M ',
-                helperText: 'Enter the amount handed to the cashier.',
-              ),
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Cash payment'),
+      ),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final horizontal = constraints.maxWidth >= 760 ? 28.0 : 16.0;
+            return ListView(
+              padding: EdgeInsets.fromLTRB(horizontal, 20, horizontal, 110),
               children: [
-                for (final amount in quickAmounts)
-                  ActionChip(
-                    label: Text(amount == widget.totalMinor ? 'Exact ${Loti.formatMinor(amount)}' : Loti.formatMinor(amount)),
-                    onPressed: () => _setTendered(amount),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: _canComplete
-                    ? scheme.secondaryContainer.withValues(alpha: 0.55)
-                    : scheme.errorContainer.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Text(_canComplete ? 'Change due' : 'Still due'),
-                    const Spacer(),
-                    Text(
-                      Loti.formatMinor(_canComplete ? _changeMinor : shortfall),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 680),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Receive cash',
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Enter the amount handed to the cashier and confirm the change before completing the sale.',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                        ),
+                        const SizedBox(height: 20),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Row(
+                              children: [
+                                const Text('Amount due'),
+                                const Spacer(),
+                                Text(
+                                  Loti.formatMinor(widget.totalMinor),
+                                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        TextField(
+                          controller: _controller,
+                          focusNode: _focusNode,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+                          onChanged: _onChanged,
+                          onSubmitted: (_) => _complete(),
+                          decoration: const InputDecoration(
+                            labelText: 'Cash received',
+                            prefixText: 'M ',
+                            helperText: 'Enter the amount handed to the cashier.',
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final amount in quickAmounts)
+                              ActionChip(
+                                label: Text(
+                                  amount == widget.totalMinor
+                                      ? 'Exact ${Loti.formatMinor(amount)}'
+                                      : Loti.formatMinor(amount),
+                                ),
+                                onPressed: () => _setTendered(amount),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        Card(
+                          color: _canComplete
+                              ? scheme.secondaryContainer.withValues(alpha: 0.55)
+                              : scheme.errorContainer.withValues(alpha: 0.45),
+                          child: Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Row(
+                              children: [
+                                Text(_canComplete ? 'Change due' : 'Still due'),
+                                const Spacer(),
+                                Text(
+                                  Loti.formatMinor(_canComplete ? _changeMinor : shortfall),
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        FilledButton.icon(
+                          onPressed: _canComplete ? _complete : null,
+                          icon: const Icon(Icons.check_circle_outline),
+                          label: Text(
+                            _canComplete
+                                ? 'Complete sale • Change ${Loti.formatMinor(_changeMinor)}'
+                                : 'Enter enough cash',
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton.icon(
-          onPressed: _canComplete ? _complete : null,
-          icon: const Icon(Icons.check_circle_outline),
-          label: Text(_canComplete ? 'Complete sale • Change ${Loti.formatMinor(_changeMinor)}' : 'Enter enough cash'),
-        ),
-      ],
     );
   }
 }

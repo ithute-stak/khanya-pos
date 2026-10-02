@@ -36,10 +36,11 @@ class _CustomersViewState extends State<_CustomersView> {
   }
 
   Future<void> _addCustomer() async {
-    final created = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => _AddCustomerDialog(
-        repository: context.read<CustomerRepository>(),
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => AddCustomerPage(
+          repository: context.read<CustomerRepository>(),
+        ),
       ),
     );
     if (created == true && mounted) {
@@ -399,16 +400,16 @@ class _AmountLabel extends StatelessWidget {
   }
 }
 
-class _AddCustomerDialog extends StatefulWidget {
-  const _AddCustomerDialog({required this.repository});
+class AddCustomerPage extends StatefulWidget {
+  const AddCustomerPage({super.key, required this.repository});
 
   final CustomerRepository repository;
 
   @override
-  State<_AddCustomerDialog> createState() => _AddCustomerDialogState();
+  State<AddCustomerPage> createState() => _AddCustomerPageState();
 }
 
-class _AddCustomerDialogState extends State<_AddCustomerDialog> {
+class _AddCustomerPageState extends State<AddCustomerPage> {
   final _formKey = GlobalKey<FormState>();
   final _code = TextEditingController();
   final _name = TextEditingController();
@@ -447,7 +448,7 @@ class _AddCustomerDialogState extends State<_AddCustomerDialog> {
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _saving = false;
@@ -458,98 +459,168 @@ class _AddCustomerDialogState extends State<_AddCustomerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Add customer'),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480),
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: _code,
-                  autofocus: true,
-                  textCapitalization: TextCapitalization.characters,
-                  decoration: const InputDecoration(labelText: 'Customer code'),
-                  validator: (value) => value == null || value.trim().isEmpty ? 'Enter a customer code.' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _name,
-                  decoration: const InputDecoration(labelText: 'Customer name'),
-                  validator: (value) => value == null || value.trim().length < 2 ? 'Enter the customer name.' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _phone,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Phone (optional)'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Email (optional)'),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _creditLimit,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(labelText: 'Credit limit (M)'),
-                        validator: (value) {
-                          final minor = ScaledDecimal.toMinor(value ?? '0');
-                          return minor < 0 ? 'Cannot be negative.' : null;
-                        },
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Add customer')),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final horizontal = constraints.maxWidth >= 760 ? 28.0 : 16.0;
+            return Form(
+              key: _formKey,
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(horizontal, 20, horizontal, 110),
+                children: [
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 720),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Customer details',
+                            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Create a customer profile for sales, credit and statement history.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+                          TextFormField(
+                            controller: _code,
+                            autofocus: true,
+                            textCapitalization: TextCapitalization.characters,
+                            textInputAction: TextInputAction.next,
+                            decoration: const InputDecoration(
+                              labelText: 'Customer code',
+                              prefixIcon: Icon(Icons.badge_outlined),
+                            ),
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty ? 'Enter a customer code.' : null,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _name,
+                            textInputAction: TextInputAction.next,
+                            decoration: const InputDecoration(
+                              labelText: 'Customer name',
+                              prefixIcon: Icon(Icons.person_outline),
+                            ),
+                            validator: (value) =>
+                                value == null || value.trim().length < 2 ? 'Enter the customer name.' : null,
+                          ),
+                          const SizedBox(height: 12),
+                          LayoutBuilder(
+                            builder: (context, inner) {
+                              final stacked = inner.maxWidth < 560;
+                              final phone = TextFormField(
+                                controller: _phone,
+                                keyboardType: TextInputType.phone,
+                                textInputAction: TextInputAction.next,
+                                decoration: const InputDecoration(
+                                  labelText: 'Phone (optional)',
+                                  prefixIcon: Icon(Icons.phone_outlined),
+                                ),
+                              );
+                              final email = TextFormField(
+                                controller: _email,
+                                keyboardType: TextInputType.emailAddress,
+                                textInputAction: TextInputAction.next,
+                                decoration: const InputDecoration(
+                                  labelText: 'Email (optional)',
+                                  prefixIcon: Icon(Icons.email_outlined),
+                                ),
+                              );
+                              if (stacked) {
+                                return Column(children: [phone, const SizedBox(height: 12), email]);
+                              }
+                              return Row(
+                                children: [
+                                  Expanded(child: phone),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: email),
+                                ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          LayoutBuilder(
+                            builder: (context, inner) {
+                              final stacked = inner.maxWidth < 560;
+                              final credit = TextFormField(
+                                controller: _creditLimit,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: const InputDecoration(
+                                  labelText: 'Credit limit (M)',
+                                  prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                                ),
+                                validator: (value) {
+                                  final minor = ScaledDecimal.toMinor(value ?? '0');
+                                  return minor < 0 ? 'Cannot be negative.' : null;
+                                },
+                              );
+                              final terms = TextFormField(
+                                controller: _terms,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'Terms (days)',
+                                  prefixIcon: Icon(Icons.calendar_month_outlined),
+                                ),
+                                validator: (value) {
+                                  final days = int.tryParse(value?.trim() ?? '');
+                                  if (days == null || days < 0 || days > 365) return 'Use 0–365 days.';
+                                  return null;
+                                },
+                              );
+                              if (stacked) {
+                                return Column(children: [credit, const SizedBox(height: 12), terms]);
+                              }
+                              return Row(
+                                children: [
+                                  Expanded(child: credit),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: terms),
+                                ],
+                              );
+                            },
+                          ),
+                          if (_error != null) ...[
+                            const SizedBox(height: 14),
+                            Card(
+                              color: theme.colorScheme.errorContainer,
+                              child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Text(
+                                  _error!,
+                                  style: TextStyle(color: theme.colorScheme.onErrorContainer),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 24),
+                          FilledButton.icon(
+                            onPressed: _saving ? null : _save,
+                            icon: _saving
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.save_outlined),
+                            label: Text(_saving ? 'Saving…' : 'Save customer'),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _terms,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Terms (days)'),
-                        validator: (value) {
-                          final days = int.tryParse(value?.trim() ?? '');
-                          if (days == null || days < 0 || days > 365) return 'Use 0–365 days.';
-                          return null;
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    _error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ],
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton.icon(
-          onPressed: _saving ? null : _save,
-          icon: _saving
-              ? const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.save_outlined),
-          label: Text(_saving ? 'Saving…' : 'Save customer'),
-        ),
-      ],
     );
   }
 }
