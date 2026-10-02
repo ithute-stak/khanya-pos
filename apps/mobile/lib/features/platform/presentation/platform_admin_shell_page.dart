@@ -30,9 +30,9 @@ class _PlatformAdminShellPageState extends State<PlatformAdminShellPage> {
               labelType: NavigationRailLabelType.all,
               destinations: const [
                 NavigationRailDestination(
-                  icon: Icon(Icons.admin_panel_settings_outlined),
-                  selectedIcon: Icon(Icons.admin_panel_settings),
-                  label: Text('Platform'),
+                  icon: Icon(Icons.fact_check_outlined),
+                  selectedIcon: Icon(Icons.fact_check),
+                  label: Text('Approvals'),
                 ),
                 NavigationRailDestination(
                   icon: Icon(Icons.workspace_premium_outlined),
@@ -55,9 +55,9 @@ class _PlatformAdminShellPageState extends State<PlatformAdminShellPage> {
         onDestinationSelected: (value) => setState(() => _index = value),
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.admin_panel_settings_outlined),
-            selectedIcon: Icon(Icons.admin_panel_settings),
-            label: 'Platform',
+            icon: Icon(Icons.fact_check_outlined),
+            selectedIcon: Icon(Icons.fact_check),
+            label: 'Approvals',
           ),
           NavigationDestination(
             icon: Icon(Icons.workspace_premium_outlined),
