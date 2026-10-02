@@ -23,7 +23,9 @@ class DesktopShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < breakpoint) return child;
+        if (constraints.maxWidth < breakpoint) {
+          return _MobileShell(location: location, child: child);
+        }
 
         return CallbackShortcuts(
           bindings: <ShortcutActivator, VoidCallback>{
@@ -55,6 +57,459 @@ class DesktopShell extends StatelessWidget {
     );
   }
 }
+
+class _MobileShell extends StatelessWidget {
+  const _MobileShell({
+    required this.location,
+    required this.child,
+  });
+
+  final String location;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_hideMobileNavigation(location)) return child;
+
+    final selectedIndex = _mobileDestinationIndex(location);
+    return Scaffold(
+      body: child,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: selectedIndex,
+        onDestinationSelected: (index) {
+          const destinations = <String>[
+            '/',
+            '/pos',
+            '/products',
+            '/customers',
+            '/more',
+          ];
+          final target = destinations[index];
+          if (target != location) context.go(target);
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.point_of_sale_outlined),
+            selectedIcon: Icon(Icons.point_of_sale_rounded),
+            label: 'Sell',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2_rounded),
+            label: 'Products',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.groups_2_outlined),
+            selectedIcon: Icon(Icons.groups_2_rounded),
+            label: 'Customers',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.grid_view_outlined),
+            selectedIcon: Icon(Icons.grid_view_rounded),
+            label: 'More',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+int _mobileDestinationIndex(String location) {
+  if (location == '/') return 0;
+  if (location == '/pos') return 1;
+  if (location == '/products' || location.startsWith('/products/')) return 2;
+  if (location == '/customers' || location.startsWith('/customers/')) return 3;
+  return 4;
+}
+
+bool _hideMobileNavigation(String location) {
+  if (location.startsWith('/sales/')) return true;
+  if (location.startsWith('/customers/') && location != '/customers') return true;
+  return location == '/purchases/new' ||
+      location == '/expenses/new' ||
+      location == '/inventory/controls';
+}
+
+class MobileMorePage extends StatelessWidget {
+  const MobileMorePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final role = _selectedRole(context.watch<SessionBloc>().state);
+    final hiddenPaths = <String>{
+      '/',
+      '/pos',
+      '/products',
+      '/customers',
+    };
+    final visibleItems = _items
+        .where((item) => !hiddenPaths.contains(item.path) && item.isVisibleFor(role))
+        .toList(growable: false);
+
+    final operations = visibleItems.where((item) => _operationsPaths.contains(item.path)).toList();
+    final finance = visibleItems.where((item) => _financePaths.contains(item.path)).toList();
+    final management = visibleItems
+        .where(
+          (item) =>
+              !_operationsPaths.contains(item.path) &&
+              !_financePaths.contains(item.path),
+        )
+        .toList();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('More'),
+      ),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () async {
+            context.read<SyncBloc>().add(const SyncRequested());
+          },
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+            children: [
+              _MobileMoreHeader(role: role),
+              const SizedBox(height: 18),
+              if (operations.isNotEmpty) ...[
+                _MobileSectionTitle(
+                  title: 'Operations',
+                  subtitle: 'Run daily business activity',
+                ),
+                const SizedBox(height: 10),
+                _MobileNavigationGrid(items: operations),
+                const SizedBox(height: 22),
+              ],
+              if (finance.isNotEmpty) ...[
+                _MobileSectionTitle(
+                  title: 'Finance & insights',
+                  subtitle: 'Understand performance and cash',
+                ),
+                const SizedBox(height: 10),
+                _MobileNavigationGrid(items: finance),
+                const SizedBox(height: 22),
+              ],
+              if (management.isNotEmpty) ...[
+                _MobileSectionTitle(
+                  title: 'Team & settings',
+                  subtitle: 'Manage people, devices and configuration',
+                ),
+                const SizedBox(height: 10),
+                _MobileNavigationGrid(items: management),
+                const SizedBox(height: 22),
+              ],
+              const _MobileSystemStatusCard(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileMoreHeader extends StatelessWidget {
+  const _MobileMoreHeader({required this.role});
+
+  final String? role;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final roleLabel = (role ?? 'staff')
+        .split('_')
+        .map((part) => part.isEmpty ? part : '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' ');
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer.withValues(alpha: .55),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 25,
+            backgroundColor: scheme.primary,
+            foregroundColor: scheme.onPrimary,
+            child: const Icon(Icons.apps_rounded),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Khanya workspace',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Open every business tool available to your role.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Chip(label: Text(roleLabel)),
+        ],
+      ),
+    );
+  }
+}
+
+class _MobileSectionTitle extends StatelessWidget {
+  const _MobileSectionTitle({
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          subtitle,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MobileNavigationGrid extends StatelessWidget {
+  const _MobileNavigationGrid({required this.items});
+
+  final List<_DesktopNavItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 720 ? 3 : 2;
+        const spacing = 10.0;
+        final width =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final item in items)
+              SizedBox(
+                width: width,
+                child: _MobileNavigationCard(item: item),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _MobileNavigationCard extends StatelessWidget {
+  const _MobileNavigationCard({required this.item});
+
+  final _DesktopNavItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Material(
+      color: scheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.go(item.path),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 108),
+          child: Padding(
+            padding: const EdgeInsets.all(15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: scheme.primaryContainer,
+                  foregroundColor: scheme.onPrimaryContainer,
+                  child: Icon(item.icon, size: 20),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  item.label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileSystemStatusCard extends StatelessWidget {
+  const _MobileSystemStatusCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final connectivity = context.watch<ConnectivityBloc>().state;
+    final sync = context.watch<SyncBloc>().state;
+    final realtime = context.watch<RealtimeBloc>().state;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'System status',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _MobileStatusRow(
+              icon: connectivity.isNetworkAvailable
+                  ? Icons.cloud_done_outlined
+                  : Icons.cloud_off_outlined,
+              label: connectivity.isNetworkAvailable ? 'Online' : 'Offline mode',
+              value: sync.isSyncing
+                  ? 'Synchronising…'
+                  : sync.pendingCount == 0
+                      ? 'All changes synced'
+                      : '${sync.pendingCount} queued',
+              emphasis: connectivity.isNetworkAvailable
+                  ? scheme.primary
+                  : scheme.error,
+            ),
+            const SizedBox(height: 10),
+            _MobileStatusRow(
+              icon: realtime.connected
+                  ? Icons.bolt_rounded
+                  : Icons.bolt_outlined,
+              label: realtime.statusLabel,
+              value: realtime.connected ? 'Live updates on' : 'Tap to reconnect',
+              emphasis: realtime.connected
+                  ? scheme.primary
+                  : scheme.onSurfaceVariant,
+              onTap: realtime.connected
+                  ? null
+                  : () => context
+                      .read<RealtimeBloc>()
+                      .add(const RealtimeReconnectNowRequested()),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileStatusRow extends StatelessWidget {
+  const _MobileStatusRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.emphasis,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color emphasis;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Row(
+      children: [
+        Icon(icon, color: emphasis, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        if (onTap != null) const Icon(Icons.refresh_rounded, size: 18),
+      ],
+    );
+
+    if (onTap == null) return content;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: content,
+      ),
+    );
+  }
+}
+
+const _operationsPaths = <String>{
+  '/sales',
+  '/till',
+  '/inventory',
+  '/purchases',
+  '/purchase-orders',
+  '/suppliers',
+  '/receipts',
+};
+
+const _financePaths = <String>{
+  '/reports',
+  '/business-os',
+  '/accounting',
+  '/accounting/management',
+  '/accounting/cash-flow',
+  '/accounting/statements',
+  '/expenses',
+};
 
 class _DesktopSidebar extends StatelessWidget {
   const _DesktopSidebar({required this.location});
