@@ -225,6 +225,17 @@ final class CustomerDatabase extends _$CustomerDatabase {
         .get();
   }
 
+  Future<List<PendingCustomerPayment>> getPendingPayments({
+    String? tenantId,
+    String? branchId,
+  }) {
+    final query = select(pendingCustomerPayments);
+    if (tenantId != null) query.where((row) => row.tenantId.equals(tenantId));
+    if (branchId != null) query.where((row) => row.branchId.equals(branchId));
+    query.orderBy([(row) => OrderingTerm.desc(row.createdAt)]);
+    return query.get();
+  }
+
   Future<PendingCustomerPayment?> getPendingPayment(String clientOperationId) {
     return (select(pendingCustomerPayments)
           ..where((row) => row.clientOperationId.equals(clientOperationId)))
