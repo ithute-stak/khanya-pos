@@ -162,59 +162,18 @@ class _PlatformAdminPageState extends State<PlatformAdminPage> {
 
   Future<void> _manageStaffRole() async {
     if (!_isSuperAdmin) return;
-    final emailController = TextEditingController();
-    String? role = 'platform_support';
-    final result = await showDialog<(String, String?)>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Manage platform staff'),
-          content: SizedBox(
-            width: 430,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: emailController,
-                  autofocus: true,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Existing Khanya user email',
-                    hintText: 'staff@example.com',
-                  ),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String?>(
-                  initialValue: role,
-                  decoration: const InputDecoration(labelText: 'Platform role'),
-                  items: const [
-                    DropdownMenuItem(value: 'platform_super_admin', child: Text('Super Admin')),
-                    DropdownMenuItem(value: 'platform_admin', child: Text('Admin')),
-                    DropdownMenuItem(value: 'platform_support', child: Text('Support (read-only)')),
-                    DropdownMenuItem(value: null, child: Text('Remove platform access')),
-                  ],
-                  onChanged: (value) => setDialogState(() => role = value),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () {
-                final email = emailController.text.trim();
-                if (email.contains('@')) Navigator.pop(dialogContext, (email, role));
-              },
-              child: const Text('Save role'),
-            ),
-          ],
-        ),
+    final result = await Navigator.of(context).push<(String, String?)>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const _PlatformStaffRolePage(),
       ),
     );
-    emailController.dispose();
     if (!mounted || result == null) return;
     try {
-      await context.read<PlatformRepository>().setStaffRole(email: result.$1, role: result.$2);
+      await context.read<PlatformRepository>().setStaffRole(
+            email: result.$1,
+            role: result.$2,
+          );
       await _load();
       if (mounted) _message('Platform staff access updated.');
     } on DioException catch (error) {
@@ -222,32 +181,16 @@ class _PlatformAdminPageState extends State<PlatformAdminPage> {
     }
   }
 
-  Future<String?> _askReason(String title, String actionLabel) async {
-    final controller = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 3,
-          decoration: const InputDecoration(labelText: 'Reason', hintText: 'Give a clear reason for the decision'),
+  Future<String?> _askReason(String title, String actionLabel) {
+    return Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _PlatformReasonPage(
+          title: title,
+          actionLabel: actionLabel,
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              final value = controller.text.trim();
-              if (value.length >= 2) Navigator.pop(dialogContext, value);
-            },
-            child: Text(actionLabel),
-          ),
-        ],
       ),
     );
-    controller.dispose();
-    return result;
   }
 
   String _dioMessage(DioException error, String fallback) {
@@ -536,6 +479,209 @@ class _MetricCard extends StatelessWidget {
           ),
         ),
       );
+}
+
+class _PlatformStaffRolePage extends StatefulWidget {
+  const _PlatformStaffRolePage();
+
+  @override
+  State<_PlatformStaffRolePage> createState() => _PlatformStaffRolePageState();
+}
+
+class _PlatformStaffRolePageState extends State<_PlatformStaffRolePage> {
+  final _emailController = TextEditingController();
+  String? _role = 'platform_support';
+  String? _error;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final email = _emailController.text.trim();
+    if (!email.contains('@')) {
+      setState(() => _error = 'Enter a valid existing Khanya user email.');
+      return;
+    }
+    Navigator.of(context).pop((email, _role));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Manage platform staff')),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 36),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 680),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Platform access',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Assign or remove platform-level access for an existing Khanya user.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                    const SizedBox(height: 22),
+                    TextField(
+                      controller: _emailController,
+                      autofocus: true,
+                      keyboardType: TextInputType.emailAddress,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      decoration: InputDecoration(
+                        labelText: 'Existing Khanya user email',
+                        hintText: 'staff@example.com',
+                        errorText: _error,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String?>(
+                      initialValue: _role,
+                      decoration: const InputDecoration(labelText: 'Platform role'),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'platform_super_admin',
+                          child: Text('Super Admin'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'platform_admin',
+                          child: Text('Admin'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'platform_support',
+                          child: Text('Support (read-only)'),
+                        ),
+                        DropdownMenuItem(
+                          value: null,
+                          child: Text('Remove platform access'),
+                        ),
+                      ],
+                      onChanged: (value) => setState(() => _role = value),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      height: 50,
+                      child: FilledButton.icon(
+                        onPressed: _submit,
+                        icon: const Icon(Icons.save_outlined),
+                        label: const Text('Save role'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlatformReasonPage extends StatefulWidget {
+  const _PlatformReasonPage({
+    required this.title,
+    required this.actionLabel,
+  });
+
+  final String title;
+  final String actionLabel;
+
+  @override
+  State<_PlatformReasonPage> createState() => _PlatformReasonPageState();
+}
+
+class _PlatformReasonPageState extends State<_PlatformReasonPage> {
+  final _controller = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = _controller.text.trim();
+    if (value.length < 2) {
+      setState(() => _error = 'Give a clear reason for this decision.');
+      return;
+    }
+    Navigator.of(context).pop(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.title)),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 36),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 680),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'This reason will be recorded with the platform action.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                    const SizedBox(height: 22),
+                    TextField(
+                      controller: _controller,
+                      autofocus: true,
+                      maxLength: 500,
+                      minLines: 3,
+                      maxLines: 6,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        labelText: 'Reason',
+                        hintText: 'Give a clear reason for the decision',
+                        errorText: _error,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      height: 50,
+                      child: FilledButton(
+                        onPressed: _submit,
+                        child: Text(widget.actionLabel),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _RoleChip extends StatelessWidget {
