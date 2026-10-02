@@ -175,6 +175,27 @@ class IthuteBootstrapView extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 10),
+                          Container(
+                            width: compact ? 72 : 82,
+                            height: compact ? 72 : 82,
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x14062F68),
+                                  blurRadius: 18,
+                                  offset: Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: KhanyaMark(
+                              size: compact ? 64 : 74,
+                              radius: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
                           Text(
                             KhanyaBrand.appName,
                             textAlign: TextAlign.center,
