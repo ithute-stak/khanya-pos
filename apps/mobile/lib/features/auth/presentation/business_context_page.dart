@@ -77,7 +77,10 @@ class BusinessContextPage extends StatelessWidget {
                                     ActionChip(
                                       avatar: const Icon(Icons.store_mall_directory_outlined, size: 18),
                                       label: Text(
-                                        membership.branchIds.length == 1 ? 'Open branch' : 'Branch ${index + 1}',
+                                        membership.branchLabel(
+                                          membership.branchIds[index],
+                                          fallbackIndex: index,
+                                        ),
                                       ),
                                       onPressed: () => context.read<SessionBloc>().add(
                                             SessionBusinessSelected(
