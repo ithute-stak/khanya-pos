@@ -141,14 +141,21 @@ class _BusinessWorkspaceCard extends StatelessWidget {
                     child: InkWell(
                       onTap: !active
                           ? null
-                          : () {
-                              context.read<SessionBloc>().add(
-                                    SessionBusinessSelected(
-                                      tenantId: membership.tenantId,
-                                      branchId: branchId,
-                                    ),
-                                  );
-                              context.go('/');
+                          : () async {
+                              final bloc = context.read<SessionBloc>();
+                              bloc.add(
+                                SessionBusinessSelected(
+                                  tenantId: membership.tenantId,
+                                  branchId: branchId,
+                                ),
+                              );
+                              await bloc.stream.firstWhere(
+                                (state) =>
+                                    state is SessionAuthenticated &&
+                                    state.session.selectedTenantId == membership.tenantId &&
+                                    state.session.selectedBranchId == branchId,
+                              );
+                              if (context.mounted) context.go('/');
                             },
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
