@@ -28,12 +28,17 @@ import sys
 manifest = Path(sys.argv[1])
 text = manifest.read_text(encoding="utf-8")
 permission = '<uses-permission android:name="android.permission.INTERNET"/>'
+camera_permission = '<uses-permission android:name="android.permission.CAMERA"/>'
 
 if permission not in text:
     marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
     if marker not in text:
         raise SystemExit("Could not locate the Android <manifest> declaration")
     text = text.replace(marker, f"{marker}\n    {permission}", 1)
+
+if camera_permission not in text:
+    marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+    text = text.replace(marker, f"{marker}\n    {camera_permission}", 1)
 
 # The Dart package remains khanya_pos internally, but the installed app must
 # present the commercial product name to users.
@@ -64,6 +69,8 @@ manifest.write_text(text, encoding="utf-8")
 rendered = manifest.read_text(encoding="utf-8")
 if permission not in rendered:
     raise SystemExit("INTERNET permission is missing from the release manifest")
+if camera_permission not in rendered:
+    raise SystemExit("CAMERA permission is missing from the release manifest")
 if 'android:label="Khanya"' not in rendered:
     raise SystemExit("Android application label was not set to Khanya")
 if 'io.flutter.embedding.android.EnableImpeller' not in rendered:
