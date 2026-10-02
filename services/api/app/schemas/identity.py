@@ -70,6 +70,7 @@ class MembershipSummary(BaseModel):
     tenant_slug: str
     role: Role
     branch_ids: list[UUID]
+    branches: list[BranchSummary] = Field(default_factory=list)
 
 
 class MeResponse(BaseModel):

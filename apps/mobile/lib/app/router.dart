@@ -5,6 +5,7 @@ import 'package:khanya_pos/features/accounting/presentation/accounting_page.dart
 import 'package:khanya_pos/features/accounting/presentation/cash_flow_page.dart';
 import 'package:khanya_pos/features/accounting/presentation/financial_statements_page.dart';
 import 'package:khanya_pos/features/accounting/presentation/management_reports_page.dart';
+import 'package:khanya_pos/features/auth/presentation/workspace_switcher_page.dart';
 import 'package:khanya_pos/features/catalog/presentation/products_page.dart';
 import 'package:khanya_pos/features/customers/presentation/customer_detail_page.dart';
 import 'package:khanya_pos/features/customers/presentation/customer_statement_page.dart';
@@ -43,6 +44,10 @@ final GoRouter appRouter = GoRouter(
       routes: [
         GoRoute(path: '/', builder: (context, state) => const DashboardPage()),
         GoRoute(path: '/more', builder: (context, state) => const MobileMorePage()),
+        GoRoute(
+          path: '/workspace',
+          builder: (context, state) => const WorkspaceSwitcherPage(),
+        ),
         GoRoute(path: '/sync', builder: (context, state) => const SyncCentrePage()),
         GoRoute(path: '/platform-admin', builder: (context, state) => const PlatformAdminPage()),
         GoRoute(path: '/platform-admin/subscriptions', builder: (context, state) => const PlatformSubscriptionsPage()),

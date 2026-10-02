@@ -6,6 +6,18 @@ import 'package:printing/printing.dart';
 class ReceiptPrinter {
   const ReceiptPrinter._();
 
+  static Future<void> shareReceipt(
+    SaleReceipt receipt, {
+    PosHardwareSettings? settings,
+  }) async {
+    final widthMm = settings?.paperWidthMm ?? 80;
+    final bytes = await buildSaleReceiptPdf(receipt, paperWidthMm: widthMm);
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: 'Khanya-Receipt-${receipt.reference}.pdf',
+    );
+  }
+
   static Future<bool> printReceipt(
     SaleReceipt receipt, {
     PosHardwareSettings? settings,
