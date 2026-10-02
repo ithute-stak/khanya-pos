@@ -77,9 +77,20 @@ class SalesRepository {
       creditReserved = true;
     }
 
+    final now = DateTime.now().toUtc();
+    final paymentStatus = creditMinor == 0
+        ? 'paid'
+        : paidMinor > 0
+            ? 'partial'
+            : 'unpaid';
     final payload = <String, dynamic>{
       'client_operation_id': clientOperationId,
       'customer_id': customerId,
+      '_local_total_minor': totalMinor,
+      '_local_paid_minor': paidMinor,
+      '_local_balance_due_minor': creditMinor,
+      '_local_payment_status': paymentStatus,
+      '_local_completed_at': now.toIso8601String(),
       'items': [
         for (final line in lines)
           {'product_id': line.product.id, 'quantity': line.quantity},
@@ -92,8 +103,6 @@ class SalesRepository {
           },
       ],
     };
-    final now = DateTime.now().toUtc();
-
     try {
       await _database.queueSaleAndApplyStock(
         sale: PendingSalesCompanion.insert(
@@ -128,25 +137,108 @@ class SalesRepository {
     }
     return SaleSubmission(
       clientOperationId: clientOperationId,
-      status: pending.status == 'conflict' ? SaleSubmissionStatus.conflict : SaleSubmissionStatus.queued,
+      status: switch (pending.status) {
+        'synced' => SaleSubmissionStatus.synced,
+        'conflict' => SaleSubmissionStatus.conflict,
+        _ => SaleSubmissionStatus.queued,
+      },
     );
   }
 
   Future<List<SaleHistoryEntry>> history({String? search}) async {
-    final apiClient = _requireApiClient();
+    final tenantId = _sessionContext.tenantId;
+    final branchId = _sessionContext.branchId;
+    if (tenantId == null || branchId == null) {
+      throw StateError('A business and branch must be selected');
+    }
+
+    final localRows = await _database.getSalesForHistory(
+      tenantId: tenantId,
+      branchId: branchId,
+    );
+    final local = localRows
+        .map(_localHistoryEntry)
+        .whereType<SaleHistoryEntry>()
+        .where((sale) {
+          final query = search?.trim().toLowerCase() ?? '';
+          return query.isEmpty || sale.saleNumber.toLowerCase().contains(query);
+        })
+        .toList(growable: false);
+
+    final remote = <SaleHistoryEntry>[];
+    final apiClient = _apiClient;
+    if (apiClient != null) {
+      try {
+        final response = await apiClient.dio.get<List<dynamic>>(
+          '/pos/sales',
+          queryParameters: {
+            if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+            'limit': 200,
+          },
+        );
+        remote.addAll(
+          (response.data ?? const <dynamic>[])
+              .map((value) =>
+                  SaleHistoryEntry.fromJson(Map<String, dynamic>.from(value as Map))),
+        );
+      } on DioException {
+        // Local sales remain visible while offline or while the server is unavailable.
+      }
+    }
+
+    final byId = <String, SaleHistoryEntry>{
+      for (final sale in remote) sale.id: sale,
+    };
+    for (final sale in local) {
+      if (!byId.containsKey(sale.id)) byId[sale.id] = sale;
+    }
+    final merged = byId.values.toList(growable: false)
+      ..sort((a, b) => b.completedAt.compareTo(a.completedAt));
+    return merged;
+  }
+
+  SaleHistoryEntry? _localHistoryEntry(PendingSale sale) {
     try {
-      final response = await apiClient.dio.get<List<dynamic>>(
-        '/pos/sales',
-        queryParameters: {
-          if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
-          'limit': 200,
-        },
+      final payload = Map<String, dynamic>.from(jsonDecode(sale.payloadJson) as Map);
+      final totalMinor = (payload['_local_total_minor'] as num?)?.toInt();
+      final balanceDueMinor =
+          (payload['_local_balance_due_minor'] as num?)?.toInt() ?? 0;
+      if (totalMinor == null) return null;
+
+      final serverId = payload['_server_sale_id']?.toString();
+      final serverNumber = payload['_server_sale_number']?.toString();
+      final completedAt = DateTime.tryParse(
+            payload['_server_completed_at']?.toString() ??
+                payload['_local_completed_at']?.toString() ??
+                '',
+          ) ??
+          sale.createdAt;
+
+      final syncStatus = switch (sale.status) {
+        'synced' => 'Synced',
+        'conflict' => 'Needs attention',
+        'syncing' => 'Syncing',
+        _ => 'Queued',
+      };
+
+      return SaleHistoryEntry(
+        id: serverId?.isNotEmpty == true ? serverId! : sale.clientOperationId,
+        saleNumber: serverNumber?.isNotEmpty == true
+            ? serverNumber!
+            : 'LOCAL-${sale.clientOperationId.substring(0, 8).toUpperCase()}',
+        totalMinor: totalMinor,
+        balanceDueMinor: balanceDueMinor,
+        paymentStatus:
+            payload['_local_payment_status']?.toString() ?? 'paid',
+        completedAt: completedAt,
+        returnedTotalMinor: 0,
+        returnStatus: 'none',
+        refundableTotalMinor: totalMinor,
+        syncStatus: syncStatus,
+        localOnly: serverId == null || serverId.isEmpty,
       );
-      return (response.data ?? const <dynamic>[])
-          .map((value) => SaleHistoryEntry.fromJson(Map<String, dynamic>.from(value as Map)))
-          .toList(growable: false);
-    } on DioException catch (error) {
-      throw StateError(_message(error, 'Unable to load sales history.'));
+    } catch (_) {
+      return null;
     }
   }
 

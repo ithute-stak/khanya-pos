@@ -274,13 +274,24 @@ class SyncService {
         incrementAttempts: true,
       );
       try {
-        await _apiClient.dio.post<Map<String, dynamic>>(
+        final storedPayload =
+            Map<String, dynamic>.from(jsonDecode(sale.payloadJson) as Map);
+        final apiPayload = Map<String, dynamic>.from(storedPayload)
+          ..removeWhere((key, _) => key.startsWith('_local_') || key.startsWith('_server_'));
+        final response = await _apiClient.dio.post<Map<String, dynamic>>(
           '/pos/sales/complete',
-          data: jsonDecode(sale.payloadJson),
+          data: apiPayload,
           options: _requestOptions(tenantId: sale.tenantId, branchId: sale.branchId),
         );
+        final server = response.data ?? const <String, dynamic>{};
+        storedPayload['_server_sale_id'] = server['id']?.toString();
+        storedPayload['_server_sale_number'] = server['sale_number']?.toString();
+        storedPayload['_server_completed_at'] = server['completed_at']?.toString();
         await _customerDatabase.finalizeCreditReservation(sale.clientOperationId);
-        await _database.deletePendingSale(sale.clientOperationId);
+        await _database.markPendingSaleSynced(
+          clientOperationId: sale.clientOperationId,
+          payloadJson: jsonEncode(storedPayload),
+        );
         synced += 1;
       } on DioException catch (error) {
         final statusCode = error.response?.statusCode;

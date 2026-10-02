@@ -12,6 +12,8 @@ class SaleHistoryEntry extends Equatable {
     required this.returnedTotalMinor,
     required this.returnStatus,
     required this.refundableTotalMinor,
+    this.syncStatus,
+    this.localOnly = false,
   });
 
   factory SaleHistoryEntry.fromJson(Map<String, dynamic> json) => SaleHistoryEntry(
@@ -24,6 +26,8 @@ class SaleHistoryEntry extends Equatable {
         returnedTotalMinor: ScaledDecimal.toMinor(json['returned_total']),
         returnStatus: json['return_status'].toString(),
         refundableTotalMinor: ScaledDecimal.toMinor(json['refundable_total']),
+        syncStatus: json['sync_status']?.toString(),
+        localOnly: json['local_only'] as bool? ?? false,
       );
 
   final String id;
@@ -35,6 +39,8 @@ class SaleHistoryEntry extends Equatable {
   final int returnedTotalMinor;
   final String returnStatus;
   final int refundableTotalMinor;
+  final String? syncStatus;
+  final bool localOnly;
 
   bool get hasReturns => returnedTotalMinor > 0;
   bool get fullyReturned => returnStatus == 'full' || refundableTotalMinor <= 0;
@@ -50,6 +56,8 @@ class SaleHistoryEntry extends Equatable {
         returnedTotalMinor,
         returnStatus,
         refundableTotalMinor,
+        syncStatus,
+        localOnly,
       ];
 }
 

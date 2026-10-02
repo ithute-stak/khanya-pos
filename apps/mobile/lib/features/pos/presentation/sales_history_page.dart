@@ -97,7 +97,9 @@ class _SalesHistoryViewState extends State<_SalesHistoryView> {
                       for (final sale in state.sales) ...[
                         _SaleHistoryCard(
                           sale: sale,
-                          onTap: () => context.push('/sales/${sale.id}'),
+                          onTap: sale.localOnly
+                              ? null
+                              : () => context.push('/sales/${sale.id}'),
                         ),
                         const SizedBox(height: 10),
                       ],
@@ -214,7 +216,7 @@ class _SaleHistoryCard extends StatelessWidget {
   const _SaleHistoryCard({required this.sale, required this.onTap});
 
   final SaleHistoryEntry sale;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -280,7 +282,15 @@ class _SaleHistoryCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              const Icon(Icons.chevron_right),
+              if (sale.syncStatus != null)
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  label: Text(sale.syncStatus!),
+                ),
+              if (!sale.localOnly) ...[
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right),
+              ],
             ],
           ),
         ),
