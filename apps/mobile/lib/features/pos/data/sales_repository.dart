@@ -77,6 +77,7 @@ class SalesRepository {
       creditReserved = true;
     }
 
+    final now = DateTime.now().toUtc();
     final paymentStatus = creditMinor == 0
         ? 'paid'
         : paidMinor > 0
@@ -136,7 +137,11 @@ class SalesRepository {
     }
     return SaleSubmission(
       clientOperationId: clientOperationId,
-      status: pending.status == 'conflict' ? SaleSubmissionStatus.conflict : SaleSubmissionStatus.queued,
+      status: switch (pending.status) {
+        'synced' => SaleSubmissionStatus.synced,
+        'conflict' => SaleSubmissionStatus.conflict,
+        _ => SaleSubmissionStatus.queued,
+      },
     );
   }
 
