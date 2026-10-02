@@ -255,10 +255,13 @@ class _AddCatalogMasterPageState extends State<AddCatalogMasterPage> {
       switch (widget.type) {
         case CatalogMasterType.category:
           await repository.createCategory(_name.text);
+          break;
         case CatalogMasterType.brand:
           await repository.createBrand(_name.text);
+          break;
         case CatalogMasterType.unit:
           await repository.createUnit(_name.text);
+          break;
       }
       if (!mounted) return;
       Navigator.of(context).pop(true);
