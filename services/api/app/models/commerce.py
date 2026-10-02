@@ -17,6 +17,24 @@ class ProductCategory(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
+class ProductBrand(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "product_brands"
+    __table_args__ = (UniqueConstraint("tenant_id", "name"),)
+
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class ProductUnit(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "product_units"
+    __table_args__ = (UniqueConstraint("tenant_id", "name"),)
+
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(40))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
 class Product(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "products"
     __table_args__ = (
@@ -27,6 +45,12 @@ class Product(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
     category_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("product_categories.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    brand_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("product_brands.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    unit_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("product_units.id", ondelete="SET NULL"), nullable=True, index=True
     )
     name: Mapped[str] = mapped_column(String(200), index=True)
     sku: Mapped[str] = mapped_column(String(80))

@@ -8,16 +8,41 @@ class ProductCategoryCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
 
 
+class ProductBrandCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+
+
+class ProductUnitCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+
+
 class ProductCreate(BaseModel):
     name: str = Field(min_length=2, max_length=200)
     sku: str = Field(min_length=1, max_length=80)
     barcode: str | None = Field(default=None, max_length=120)
     category_id: UUID | None = None
+    brand_id: UUID | None = None
+    unit_id: UUID | None = None
     unit: str = Field(default="unit", min_length=1, max_length=40)
     selling_price: Decimal = Field(ge=0)
     cost_price: Decimal = Field(default=Decimal("0.00"), ge=0)
     reorder_level: Decimal = Field(default=Decimal("0.000"), ge=0)
     track_stock: bool = True
+
+
+class ProductUpdate(BaseModel):
+    name: str = Field(min_length=2, max_length=200)
+    sku: str = Field(min_length=1, max_length=80)
+    barcode: str | None = Field(default=None, max_length=120)
+    category_id: UUID | None = None
+    brand_id: UUID | None = None
+    unit_id: UUID | None = None
+    unit: str = Field(default="unit", min_length=1, max_length=40)
+    selling_price: Decimal = Field(ge=0)
+    cost_price: Decimal = Field(default=Decimal("0.00"), ge=0)
+    reorder_level: Decimal = Field(default=Decimal("0.000"), ge=0)
+    track_stock: bool = True
+    is_active: bool = True
 
 
 class StockAdjustmentRequest(BaseModel):
