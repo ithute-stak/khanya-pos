@@ -746,6 +746,11 @@ const _items = <_DesktopNavItem>[
   _DesktopNavItem(label: 'New Sale', path: '/pos', icon: Icons.point_of_sale_outlined, shortcut: 'F2'),
   _DesktopNavItem(label: 'Sales History', path: '/sales', icon: Icons.history_outlined),
   _DesktopNavItem(label: 'Sync Centre', path: '/sync', icon: Icons.cloud_sync_outlined),
+  _DesktopNavItem(
+    label: 'Switch Workspace',
+    path: '/workspace',
+    icon: Icons.swap_horiz_rounded,
+  ),
   _DesktopNavItem(label: 'Till & Shift', path: '/till', icon: Icons.price_check_outlined),
   _DesktopNavItem(
     label: 'Reports',
