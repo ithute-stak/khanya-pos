@@ -246,7 +246,7 @@ class RealtimeBloc extends Bloc<RealtimeEvent, RealtimeState> {
     if (!_active || _reconnectTimer != null || isClosed) return;
 
     _reconnectAttempt += 1;
-    final exponent = (_reconnectAttempt - 1).clamp(0, 4);
+    final exponent = (_reconnectAttempt - 1).clamp(0, 4) as int;
     final delaySeconds = 2 * (1 << exponent);
     final delay = Duration(
       seconds: delaySeconds > _maxReconnectDelay.inSeconds
