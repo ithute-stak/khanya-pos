@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:khanya_pos/app/app_theme.dart';
 import 'package:khanya_pos/app/dependencies.dart';
 import 'package:khanya_pos/app/router.dart';
+import 'package:khanya_pos/core/branding/ithute_brand.dart';
 import 'package:khanya_pos/core/branding/khanya_brand.dart';
 import 'package:khanya_pos/core/connectivity/connectivity_bloc.dart';
 import 'package:khanya_pos/core/realtime/realtime_bloc.dart';
@@ -152,7 +153,9 @@ class _AppView extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: KhanyaTheme.light,
         routerConfig: appRouter,
-        builder: (context, child) => _SessionGate(child: child ?? const SizedBox.shrink()),
+        builder: (context, child) => IthuteBootstrapGate(
+          child: _SessionGate(child: child ?? const SizedBox.shrink()),
+        ),
       ),
     );
   }
