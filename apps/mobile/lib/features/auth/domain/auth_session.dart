@@ -80,7 +80,7 @@ class BusinessMembership extends Equatable {
       tenantId: json['tenant_id'].toString(),
       tenantName: json['tenant_name'].toString(),
       tenantSlug: json['tenant_slug'].toString(),
-      posType: json['pos_type'] == 'services' ? 'services' : 'goods',
+      posType: json['pos_type'] == 'services' ? 'services' : (json['pos_type'] == 'hybrid' ? 'hybrid' : 'goods'),
       role: json['role'].toString(),
       branchIds: (json['branch_ids'] as List<dynamic>? ?? const [])
           .map((value) => value.toString())
