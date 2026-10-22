@@ -140,6 +140,13 @@ class DashboardPage extends StatelessWidget {
                       accent: KhanyaBrand.forest,
                       onTap: () => context.push('/customers'),
                     ),
+                    if ((services || hybrid) && canReadReports) _ModuleCard(
+                      title: 'Service Revenue',
+                      description: 'Revenue by service and outstanding balances',
+                      icon: Icons.insights_outlined,
+                      accent: KhanyaBrand.navy,
+                      onTap: () => context.push('/service-reports'),
+                    ),
                     if (services || hybrid) _ModuleCard(
                       title: 'Appointments',
                       description: 'Book customers and track service progress',
