@@ -18,3 +18,14 @@ class ServiceItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     price: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class ServiceSaleLine(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = 'service_sale_lines'
+
+    sale_id: Mapped[UUID] = mapped_column(ForeignKey('sales.id', ondelete='CASCADE'), index=True)
+    service_id: Mapped[UUID] = mapped_column(ForeignKey('service_items.id', ondelete='RESTRICT'), index=True)
+    name_snapshot: Mapped[str] = mapped_column(String(200), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    unit_price: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    line_total: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False)
