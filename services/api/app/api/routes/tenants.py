@@ -42,6 +42,7 @@ async def list_tenants(
                 tenant_id=tenant.id,
                 tenant_name=tenant.name,
                 tenant_slug=tenant.slug,
+                pos_type=tenant.pos_type,
                 role=Role(membership.role),
                 branch_ids=list(branches.scalars().all()),
             )
