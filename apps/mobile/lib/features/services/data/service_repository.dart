@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:khanya_pos/core/network/api_client.dart';
 
 class ServiceEntry {
@@ -27,6 +29,19 @@ class ServiceEntry {
 class ServiceRepository {
   ServiceRepository({required ApiClient apiClient}) : _apiClient = apiClient;
   final ApiClient _apiClient;
+
+  Future<Map<String, dynamic>> checkout({required String serviceId, required int quantity, required String method, required String amount, String? customerId}) async {
+    final random = Random.secure();
+    String part(int count) => List.generate(count, (_) => random.nextInt(16).toRadixString(16)).join();
+    final operationId = '${part(8)}-${part(4)}-4${part(3)}-a${part(3)}-${part(12)}';
+    final response = await _apiClient.dio.post<Map<String, dynamic>>('/pos/services/complete', data: {
+      'client_operation_id': operationId,
+      'items': [{'service_id': serviceId, 'quantity': quantity}],
+      'payments': [{'method': method, 'amount': amount}],
+      if (customerId != null) 'customer_id': customerId,
+    });
+    return response.data ?? {};
+  }
 
   Future<List<ServiceEntry>> list() async {
     final response = await _apiClient.dio.get<List<dynamic>>('/services');
