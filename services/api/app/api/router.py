@@ -21,6 +21,7 @@ from app.api.routes import (
     receivables,
     reports,
     sales,
+    service_checkout,
     services_catalog,
     staff,
     subscriptions,
@@ -44,6 +45,7 @@ api_router.include_router(services_catalog.router, prefix="/services", tags=["se
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
 api_router.include_router(inventory_controls.router, prefix="/inventory", tags=["inventory"])
 api_router.include_router(sales.router, prefix="/pos/sales", tags=["sales"])
+api_router.include_router(service_checkout.router, prefix="/pos/services", tags=["sales", "services"])
 api_router.include_router(till.router, prefix="/pos/till", tags=["till"])
 api_router.include_router(customers.router, prefix="/customers", tags=["customers"])
 api_router.include_router(receivables.router, prefix="/customers", tags=["customers", "accounting"])
