@@ -14,7 +14,7 @@ router = APIRouter()
 
 
 def _ensure_service_business(context: TenantContext) -> None:
-    if context.tenant.pos_type != "services":
+    if context.tenant.pos_type not in ("services", "hybrid"):
         raise HTTPException(status_code=403, detail="Services catalogue requires a Services POS workspace")
 
 
