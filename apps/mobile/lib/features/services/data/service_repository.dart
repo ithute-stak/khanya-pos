@@ -30,10 +30,13 @@ class ServiceRepository {
   ServiceRepository({required ApiClient apiClient}) : _apiClient = apiClient;
   final ApiClient _apiClient;
 
-  Future<Map<String, dynamic>> checkout({required String serviceId, required int quantity, required String method, required String amount, String? customerId}) async {
+  static String newOperationId() {
     final random = Random.secure();
     String part(int count) => List.generate(count, (_) => random.nextInt(16).toRadixString(16)).join();
-    final operationId = '${part(8)}-${part(4)}-4${part(3)}-a${part(3)}-${part(12)}';
+    return '${part(8)}-${part(4)}-4${part(3)}-a${part(3)}-${part(12)}';
+  }
+
+  Future<Map<String, dynamic>> checkout({required String operationId, required String serviceId, required int quantity, required String method, required String amount, String? customerId}) async {
     final response = await _apiClient.dio.post<Map<String, dynamic>>('/pos/services/complete', data: {
       'client_operation_id': operationId,
       'items': [{'service_id': serviceId, 'quantity': quantity}],
