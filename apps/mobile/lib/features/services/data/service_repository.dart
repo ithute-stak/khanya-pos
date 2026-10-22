@@ -43,6 +43,23 @@ class ServiceRepository {
     return response.data ?? {};
   }
 
+  Future<List<Map<String, dynamic>>> appointments() async {
+    final response = await _apiClient.dio.get<List<dynamic>>('/appointments');
+    return (response.data ?? []).map((item) => (item as Map).cast<String, dynamic>()).toList();
+  }
+
+  Future<void> createAppointment({required String serviceId, required String customerName, required DateTime startsAt, String? membershipId}) async {
+    await _apiClient.dio.post('/appointments', data: {
+      'service_id': serviceId, 'customer_name': customerName.trim(),
+      'starts_at': startsAt.toUtc().toIso8601String(),
+      if (membershipId != null) 'membership_id': membershipId,
+    });
+  }
+
+  Future<void> updateAppointmentStatus(String id, String status) async {
+    await _apiClient.dio.patch('/appointments/$id', data: {'status': status});
+  }
+
   Future<List<ServiceEntry>> list() async {
     final response = await _apiClient.dio.get<List<dynamic>>('/services');
     return (response.data ?? []).map((row) => ServiceEntry.fromJson((row as Map).cast<String, dynamic>())).toList();
