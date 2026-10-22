@@ -32,7 +32,7 @@ class DesktopShell extends StatelessWidget {
         return CallbackShortcuts(
           bindings: <ShortcutActivator, VoidCallback>{
             const SingleActivator(LogicalKeyboardKey.f1): () => context.go('/'),
-            const SingleActivator(LogicalKeyboardKey.f2): () => context.go('/pos'),
+            const SingleActivator(LogicalKeyboardKey.f2): () => context.go(services ? '/services/checkout' : '/pos'),
             if (!services) const SingleActivator(LogicalKeyboardKey.f3): () => context.go('/products'),
             const SingleActivator(LogicalKeyboardKey.digit4, control: true): () => context.go('/customers'),
             if (!services) const SingleActivator(LogicalKeyboardKey.f5): () => context.go('/inventory'),
@@ -83,7 +83,7 @@ class _MobileShell extends StatelessWidget {
         onDestinationSelected: (index) {
           final destinations = <String>[
             '/',
-            '/pos',
+            if (services) '/services/checkout' else '/pos',
             if (services) '/services' else '/products',
             '/customers',
             '/more',
@@ -129,7 +129,7 @@ class _MobileShell extends StatelessWidget {
 
 int _mobileDestinationIndex(String location, {bool services = false}) {
   if (location == '/') return 0;
-  if (location == '/pos') return 1;
+  if (location == '/pos' || (services && location == '/services/checkout')) return 1;
   if (services && (location == '/services' || location.startsWith('/services/'))) return 2;
   if (!services && (location == '/products' || location.startsWith('/products/'))) return 2;
   if (location == '/customers' || location.startsWith('/customers/')) return services ? 2 : 3;
@@ -157,12 +157,13 @@ class MobileMorePage extends StatelessWidget {
     final hiddenPaths = <String>{
       '/',
       '/pos',
+      '/services/checkout',
       '/products',
       '/services',
       '/customers',
     };
     final visibleItems = _items
-        .where((item) => !hiddenPaths.contains(item.path) && item.isVisibleFor(role) && (services ? !_goodsOnlyPaths.contains(item.path) : item.path != '/services'))
+        .where((item) => !hiddenPaths.contains(item.path) && item.isVisibleFor(role) && (services ? !_goodsOnlyPaths.contains(item.path) && item.path != '/pos' : item.path != '/services' && item.path != '/services/checkout'))
         .toList(growable: false);
 
     final operations = visibleItems.where((item) => _operationsPaths.contains(item.path)).toList();
@@ -519,6 +520,7 @@ const _goodsOnlyPaths = <String>{'/products', '/inventory', '/purchases', '/purc
 const _operationsPaths = <String>{
   '/sync',
   '/sales',
+  '/services/checkout',
   '/till',
   '/inventory',
   '/purchases',
@@ -549,7 +551,7 @@ class _DesktopSidebar extends StatelessWidget {
     final role = _selectedRole(sessionState);
     final workspaceLabel = _selectedWorkspaceLabel(sessionState);
     final services = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'services';
-    final visibleItems = _items.where((item) => item.isVisibleFor(role) && (services ? !_goodsOnlyPaths.contains(item.path) : item.path != '/services')).toList(growable: false);
+    final visibleItems = _items.where((item) => item.isVisibleFor(role) && (services ? !_goodsOnlyPaths.contains(item.path) && item.path != '/pos' : item.path != '/services' && item.path != '/services/checkout')).toList(growable: false);
 
     return SizedBox(
       width: 252,
@@ -869,6 +871,7 @@ const _items = <_DesktopNavItem>[
   ),
   _DesktopNavItem(label: 'Products', path: '/products', icon: Icons.inventory_2_outlined, shortcut: 'F3'),
   _DesktopNavItem(label: 'Services', path: '/services', icon: Icons.design_services_outlined),
+  _DesktopNavItem(label: 'Service Checkout', path: '/services/checkout', icon: Icons.point_of_sale_outlined),
   _DesktopNavItem(label: 'Customers', path: '/customers', icon: Icons.groups_2_outlined, shortcut: 'Ctrl+4'),
   _DesktopNavItem(label: 'Inventory', path: '/inventory', icon: Icons.warehouse_outlined, shortcut: 'F5'),
   _DesktopNavItem(
