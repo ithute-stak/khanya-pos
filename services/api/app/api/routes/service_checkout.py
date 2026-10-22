@@ -48,7 +48,7 @@ async def complete_service_checkout(
     principal: Principal = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db),
 ):
-    if context.tenant.pos_type != "services":
+    if context.tenant.pos_type not in ("services", "hybrid"):
         raise HTTPException(status_code=403, detail="Services POS required")
     if context.branch is None:
         raise HTTPException(status_code=400, detail="X-Branch-ID is required")
