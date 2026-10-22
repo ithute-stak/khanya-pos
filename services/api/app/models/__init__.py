@@ -1,5 +1,6 @@
 from app.models.accounting import Account, AccountingSettings, JournalEntry, JournalLine
 from app.models.audit import AuditEvent
+from app.models.appointments import ServiceAppointment
 from app.models.base import Base
 from app.models.commerce import (
     BranchProductStock,
