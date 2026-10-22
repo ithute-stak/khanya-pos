@@ -71,6 +71,7 @@ async def _create_business(
     tenant = Tenant(
         name=payload.business_name.strip(),
         slug=payload.business_slug.strip().lower(),
+        pos_type=payload.pos_type,
         is_active=approved,
         onboarding_status="approved" if approved else "pending",
     )
@@ -115,7 +116,7 @@ async def signup(
                 entity_type="tenant",
                 entity_id=str(tenant.id),
                 summary=f"New Khanya business application: {tenant.name}",
-                details={"business_slug": tenant.slug},
+                details={"business_slug": tenant.slug, "pos_type": tenant.pos_type},
             )
         )
         db.add(
