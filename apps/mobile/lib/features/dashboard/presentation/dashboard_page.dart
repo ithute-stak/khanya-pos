@@ -96,11 +96,11 @@ class DashboardPage extends StatelessWidget {
                   ),
                   delegate: SliverChildListDelegate.fixed([
                     _ModuleCard(
-                      title: 'New Sale',
+                      title: services ? 'New Service Sale' : 'New Sale',
                       description: 'Fast checkout, offline queue and payments',
                       icon: Icons.point_of_sale,
                       accent: KhanyaBrand.forest,
-                      onTap: () => context.push('/pos'),
+                      onTap: () => context.push(services ? '/services/checkout' : '/pos'),
                     ),
                     _ModuleCard(
                       title: 'Sales History',
