@@ -1,3 +1,4 @@
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
@@ -15,7 +16,7 @@ class ServiceItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(48), nullable=False)
     category: Mapped[str | None] = mapped_column(String(120), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    price: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
@@ -27,5 +28,5 @@ class ServiceSaleLine(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     service_id: Mapped[UUID] = mapped_column(ForeignKey('service_items.id', ondelete='RESTRICT'), index=True)
     name_snapshot: Mapped[str] = mapped_column(String(200), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
-    unit_price: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
-    line_total: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    line_total: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
