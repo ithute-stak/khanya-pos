@@ -43,7 +43,7 @@ from app.models.purchasing import (
     SupplierPayment,
 )
 from app.models.returns import SaleReturn, SaleReturnLine
-from app.models.services_catalog import ServiceItem
+from app.models.services_catalog import ServiceItem, ServiceSaleLine
 from app.models.subscriptions import TenantSubscription
 from app.models.till import TillCashMovement, TillShift
 
