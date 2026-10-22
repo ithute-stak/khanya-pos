@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -8,6 +9,7 @@ from app.security.permissions import Role
 class BootstrapRequest(BaseModel):
     business_name: str = Field(min_length=2, max_length=200)
     business_slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,78}[a-z0-9]$")
+    pos_type: Literal["goods", "services"] = "goods"
     branch_name: str = Field(min_length=2, max_length=200)
     branch_code: str = Field(min_length=1, max_length=40)
     branch_location: str | None = Field(default=None, max_length=240)
@@ -55,6 +57,7 @@ class TenantSettings(BaseModel):
     id: UUID
     name: str
     slug: str
+    pos_type: Literal["goods", "services"]
     is_active: bool
 
     model_config = ConfigDict(from_attributes=True)
@@ -68,6 +71,7 @@ class MembershipSummary(BaseModel):
     tenant_id: UUID
     tenant_name: str
     tenant_slug: str
+    pos_type: Literal["goods", "services"] = "goods"
     role: Role
     branch_ids: list[UUID]
     branches: list[BranchSummary] = Field(default_factory=list)
