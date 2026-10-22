@@ -75,6 +75,7 @@ class _MobileShell extends StatelessWidget {
 
     final sessionState = context.watch<SessionBloc>().state;
     final services = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'services';
+    final hybrid = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'hybrid';
     final selectedIndex = _mobileDestinationIndex(location, services: services);
     return Scaffold(
       body: child,
@@ -153,6 +154,7 @@ class MobileMorePage extends StatelessWidget {
     final sessionState = context.watch<SessionBloc>().state;
     final role = _selectedRole(sessionState);
     final services = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'services';
+    final hybrid = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'hybrid';
     final workspaceLabel = _selectedWorkspaceLabel(sessionState);
     final hiddenPaths = <String>{
       '/',
@@ -163,7 +165,7 @@ class MobileMorePage extends StatelessWidget {
       '/customers',
     };
     final visibleItems = _items
-        .where((item) => !hiddenPaths.contains(item.path) && item.isVisibleFor(role) && (services ? !_goodsOnlyPaths.contains(item.path) && item.path != '/pos' : item.path != '/services' && item.path != '/services/checkout' && item.path != '/appointments'))
+        .where((item) => !hiddenPaths.contains(item.path) && item.isVisibleFor(role) && (hybrid || (services ? !_goodsOnlyPaths.contains(item.path) && item.path != '/pos' : item.path != '/services' && item.path != '/services/checkout' && item.path != '/appointments')))
         .toList(growable: false);
 
     final operations = visibleItems.where((item) => _operationsPaths.contains(item.path)).toList();
@@ -552,7 +554,8 @@ class _DesktopSidebar extends StatelessWidget {
     final role = _selectedRole(sessionState);
     final workspaceLabel = _selectedWorkspaceLabel(sessionState);
     final services = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'services';
-    final visibleItems = _items.where((item) => item.isVisibleFor(role) && (services ? !_goodsOnlyPaths.contains(item.path) && item.path != '/pos' : item.path != '/services' && item.path != '/services/checkout' && item.path != '/appointments')).toList(growable: false);
+    final hybrid = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'hybrid';
+    final visibleItems = _items.where((item) => item.isVisibleFor(role) && (hybrid || (services ? !_goodsOnlyPaths.contains(item.path) && item.path != '/pos' : item.path != '/services' && item.path != '/services/checkout' && item.path != '/appointments'))).toList(growable: false);
 
     return SizedBox(
       width: 252,
