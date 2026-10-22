@@ -23,6 +23,7 @@ class DashboardPage extends StatelessWidget {
         .where((item) => item.tenantId == session.selectedTenantId)
         .firstOrNull;
     final services = membership?.posType == 'services';
+    final hybrid = membership?.posType == 'hybrid';
     final role = membership?.role;
     final canReadReports = const {'owner', 'admin', 'manager', 'accountant'}.contains(role);
     final canManageStaff = const {'owner', 'admin', 'manager'}.contains(role);
@@ -68,7 +69,7 @@ class DashboardPage extends StatelessWidget {
                         businessName: membership?.tenantName,
                       ),
                       const SizedBox(height: 12),
-                      Chip(label: Text(services ? 'Services POS' : 'Goods POS')),
+                      Chip(label: Text(hybrid ? 'Goods & Services POS' : (services ? 'Services POS' : 'Goods POS'))),
                       const SizedBox(height: 16),
                       const _SystemStatusCard(),
                       const SizedBox(height: 16),
@@ -139,49 +140,49 @@ class DashboardPage extends StatelessWidget {
                       accent: KhanyaBrand.forest,
                       onTap: () => context.push('/customers'),
                     ),
-                    if (services) _ModuleCard(
+                    if (services || hybrid) _ModuleCard(
                       title: 'Appointments',
                       description: 'Book customers and track service progress',
                       icon: Icons.event_available_outlined,
                       accent: KhanyaBrand.forest,
                       onTap: () => context.push('/appointments'),
                     ),
-                    if (services) _ModuleCard(
+                    if (services || hybrid) _ModuleCard(
                       title: 'Services',
                       description: 'Manage service pricing, durations and categories',
                       icon: Icons.design_services_outlined,
                       accent: KhanyaBrand.navy,
                       onTap: () => context.push('/services'),
                     ),
-                    if (!services) _ModuleCard(
+                    if (!services || hybrid) _ModuleCard(
                       title: 'Products',
                       description: 'Prices, SKUs, barcodes and product catalogue',
                       icon: Icons.inventory_2_outlined,
                       accent: KhanyaBrand.navy,
                       onTap: () => context.push('/products'),
                     ),
-                    if (!services) _ModuleCard(
+                    if (!services || hybrid) _ModuleCard(
                       title: 'Inventory',
                       description: 'On-hand quantities and low-stock visibility',
                       icon: Icons.warehouse_outlined,
                       accent: KhanyaBrand.goldDark,
                       onTap: () => context.push('/inventory'),
                     ),
-                    if (!services) _ModuleCard(
+                    if (!services || hybrid) _ModuleCard(
                       title: 'Purchases',
                       description: 'Buy stock, receive items and track supplier balances',
                       icon: Icons.shopping_bag_outlined,
                       accent: KhanyaBrand.forest,
                       onTap: () => context.push('/purchases'),
                     ),
-                    if (!services) _ModuleCard(
+                    if (!services || hybrid) _ModuleCard(
                       title: 'Receipt Vault',
                       description: 'Photograph and keep shopping receipts and supplier invoices',
                       icon: Icons.receipt_long_outlined,
                       accent: KhanyaBrand.goldDark,
                       onTap: () => context.push('/receipts'),
                     ),
-                    if (!services) _ModuleCard(
+                    if (!services || hybrid) _ModuleCard(
                       title: 'Suppliers',
                       description: 'Supplier contacts, purchases and outstanding balances',
                       icon: Icons.local_shipping_outlined,
