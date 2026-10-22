@@ -75,7 +75,7 @@ class _MobileShell extends StatelessWidget {
 
     final sessionState = context.watch<SessionBloc>().state;
     final services = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'services';
-    final selectedIndex = _mobileDestinationIndex(location);
+    final selectedIndex = _mobileDestinationIndex(location, services: services);
     return Scaffold(
       body: child,
       bottomNavigationBar: NavigationBar(
@@ -123,12 +123,12 @@ class _MobileShell extends StatelessWidget {
   }
 }
 
-int _mobileDestinationIndex(String location) {
+int _mobileDestinationIndex(String location, {bool services = false}) {
   if (location == '/') return 0;
   if (location == '/pos') return 1;
-  if (location == '/products' || location.startsWith('/products/')) return 2;
-  if (location == '/customers' || location.startsWith('/customers/')) return 3;
-  return 4;
+  if (!services && (location == '/products' || location.startsWith('/products/'))) return 2;
+  if (location == '/customers' || location.startsWith('/customers/')) return services ? 2 : 3;
+  return services ? 3 : 4;
 }
 
 bool _hideMobileNavigation(String location) {
