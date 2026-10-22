@@ -7,6 +7,14 @@ class ReportsRepository {
 
   final ApiClient _apiClient;
 
+  Future<Map<String, dynamic>> serviceSummary({required DateTime start, required DateTime end}) async {
+    final response = await _apiClient.dio.get<Map<String, dynamic>>('/reports/services/summary', queryParameters: {
+      'start': start.toUtc().toIso8601String(),
+      'end': end.toUtc().toIso8601String(),
+    });
+    return response.data ?? const <String, dynamic>{};
+  }
+
   Future<SalesSummaryReport> salesSummary({
     required DateTime start,
     required DateTime end,
