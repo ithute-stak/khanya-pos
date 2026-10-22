@@ -84,7 +84,7 @@ class _MobileShell extends StatelessWidget {
           final destinations = <String>[
             '/',
             '/pos',
-            if (!services) '/products',
+            if (services) '/services' else '/products',
             '/customers',
             '/more',
           ];
@@ -102,7 +102,11 @@ class _MobileShell extends StatelessWidget {
             selectedIcon: Icon(Icons.point_of_sale_rounded),
             label: 'Sell',
           ),
-          if (!services) NavigationDestination(
+          if (services) const NavigationDestination(
+            icon: Icon(Icons.design_services_outlined),
+            selectedIcon: Icon(Icons.design_services),
+            label: 'Services',
+          ) else NavigationDestination(
             icon: Icon(Icons.inventory_2_outlined),
             selectedIcon: Icon(Icons.inventory_2_rounded),
             label: 'Products',
@@ -126,6 +130,7 @@ class _MobileShell extends StatelessWidget {
 int _mobileDestinationIndex(String location, {bool services = false}) {
   if (location == '/') return 0;
   if (location == '/pos') return 1;
+  if (services && (location == '/services' || location.startsWith('/services/'))) return 2;
   if (!services && (location == '/products' || location.startsWith('/products/'))) return 2;
   if (location == '/customers' || location.startsWith('/customers/')) return services ? 2 : 3;
   return services ? 3 : 4;
@@ -153,10 +158,11 @@ class MobileMorePage extends StatelessWidget {
       '/',
       '/pos',
       '/products',
+      '/services',
       '/customers',
     };
     final visibleItems = _items
-        .where((item) => !hiddenPaths.contains(item.path) && item.isVisibleFor(role) && (!services || !_goodsOnlyPaths.contains(item.path)))
+        .where((item) => !hiddenPaths.contains(item.path) && item.isVisibleFor(role) && (services ? !_goodsOnlyPaths.contains(item.path) : item.path != '/services'))
         .toList(growable: false);
 
     final operations = visibleItems.where((item) => _operationsPaths.contains(item.path)).toList();
@@ -543,7 +549,7 @@ class _DesktopSidebar extends StatelessWidget {
     final role = _selectedRole(sessionState);
     final workspaceLabel = _selectedWorkspaceLabel(sessionState);
     final services = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'services';
-    final visibleItems = _items.where((item) => item.isVisibleFor(role) && (!services || !_goodsOnlyPaths.contains(item.path))).toList(growable: false);
+    final visibleItems = _items.where((item) => item.isVisibleFor(role) && (services ? !_goodsOnlyPaths.contains(item.path) : item.path != '/services')).toList(growable: false);
 
     return SizedBox(
       width: 252,
@@ -862,6 +868,7 @@ const _items = <_DesktopNavItem>[
     allowedRoles: {'owner', 'admin', 'manager'},
   ),
   _DesktopNavItem(label: 'Products', path: '/products', icon: Icons.inventory_2_outlined, shortcut: 'F3'),
+  _DesktopNavItem(label: 'Services', path: '/services', icon: Icons.design_services_outlined),
   _DesktopNavItem(label: 'Customers', path: '/customers', icon: Icons.groups_2_outlined, shortcut: 'Ctrl+4'),
   _DesktopNavItem(label: 'Inventory', path: '/inventory', icon: Icons.warehouse_outlined, shortcut: 'F5'),
   _DesktopNavItem(
