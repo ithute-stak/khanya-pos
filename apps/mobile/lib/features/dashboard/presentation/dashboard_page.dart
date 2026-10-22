@@ -140,6 +140,13 @@ class DashboardPage extends StatelessWidget {
                       onTap: () => context.push('/customers'),
                     ),
                     if (services) _ModuleCard(
+                      title: 'Appointments',
+                      description: 'Book customers and track service progress',
+                      icon: Icons.event_available_outlined,
+                      accent: KhanyaBrand.forest,
+                      onTap: () => context.push('/appointments'),
+                    ),
+                    if (services) _ModuleCard(
                       title: 'Services',
                       description: 'Manage service pricing, durations and categories',
                       icon: Icons.design_services_outlined,
