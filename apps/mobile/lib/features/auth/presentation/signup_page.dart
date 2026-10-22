@@ -25,6 +25,7 @@ class _SignupPageState extends State<SignupPage> {
   final _phone = TextEditingController();
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
+  String? _posType;
   bool _submitting = false;
   bool _obscurePassword = true;
   String? _error;
@@ -91,6 +92,7 @@ class _SignupPageState extends State<SignupPage> {
       final result = await context.read<AuthRepository>().signup(
             businessName: _businessName.text,
             businessSlug: _businessSlug.text,
+            posType: _posType!,
             branchName: _branchName.text,
             branchCode: _branchCode.text,
             branchLocation: _branchLocation.text,
@@ -199,6 +201,40 @@ class _SignupPageState extends State<SignupPage> {
                                     }
                                     return null;
                                   },
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              const _SectionTitle('Point of sale type'),
+                              const SizedBox(height: 8),
+                              Text('Choose how your business sells. This determines the POS workspace you start with.'),
+                              const SizedBox(height: 12),
+                              FormField<String>(
+                                validator: (_) => _posType == null ? 'Select a POS type' : null,
+                                builder: (field) => Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    RadioListTile<String>(
+                                      title: const Text('Goods POS'),
+                                      subtitle: const Text('Retail, products, stock and barcode sales'),
+                                      secondary: const Icon(Icons.inventory_2_outlined),
+                                      value: 'goods',
+                                      groupValue: _posType,
+                                      onChanged: _submitting ? null : (value) => setState(() { _posType = value; field.didChange(value); }),
+                                    ),
+                                    RadioListTile<String>(
+                                      title: const Text('Services POS'),
+                                      subtitle: const Text('Services, labour, professional fees and appointments'),
+                                      secondary: const Icon(Icons.design_services_outlined),
+                                      value: 'services',
+                                      groupValue: _posType,
+                                      onChanged: _submitting ? null : (value) => setState(() { _posType = value; field.didChange(value); }),
+                                    ),
+                                    if (field.hasError)
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 12),
+                                        child: Text(field.errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                                      ),
+                                  ],
                                 ),
                               ),
                               const SizedBox(height: 18),
