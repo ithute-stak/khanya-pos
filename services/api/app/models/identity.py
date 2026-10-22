@@ -26,6 +26,7 @@ class Tenant(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     name: Mapped[str] = mapped_column(String(200))
     slug: Mapped[str] = mapped_column(String(80), index=True)
+    pos_type: Mapped[str] = mapped_column(String(16), default="goods", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     onboarding_status: Mapped[str] = mapped_column(String(24), default="approved", nullable=False, index=True)
     onboarding_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
