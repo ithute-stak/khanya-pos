@@ -16,6 +16,11 @@ class _ServiceCheckoutPageState extends State<ServiceCheckoutPage> {
   int _quantity = 1;
   bool _submitting = false;
   String? _confirmation;
+  String? _pendingOperationId;
+  String? _pendingServiceId;
+  int? _pendingQuantity;
+  String? _pendingAmount;
+  bool _statusUnknown = false;
 
   @override
   void initState() {
@@ -29,7 +34,11 @@ class _ServiceCheckoutPageState extends State<ServiceCheckoutPage> {
     final price = double.tryParse(service.price);
     if (price == null) return;
     final amount = (price * _quantity).toStringAsFixed(2);
-    final confirmed = await showDialog<bool>(
+    if (_pendingOperationId != null &&
+        (_pendingServiceId != service.id || _pendingQuantity != _quantity || _pendingAmount != amount)) {
+      return;
+    }
+    final confirmed = _pendingOperationId == null ? await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirm cash received'),
@@ -39,16 +48,21 @@ class _ServiceCheckoutPageState extends State<ServiceCheckoutPage> {
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Cash received')),
         ],
       ),
-    );
+    ) : true;
     if (confirmed != true || !mounted) return;
+    _pendingOperationId ??= ServiceRepository.newOperationId();
+    _pendingServiceId ??= service.id;
+    _pendingQuantity ??= _quantity;
+    _pendingAmount ??= amount;
     setState(() => _submitting = true);
     try {
       final result = await context.read<ServiceRepository>().checkout(
-        serviceId: service.id, quantity: _quantity, method: 'cash', amount: amount,
+        operationId: _pendingOperationId!, serviceId: service.id, quantity: _quantity, method: 'cash', amount: amount,
       );
       if (!mounted) return;
-      setState(() => _confirmation = result['sale_number']?.toString() ?? 'Sale completed');
+      setState(() { _confirmation = result['sale_number']?.toString() ?? 'Sale completed'; _statusUnknown = false; });
     } catch (error) {
+      if (mounted) setState(() => _statusUnknown = true);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Checkout status unconfirmed. Check sales history before retrying: $error')),
       );
@@ -77,7 +91,7 @@ class _ServiceCheckoutPageState extends State<ServiceCheckoutPage> {
                 subtitle: Text('Sale: $_confirmation'),
               )),
               FilledButton.tonal(
-                onPressed: () => setState(() { _confirmation = null; _selected = null; _quantity = 1; }),
+                onPressed: () => setState(() { _confirmation = null; _selected = null; _quantity = 1; _pendingOperationId = null; _pendingServiceId = null; _pendingQuantity = null; _pendingAmount = null; }),
                 child: const Text('New checkout'),
               ),
             ] else ...[
@@ -88,24 +102,28 @@ class _ServiceCheckoutPageState extends State<ServiceCheckoutPage> {
                 subtitle: Text('M ${service.price} • ${service.durationMinutes ?? '-'} minutes'),
                 value: service.id,
                 groupValue: _selected?.id,
-                onChanged: _submitting ? null : (_) => setState(() => _selected = service),
+                onChanged: _submitting || _pendingOperationId != null ? null : (_) => setState(() => _selected = service),
               )),
               const SizedBox(height: 14),
               Row(children: [
                 const Text('Quantity'),
                 const Spacer(),
-                IconButton(onPressed: _quantity > 1 && !_submitting ? () => setState(() => _quantity--) : null, icon: const Icon(Icons.remove)),
+                IconButton(onPressed: _quantity > 1 && !_submitting && _pendingOperationId == null ? () => setState(() => _quantity--) : null, icon: const Icon(Icons.remove)),
                 Text('$_quantity'),
-                IconButton(onPressed: _quantity < 10000 && !_submitting ? () => setState(() => _quantity++) : null, icon: const Icon(Icons.add)),
+                IconButton(onPressed: _quantity < 10000 && !_submitting && _pendingOperationId == null ? () => setState(() => _quantity++) : null, icon: const Icon(Icons.add)),
               ]),
               const SizedBox(height: 12),
               Text('Total: M ${((double.tryParse(_selected?.price ?? '') ?? 0) * _quantity).toStringAsFixed(2)}',
                 style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 18),
+              if (_statusUnknown) Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text('Transaction confirmation is unknown. Check sales history first. Retrying uses the SAME operation ID, not a new sale. Reference: $_pendingOperationId'),
+              ),
               FilledButton.icon(
                 onPressed: _selected == null || _submitting ? null : _checkout,
                 icon: const Icon(Icons.payments_outlined),
-                label: Text(_submitting ? 'Recording payment…' : 'Record cash payment'),
+                label: Text(_submitting ? 'Recording payment…' : _statusUnknown ? 'Verify by retrying same transaction' : 'Record cash payment'),
               ),
               const SizedBox(height: 12),
               const Text('Cash only in this initial version. Do not record a card or mobile-money payment until provider confirmation is implemented.'),
