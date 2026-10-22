@@ -32,6 +32,7 @@ import 'package:khanya_pos/features/reports/presentation/reports_page.dart';
 import 'package:khanya_pos/features/settings/presentation/business_settings_page.dart';
 import 'package:khanya_pos/features/services/presentation/services_page.dart';
 import 'package:khanya_pos/features/services/presentation/appointments_page.dart';
+import 'package:khanya_pos/features/services/presentation/service_reports_page.dart';
 import 'package:khanya_pos/features/services/presentation/service_checkout_page.dart';
 import 'package:khanya_pos/features/staff/presentation/staff_page.dart';
 import 'package:khanya_pos/features/workforce/presentation/workforce_page.dart';
@@ -85,6 +86,7 @@ final GoRouter appRouter = GoRouter(
         GoRoute(path: '/services', builder: (context, state) => const ServicesPage()),
         GoRoute(path: '/services/checkout', builder: (context, state) => const ServiceCheckoutPage()),
         GoRoute(path: '/appointments', builder: (context, state) => const AppointmentsPage()),
+        GoRoute(path: '/service-reports', builder: (context, state) => const ServiceReportsPage()),
         GoRoute(path: '/customers', builder: (context, state) => const CustomersPage()),
         GoRoute(
           path: '/customers/:customerId',
