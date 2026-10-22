@@ -139,6 +139,13 @@ class DashboardPage extends StatelessWidget {
                       accent: KhanyaBrand.forest,
                       onTap: () => context.push('/customers'),
                     ),
+                    if (services) _ModuleCard(
+                      title: 'Services',
+                      description: 'Manage service pricing, durations and categories',
+                      icon: Icons.design_services_outlined,
+                      accent: KhanyaBrand.navy,
+                      onTap: () => context.push('/services'),
+                    ),
                     if (!services) _ModuleCard(
                       title: 'Products',
                       description: 'Prices, SKUs, barcodes and product catalogue',
