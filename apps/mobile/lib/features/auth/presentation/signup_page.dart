@@ -229,6 +229,14 @@ class _SignupPageState extends State<SignupPage> {
                                       groupValue: _posType,
                                       onChanged: _submitting ? null : (value) => setState(() { _posType = value; field.didChange(value); }),
                                     ),
+                                    RadioListTile<String>(
+                                      title: const Text('Goods & Services POS'),
+                                      subtitle: const Text('Sell products and provide services in one business'),
+                                      secondary: const Icon(Icons.store_mall_directory_outlined),
+                                      value: 'hybrid',
+                                      groupValue: _posType,
+                                      onChanged: _submitting ? null : (value) => setState(() { _posType = value; field.didChange(value); }),
+                                    ),
                                     if (field.hasError)
                                       Padding(
                                         padding: const EdgeInsets.only(left: 12),
