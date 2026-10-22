@@ -163,7 +163,7 @@ class MobileMorePage extends StatelessWidget {
       '/customers',
     };
     final visibleItems = _items
-        .where((item) => !hiddenPaths.contains(item.path) && item.isVisibleFor(role) && (services ? !_goodsOnlyPaths.contains(item.path) && item.path != '/pos' : item.path != '/services' && item.path != '/services/checkout'))
+        .where((item) => !hiddenPaths.contains(item.path) && item.isVisibleFor(role) && (services ? !_goodsOnlyPaths.contains(item.path) && item.path != '/pos' : item.path != '/services' && item.path != '/services/checkout' && item.path != '/appointments'))
         .toList(growable: false);
 
     final operations = visibleItems.where((item) => _operationsPaths.contains(item.path)).toList();
@@ -521,6 +521,7 @@ const _operationsPaths = <String>{
   '/sync',
   '/sales',
   '/services/checkout',
+  '/appointments',
   '/till',
   '/inventory',
   '/purchases',
@@ -551,7 +552,7 @@ class _DesktopSidebar extends StatelessWidget {
     final role = _selectedRole(sessionState);
     final workspaceLabel = _selectedWorkspaceLabel(sessionState);
     final services = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'services';
-    final visibleItems = _items.where((item) => item.isVisibleFor(role) && (services ? !_goodsOnlyPaths.contains(item.path) && item.path != '/pos' : item.path != '/services' && item.path != '/services/checkout')).toList(growable: false);
+    final visibleItems = _items.where((item) => item.isVisibleFor(role) && (services ? !_goodsOnlyPaths.contains(item.path) && item.path != '/pos' : item.path != '/services' && item.path != '/services/checkout' && item.path != '/appointments')).toList(growable: false);
 
     return SizedBox(
       width: 252,
@@ -872,6 +873,7 @@ const _items = <_DesktopNavItem>[
   _DesktopNavItem(label: 'Products', path: '/products', icon: Icons.inventory_2_outlined, shortcut: 'F3'),
   _DesktopNavItem(label: 'Services', path: '/services', icon: Icons.design_services_outlined),
   _DesktopNavItem(label: 'Service Checkout', path: '/services/checkout', icon: Icons.point_of_sale_outlined),
+  _DesktopNavItem(label: 'Appointments', path: '/appointments', icon: Icons.event_available_outlined),
   _DesktopNavItem(label: 'Customers', path: '/customers', icon: Icons.groups_2_outlined, shortcut: 'Ctrl+4'),
   _DesktopNavItem(label: 'Inventory', path: '/inventory', icon: Icons.warehouse_outlined, shortcut: 'F5'),
   _DesktopNavItem(
