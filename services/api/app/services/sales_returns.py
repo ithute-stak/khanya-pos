@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.commerce import BranchProductStock, Payment, Product, Sale, SaleLine, StockMovement
+from app.models.services_catalog import ServiceSaleLine
 from app.models.returns import SaleReturn, SaleReturnLine
 from app.models.till import TillShift
 from app.schemas.returns import SaleReturnRequest
@@ -204,6 +205,25 @@ async def sale_detail(
                 "returned_total": returned_line_total,
             }
         )
+
+    service_lines = (await db.execute(
+        select(ServiceSaleLine)
+        .where(ServiceSaleLine.sale_id == sale.id)
+        .order_by(ServiceSaleLine.created_at.asc(), ServiceSaleLine.id.asc())
+    )).scalars().all()
+    for item in service_lines:
+        lines.append({
+            "id": item.id, "product_id": None,
+            "service_id": item.service_id,
+            "product_name": item.name_snapshot,
+            "sku": "SERVICE",
+            "quantity": Decimal(item.quantity),
+            "returned_quantity": Decimal("0"),
+            "returnable_quantity": Decimal("0"),
+            "unit_price": money(item.unit_price),
+            "line_total": money(item.line_total),
+            "returned_total": Decimal("0.00"),
+        })
 
     return {
         "id": sale.id,
