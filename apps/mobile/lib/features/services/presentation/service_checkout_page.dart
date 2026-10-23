@@ -63,9 +63,11 @@ class _ServiceCheckoutPageState extends State<ServiceCheckoutPage> {
       setState(() { _confirmation = result['sale_number']?.toString() ?? 'Sale completed'; _statusUnknown = false; });
     } catch (error) {
       if (mounted) setState(() => _statusUnknown = true);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Checkout status unconfirmed. Check sales history before retrying: $error')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Checkout status unconfirmed. Check sales history before retrying: $error')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -97,13 +99,15 @@ class _ServiceCheckoutPageState extends State<ServiceCheckoutPage> {
             ] else ...[
               const Text('Select a service'),
               const SizedBox(height: 12),
-              ...services.map((service) => RadioListTile<String>(
+              RadioGroup<String>(
+                groupValue: _selected?.id,
+                onChanged: _submitting || _pendingOperationId != null ? (value) {} : (value) => setState(() => _selected = services.firstWhere((item) => item.id == value)),
+                child: Column(children: services.map((service) => RadioListTile<String>(
                 title: Text(service.name),
                 subtitle: Text('M ${service.price} • ${service.durationMinutes ?? '-'} minutes'),
                 value: service.id,
-                groupValue: _selected?.id,
-                onChanged: _submitting || _pendingOperationId != null ? null : (_) => setState(() => _selected = service),
-              )),
+              )).toList()),
+              ),
               const SizedBox(height: 14),
               Row(children: [
                 const Text('Quantity'),
