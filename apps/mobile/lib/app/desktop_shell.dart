@@ -21,6 +21,8 @@ class DesktopShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<SessionBloc>().state;
+    final services = state is SessionAuthenticated && state.session.selectedPosType == 'services';
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < breakpoint) {
@@ -30,12 +32,12 @@ class DesktopShell extends StatelessWidget {
         return CallbackShortcuts(
           bindings: <ShortcutActivator, VoidCallback>{
             const SingleActivator(LogicalKeyboardKey.f1): () => context.go('/'),
-            const SingleActivator(LogicalKeyboardKey.f2): () => context.go('/pos'),
-            const SingleActivator(LogicalKeyboardKey.f3): () => context.go('/products'),
+            const SingleActivator(LogicalKeyboardKey.f2): () => context.go(services ? '/services/checkout' : '/pos'),
+            if (!services) const SingleActivator(LogicalKeyboardKey.f3): () => context.go('/products'),
             const SingleActivator(LogicalKeyboardKey.digit4, control: true): () => context.go('/customers'),
-            const SingleActivator(LogicalKeyboardKey.f5): () => context.go('/inventory'),
-            const SingleActivator(LogicalKeyboardKey.f6): () => context.go('/purchases'),
-            const SingleActivator(LogicalKeyboardKey.f7): () => context.go('/suppliers'),
+            if (!services) const SingleActivator(LogicalKeyboardKey.f5): () => context.go('/inventory'),
+            if (!services) const SingleActivator(LogicalKeyboardKey.f6): () => context.go('/purchases'),
+            if (!services) const SingleActivator(LogicalKeyboardKey.f7): () => context.go('/suppliers'),
             const SingleActivator(LogicalKeyboardKey.f8): () => context.go('/receipts'),
             const SingleActivator(LogicalKeyboardKey.f10): () => context.go('/expenses'),
           },
@@ -71,23 +73,25 @@ class _MobileShell extends StatelessWidget {
   Widget build(BuildContext context) {
     if (_hideMobileNavigation(location)) return child;
 
-    final selectedIndex = _mobileDestinationIndex(location);
+    final sessionState = context.watch<SessionBloc>().state;
+    final services = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'services';
+    final selectedIndex = _mobileDestinationIndex(location, services: services);
     return Scaffold(
       body: child,
       bottomNavigationBar: NavigationBar(
         selectedIndex: selectedIndex,
         onDestinationSelected: (index) {
-          const destinations = <String>[
+          final destinations = <String>[
             '/',
-            '/pos',
-            '/products',
+            if (services) '/services/checkout' else '/pos',
+            if (services) '/services' else '/products',
             '/customers',
             '/more',
           ];
           final target = destinations[index];
           if (target != location) context.go(target);
         },
-        destinations: const [
+        destinations: [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
             selectedIcon: Icon(Icons.home_rounded),
@@ -98,7 +102,11 @@ class _MobileShell extends StatelessWidget {
             selectedIcon: Icon(Icons.point_of_sale_rounded),
             label: 'Sell',
           ),
-          NavigationDestination(
+          if (services) const NavigationDestination(
+            icon: Icon(Icons.design_services_outlined),
+            selectedIcon: Icon(Icons.design_services),
+            label: 'Services',
+          ) else NavigationDestination(
             icon: Icon(Icons.inventory_2_outlined),
             selectedIcon: Icon(Icons.inventory_2_rounded),
             label: 'Products',
@@ -119,12 +127,13 @@ class _MobileShell extends StatelessWidget {
   }
 }
 
-int _mobileDestinationIndex(String location) {
+int _mobileDestinationIndex(String location, {bool services = false}) {
   if (location == '/') return 0;
-  if (location == '/pos') return 1;
-  if (location == '/products' || location.startsWith('/products/')) return 2;
-  if (location == '/customers' || location.startsWith('/customers/')) return 3;
-  return 4;
+  if (location == '/pos' || (services && location == '/services/checkout')) return 1;
+  if (services && (location == '/services' || location.startsWith('/services/'))) return 2;
+  if (!services && (location == '/products' || location.startsWith('/products/'))) return 2;
+  if (location == '/customers' || location.startsWith('/customers/')) return services ? 2 : 3;
+  return services ? 3 : 4;
 }
 
 bool _hideMobileNavigation(String location) {
@@ -143,15 +152,19 @@ class MobileMorePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final sessionState = context.watch<SessionBloc>().state;
     final role = _selectedRole(sessionState);
+    final services = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'services';
+    final hybrid = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'hybrid';
     final workspaceLabel = _selectedWorkspaceLabel(sessionState);
     final hiddenPaths = <String>{
       '/',
       '/pos',
+      '/services/checkout',
       '/products',
+      '/services',
       '/customers',
     };
     final visibleItems = _items
-        .where((item) => !hiddenPaths.contains(item.path) && item.isVisibleFor(role))
+        .where((item) => !hiddenPaths.contains(item.path) && item.isVisibleFor(role) && (hybrid || (services ? !_goodsOnlyPaths.contains(item.path) && item.path != '/pos' : item.path != '/services' && item.path != '/services/checkout' && item.path != '/appointments')))
         .toList(growable: false);
 
     final operations = visibleItems.where((item) => _operationsPaths.contains(item.path)).toList();
@@ -503,9 +516,13 @@ class _MobileStatusRow extends StatelessWidget {
   }
 }
 
+const _goodsOnlyPaths = <String>{'/products', '/inventory', '/purchases', '/purchase-orders', '/suppliers', '/receipts'};
+
 const _operationsPaths = <String>{
   '/sync',
   '/sales',
+  '/services/checkout',
+  '/appointments',
   '/till',
   '/inventory',
   '/purchases',
@@ -535,7 +552,9 @@ class _DesktopSidebar extends StatelessWidget {
     final sessionState = context.watch<SessionBloc>().state;
     final role = _selectedRole(sessionState);
     final workspaceLabel = _selectedWorkspaceLabel(sessionState);
-    final visibleItems = _items.where((item) => item.isVisibleFor(role)).toList(growable: false);
+    final services = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'services';
+    final hybrid = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'hybrid';
+    final visibleItems = _items.where((item) => item.isVisibleFor(role) && (hybrid || (services ? !_goodsOnlyPaths.contains(item.path) && item.path != '/pos' : item.path != '/services' && item.path != '/services/checkout' && item.path != '/appointments'))).toList(growable: false);
 
     return SizedBox(
       width: 252,
@@ -854,6 +873,9 @@ const _items = <_DesktopNavItem>[
     allowedRoles: {'owner', 'admin', 'manager'},
   ),
   _DesktopNavItem(label: 'Products', path: '/products', icon: Icons.inventory_2_outlined, shortcut: 'F3'),
+  _DesktopNavItem(label: 'Services', path: '/services', icon: Icons.design_services_outlined),
+  _DesktopNavItem(label: 'Service Checkout', path: '/services/checkout', icon: Icons.point_of_sale_outlined),
+  _DesktopNavItem(label: 'Appointments', path: '/appointments', icon: Icons.event_available_outlined),
   _DesktopNavItem(label: 'Customers', path: '/customers', icon: Icons.groups_2_outlined, shortcut: 'Ctrl+4'),
   _DesktopNavItem(label: 'Inventory', path: '/inventory', icon: Icons.warehouse_outlined, shortcut: 'F5'),
   _DesktopNavItem(

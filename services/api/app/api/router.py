@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     accounting,
     accounting_cash_flow,
+    appointments,
     audit,
     auth,
     customers,
@@ -21,6 +22,10 @@ from app.api.routes import (
     receivables,
     reports,
     sales,
+    service_checkout,
+    service_materials,
+    service_reports,
+    services_catalog,
     staff,
     subscriptions,
     suppliers,
@@ -39,9 +44,14 @@ api_router.include_router(staff.router, prefix="/staff", tags=["staff"])
 api_router.include_router(workforce.router, prefix="/workforce", tags=["staff", "workforce"])
 api_router.include_router(devices.router, prefix="/devices", tags=["devices"])
 api_router.include_router(products.router, prefix="/products", tags=["products"])
+api_router.include_router(services_catalog.router, prefix="/services", tags=["services"])
+api_router.include_router(service_materials.router, prefix="/services", tags=["services", "inventory"])
+api_router.include_router(service_reports.router, prefix="/reports/services", tags=["reports", "services"])
+api_router.include_router(appointments.router, prefix="/appointments", tags=["services", "appointments"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
 api_router.include_router(inventory_controls.router, prefix="/inventory", tags=["inventory"])
 api_router.include_router(sales.router, prefix="/pos/sales", tags=["sales"])
+api_router.include_router(service_checkout.router, prefix="/pos/services", tags=["sales", "services"])
 api_router.include_router(till.router, prefix="/pos/till", tags=["till"])
 api_router.include_router(customers.router, prefix="/customers", tags=["customers"])
 api_router.include_router(receivables.router, prefix="/customers", tags=["customers", "accounting"])

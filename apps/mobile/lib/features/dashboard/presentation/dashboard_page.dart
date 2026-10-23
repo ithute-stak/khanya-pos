@@ -22,6 +22,8 @@ class DashboardPage extends StatelessWidget {
     final membership = session?.memberships
         .where((item) => item.tenantId == session.selectedTenantId)
         .firstOrNull;
+    final services = membership?.posType == 'services';
+    final hybrid = membership?.posType == 'hybrid';
     final role = membership?.role;
     final canReadReports = const {'owner', 'admin', 'manager', 'accountant'}.contains(role);
     final canManageStaff = const {'owner', 'admin', 'manager'}.contains(role);
@@ -66,6 +68,8 @@ class DashboardPage extends StatelessWidget {
                         firstName: session?.displayName.split(' ').first,
                         businessName: membership?.tenantName,
                       ),
+                      const SizedBox(height: 12),
+                      Chip(label: Text(hybrid ? 'Goods & Services POS' : (services ? 'Services POS' : 'Goods POS'))),
                       const SizedBox(height: 16),
                       const _SystemStatusCard(),
                       const SizedBox(height: 16),
@@ -93,11 +97,11 @@ class DashboardPage extends StatelessWidget {
                   ),
                   delegate: SliverChildListDelegate.fixed([
                     _ModuleCard(
-                      title: 'New Sale',
+                      title: services ? 'New Service Sale' : 'New Sale',
                       description: 'Fast checkout, offline queue and payments',
                       icon: Icons.point_of_sale,
                       accent: KhanyaBrand.forest,
-                      onTap: () => context.push('/pos'),
+                      onTap: () => context.push(services ? '/services/checkout' : '/pos'),
                     ),
                     _ModuleCard(
                       title: 'Sales History',
@@ -136,35 +140,56 @@ class DashboardPage extends StatelessWidget {
                       accent: KhanyaBrand.forest,
                       onTap: () => context.push('/customers'),
                     ),
-                    _ModuleCard(
+                    if ((services || hybrid) && canReadReports) _ModuleCard(
+                      title: 'Service Revenue',
+                      description: 'Revenue by service and outstanding balances',
+                      icon: Icons.insights_outlined,
+                      accent: KhanyaBrand.navy,
+                      onTap: () => context.push('/service-reports'),
+                    ),
+                    if (services || hybrid) _ModuleCard(
+                      title: 'Appointments',
+                      description: 'Book customers and track service progress',
+                      icon: Icons.event_available_outlined,
+                      accent: KhanyaBrand.forest,
+                      onTap: () => context.push('/appointments'),
+                    ),
+                    if (services || hybrid) _ModuleCard(
+                      title: 'Services',
+                      description: 'Manage service pricing, durations and categories',
+                      icon: Icons.design_services_outlined,
+                      accent: KhanyaBrand.navy,
+                      onTap: () => context.push('/services'),
+                    ),
+                    if (!services || hybrid) _ModuleCard(
                       title: 'Products',
                       description: 'Prices, SKUs, barcodes and product catalogue',
                       icon: Icons.inventory_2_outlined,
                       accent: KhanyaBrand.navy,
                       onTap: () => context.push('/products'),
                     ),
-                    _ModuleCard(
+                    if (!services || hybrid) _ModuleCard(
                       title: 'Inventory',
                       description: 'On-hand quantities and low-stock visibility',
                       icon: Icons.warehouse_outlined,
                       accent: KhanyaBrand.goldDark,
                       onTap: () => context.push('/inventory'),
                     ),
-                    _ModuleCard(
+                    if (!services || hybrid) _ModuleCard(
                       title: 'Purchases',
                       description: 'Buy stock, receive items and track supplier balances',
                       icon: Icons.shopping_bag_outlined,
                       accent: KhanyaBrand.forest,
                       onTap: () => context.push('/purchases'),
                     ),
-                    _ModuleCard(
+                    if (!services || hybrid) _ModuleCard(
                       title: 'Receipt Vault',
                       description: 'Photograph and keep shopping receipts and supplier invoices',
                       icon: Icons.receipt_long_outlined,
                       accent: KhanyaBrand.goldDark,
                       onTap: () => context.push('/receipts'),
                     ),
-                    _ModuleCard(
+                    if (!services || hybrid) _ModuleCard(
                       title: 'Suppliers',
                       description: 'Supplier contacts, purchases and outstanding balances',
                       icon: Icons.local_shipping_outlined,

@@ -44,6 +44,7 @@ class BusinessMembership extends Equatable {
     required this.tenantId,
     required this.tenantName,
     required this.tenantSlug,
+    this.posType = 'goods',
     required this.role,
     required this.branchIds,
     this.branches = const [],
@@ -52,6 +53,7 @@ class BusinessMembership extends Equatable {
   final String tenantId;
   final String tenantName;
   final String tenantSlug;
+  final String posType;
   final String role;
   final List<String> branchIds;
   final List<BusinessBranch> branches;
@@ -78,6 +80,7 @@ class BusinessMembership extends Equatable {
       tenantId: json['tenant_id'].toString(),
       tenantName: json['tenant_name'].toString(),
       tenantSlug: json['tenant_slug'].toString(),
+      posType: json['pos_type'] == 'services' ? 'services' : (json['pos_type'] == 'hybrid' ? 'hybrid' : 'goods'),
       role: json['role'].toString(),
       branchIds: (json['branch_ids'] as List<dynamic>? ?? const [])
           .map((value) => value.toString())
@@ -93,13 +96,14 @@ class BusinessMembership extends Equatable {
         'tenant_id': tenantId,
         'tenant_name': tenantName,
         'tenant_slug': tenantSlug,
+        'pos_type': posType,
         'role': role,
         'branch_ids': branchIds,
         'branches': branches.map((branch) => branch.toJson()).toList(growable: false),
       };
 
   @override
-  List<Object?> get props => [tenantId, tenantName, tenantSlug, role, branchIds, branches];
+  List<Object?> get props => [tenantId, tenantName, tenantSlug, posType, role, branchIds, branches];
 }
 
 class AuthSession extends Equatable {
@@ -126,6 +130,13 @@ class AuthSession extends Equatable {
   final String? platformRole;
   final String? selectedTenantId;
   final String? selectedBranchId;
+
+  String get selectedPosType {
+    for (final membership in memberships) {
+      if (membership.tenantId == selectedTenantId) return membership.posType;
+    }
+    return 'goods';
+  }
 
   bool get canOperatePlatform =>
       platformRole == 'platform_super_admin' || platformRole == 'platform_admin';

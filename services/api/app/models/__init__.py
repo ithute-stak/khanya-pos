@@ -1,5 +1,6 @@
 from app.models.accounting import Account, AccountingSettings, JournalEntry, JournalLine
 from app.models.audit import AuditEvent
+from app.models.appointments import ServiceAppointment
 from app.models.base import Base
 from app.models.commerce import (
     BranchProductStock,
@@ -43,6 +44,8 @@ from app.models.purchasing import (
     SupplierPayment,
 )
 from app.models.returns import SaleReturn, SaleReturnLine
+from app.models.service_materials import ServiceMaterial
+from app.models.services_catalog import ServiceItem, ServiceSaleLine
 from app.models.subscriptions import TenantSubscription
 from app.models.till import TillCashMovement, TillShift
 

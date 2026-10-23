@@ -31,6 +31,7 @@ import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 import 'package:khanya_pos/features/purchasing/data/purchase_order_repository.dart';
 import 'package:khanya_pos/features/reports/data/reports_repository.dart';
 import 'package:khanya_pos/features/settings/data/business_settings_repository.dart';
+import 'package:khanya_pos/features/services/data/service_repository.dart';
 import 'package:khanya_pos/features/staff/data/staff_repository.dart';
 import 'package:khanya_pos/features/workforce/data/workforce_repository.dart';
 
@@ -77,6 +78,7 @@ class _KhanyaPosAppState extends State<KhanyaPosApp> {
         RepositoryProvider<PurchaseOrderRepository>(
           create: (_) => PurchaseOrderRepository(apiClient: dependencies.apiClient),
         ),
+        RepositoryProvider<ServiceRepository>(create: (_) => ServiceRepository(apiClient: dependencies.apiClient)),
         RepositoryProvider<StaffRepository>.value(value: dependencies.staffRepository),
         RepositoryProvider<AccountingRepository>.value(value: dependencies.accountingRepository),
         RepositoryProvider<BusinessSettingsRepository>.value(value: dependencies.businessSettingsRepository),

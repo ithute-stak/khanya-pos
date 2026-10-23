@@ -38,6 +38,7 @@ class AuthRepository {
   Future<OnboardingSubmission> signup({
     required String businessName,
     required String businessSlug,
+    required String posType,
     required String branchName,
     required String branchCode,
     String? branchLocation,
@@ -51,6 +52,7 @@ class AuthRepository {
       data: {
         'business_name': businessName.trim(),
         'business_slug': businessSlug.trim().toLowerCase(),
+        'pos_type': posType,
         'branch_name': branchName.trim(),
         'branch_code': branchCode.trim().toUpperCase(),
         'branch_location': branchLocation?.trim().isEmpty == true ? null : branchLocation?.trim(),
