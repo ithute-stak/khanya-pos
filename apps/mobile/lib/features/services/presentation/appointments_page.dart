@@ -36,7 +36,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
-                value: serviceId, decoration: const InputDecoration(labelText: 'Service'),
+                initialValue: serviceId, decoration: const InputDecoration(labelText: 'Service'),
                 items: available.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
                 onChanged: (v) { if (v != null) update(() => serviceId = v); },
               ),
