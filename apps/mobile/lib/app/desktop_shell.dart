@@ -75,7 +75,6 @@ class _MobileShell extends StatelessWidget {
 
     final sessionState = context.watch<SessionBloc>().state;
     final services = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'services';
-    final hybrid = sessionState is SessionAuthenticated && sessionState.session.selectedPosType == 'hybrid';
     final selectedIndex = _mobileDestinationIndex(location, services: services);
     return Scaffold(
       body: child,
