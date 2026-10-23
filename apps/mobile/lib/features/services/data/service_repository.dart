@@ -41,7 +41,7 @@ class ServiceRepository {
       'client_operation_id': operationId,
       'items': [{'service_id': serviceId, 'quantity': quantity}],
       'payments': [{'method': method, 'amount': amount}],
-      if (customerId != null) 'customer_id': customerId,
+      'customer_id': ?customerId,
     });
     return response.data ?? {};
   }
@@ -55,7 +55,7 @@ class ServiceRepository {
     await _apiClient.dio.post('/appointments', data: {
       'service_id': serviceId, 'customer_name': customerName.trim(),
       'starts_at': startsAt.toUtc().toIso8601String(),
-      if (membershipId != null) 'membership_id': membershipId,
+      'membership_id': ?membershipId,
     });
   }
 
