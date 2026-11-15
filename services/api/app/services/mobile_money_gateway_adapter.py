@@ -8,6 +8,7 @@ server operators may configure a trusted HTTPS gateway and bearer token.
 
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
+from uuid import UUID
 
 import httpx
 
@@ -79,9 +80,9 @@ class ReadOnlyGatewayStatusAdapter:
             if not isinstance(data, dict):
                 raise ValueError("Expected JSON object")
             returned = CollectionIdentity(
-                operation_id=__import__("uuid").UUID(data["operation_id"]),
-                tenant_id=__import__("uuid").UUID(data["tenant_id"]),
-                branch_id=__import__("uuid").UUID(data["branch_id"]),
+                operation_id=UUID(data["operation_id"]),
+                tenant_id=UUID(data["tenant_id"]),
+                branch_id=UUID(data["branch_id"]),
                 rail=CollectionRail(data["rail"]),
                 amount=Decimal(str(data["amount"])),
                 currency=data["currency"],
