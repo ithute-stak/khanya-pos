@@ -52,6 +52,21 @@ class CompletedSale:
     idempotent_replay: bool = False
 
 
+def require_verified_mobile_money(payload: SaleCompleteRequest) -> None:
+    """Reject client-declared mobile-money receipts without server verification.
+
+    Neither a POS-provided reference nor an SMS is proof of settlement.
+    Once provider reconciliation is implemented, replace this fail-closed
+    policy with a server-owned, operation-bound verification lookup.
+    """
+    if any(payment.method == "mobile_money" for payment in payload.payments):
+        raise PaymentMismatchError(
+            "Mobile-money collection verification is not configured. "
+            "Do not mark M-Pesa or EcoCash payments as received until "
+            "the provider confirms settlement through the server."
+        )
+
+
 def _sale_number() -> str:
     return f"SL-{datetime.now(timezone.utc):%Y%m%d}-{str(uuid4())[:8].upper()}"
 
@@ -87,6 +102,9 @@ async def complete_sale(
     cashier_user_id: UUID,
     payload: SaleCompleteRequest,
 ) -> CompletedSale:
+    # Enforce the rule even for direct API callers and queued offline retries.
+    # Reject before locks, stock changes, payment rows or accounting entries.
+    require_verified_mobile_money(payload)
     await acquire_operation_lock(
         db,
         tenant_id=tenant_id,
