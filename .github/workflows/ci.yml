@@ -115,7 +115,9 @@ jobs:
       - name: Analyze
         run: |
           set -o pipefail
-          flutter analyze 2>&1 | tee flutter-analyze.log
+          # Flutter 3.47 reports material.dart migration as info across the existing codebase.
+          # Keep warnings/errors fatal while that framework migration is tracked separately.
+          flutter analyze --no-fatal-infos 2>&1 | tee flutter-analyze.log
       - name: Upload Flutter failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
