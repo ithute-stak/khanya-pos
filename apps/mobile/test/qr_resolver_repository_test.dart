@@ -76,5 +76,5 @@ void main() {
       final repository = QrResolverRepository(apiClient: mockClient(response));
       await expectLater(repository.verify('qr-demo-token'), throwsFormatException);
     }
-  }
+  });
 }
