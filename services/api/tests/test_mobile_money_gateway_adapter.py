@@ -118,7 +118,7 @@ async def test_invalid_gateway_origins_rejected(base_url):
             )
 
 
-async @pytest.mark.asyncio
+@pytest.mark.asyncio
 async def test_bearer_token_is_required():
     async with httpx.AsyncClient() as client:
         with pytest.raises(GatewayConfigurationError):
