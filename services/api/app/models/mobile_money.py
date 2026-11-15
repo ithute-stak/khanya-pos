@@ -32,7 +32,7 @@ class MobileMoneyCollection(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ),
         CheckConstraint(
             "(status = 'confirmed') = (confirmed_at IS NOT NULL)",
-            name="mobile_collection_confirmed_timestamp",
+            name="confirmed_timestamp",
         ),
     )
 
