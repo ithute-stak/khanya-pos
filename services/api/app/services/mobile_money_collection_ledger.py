@@ -61,7 +61,9 @@ async def register_collection_intent(
     )
     existing = result.scalar_one_or_none()
     if existing is not None:
-        assert_same_collection(existing, identity, sale_operation_id=sale_operation_id)\n        if sale_operation_id is None and existing.sale_operation_id is not None:\n            raise CollectionIdentityConflict("Collection is already bound to a sale operation")
+        assert_same_collection(existing, identity, sale_operation_id=sale_operation_id)
+        if sale_operation_id is None and existing.sale_operation_id is not None:
+            raise CollectionIdentityConflict("Collection is already bound to a sale operation")
         return existing
 
     collection = MobileMoneyCollection(
