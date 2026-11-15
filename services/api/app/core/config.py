@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     mobile_money_gateway_https_origin: str = ""
     mobile_money_gateway_approved_hostname: str = ""
     mobile_money_gateway_bearer_token: str = ""
+    # Dedicated key, provisioned outside source control; QR resolution is disabled when absent.
+    qr_locator_signing_secret: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
