@@ -47,3 +47,33 @@ class MobileMoneyCollection(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(32), default="awaiting_customer", nullable=False)
     provider_reference: Mapped[str | None] = mapped_column(String(160), nullable=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class MobileMoneyConsumption(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Exactly one recorded use of a confirmed collection for a posted payment.
+
+    This is written only by a future trusted, atomic sale-settlement workflow.
+    It does not itself authorize a sale or initiate any provider transfer.
+    """
+
+    __tablename__ = "mobile_money_consumptions"
+    __table_args__ = (
+        UniqueConstraint("collection_id", name="uq_mobile_consumption_collection"),
+        UniqueConstraint("payment_id", name="uq_mobile_consumption_payment"),
+    )
+
+    collection_id: Mapped[UUID] = mapped_column(
+        ForeignKey("mobile_money_collections.id", ondelete="RESTRICT"), nullable=False,
+    )
+    payment_id: Mapped[UUID] = mapped_column(
+        ForeignKey("payments.id", ondelete="RESTRICT"), nullable=False,
+    )
+    sale_id: Mapped[UUID] = mapped_column(
+        ForeignKey("sales.id", ondelete="RESTRICT"), nullable=False,
+    )
+    tenant_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=False,
+    )
+    branch_id: Mapped[UUID] = mapped_column(
+        ForeignKey("branches.id", ondelete="RESTRICT"), nullable=False,
+    )
