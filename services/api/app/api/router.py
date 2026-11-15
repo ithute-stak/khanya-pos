@@ -14,6 +14,7 @@ from app.api.routes import (
     health,
     inventory,
     inventory_controls,
+    mobile_money,
     platform,
     products,
     purchase_orders,
@@ -51,6 +52,7 @@ api_router.include_router(appointments.router, prefix="/appointments", tags=["se
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
 api_router.include_router(inventory_controls.router, prefix="/inventory", tags=["inventory"])
 api_router.include_router(sales.router, prefix="/pos/sales", tags=["sales"])
+api_router.include_router(mobile_money.router, prefix="/pos/mobile-money", tags=["sales", "payments"])
 api_router.include_router(service_checkout.router, prefix="/pos/services", tags=["sales", "services"])
 api_router.include_router(till.router, prefix="/pos/till", tags=["till"])
 api_router.include_router(customers.router, prefix="/customers", tags=["customers"])
