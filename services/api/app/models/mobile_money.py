@@ -39,6 +39,8 @@ class MobileMoneyCollection(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="RESTRICT"), index=True)
     branch_id: Mapped[UUID] = mapped_column(ForeignKey("branches.id", ondelete="RESTRICT"), index=True)
     operation_id: Mapped[UUID] = mapped_column(index=True)
+    # Immutable intended POS operation, not a completed Sale or settlement proof.
+    sale_operation_id: Mapped[UUID | None] = mapped_column(nullable=True, index=True)
     rail: Mapped[str] = mapped_column(String(16))
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     currency: Mapped[str] = mapped_column(String(3), default="LSL", nullable=False)
