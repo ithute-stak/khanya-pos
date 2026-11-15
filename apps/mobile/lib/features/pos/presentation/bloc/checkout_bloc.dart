@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:khanya_pos/features/customers/domain/customer_models.dart';
 import 'package:khanya_pos/features/pos/data/sales_repository.dart';
 import 'package:khanya_pos/features/pos/domain/cart.dart';
+import 'package:khanya_pos/features/pos/domain/payment_authorization_policy.dart';
 
 sealed class CheckoutEvent extends Equatable {
   const CheckoutEvent();
@@ -146,6 +147,23 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
         customer: event.customer,
         immediatePaymentMinor: paidMinor,
         cashTenderedMinor: event.cashTenderedMinor,
+      ));
+      return;
+    }
+
+    try {
+      PaymentAuthorizationPolicy.requireCheckoutReady(
+        method: event.paymentMethod,
+        immediatePaymentMinor: paidMinor,
+      );
+    } on StateError catch (error) {
+      emit(CheckoutState(
+        status: CheckoutStatus.failed,
+        errorMessage: error.message.toString(),
+        lines: lines,
+        paymentMethod: event.paymentMethod,
+        customer: event.customer,
+        immediatePaymentMinor: paidMinor,
       ));
       return;
     }
