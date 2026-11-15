@@ -31,6 +31,7 @@ from app.models.identity import (
     User,
     UserSession,
 )
+from app.models.mobile_money import MobileMoneyCollection
 from app.models.inventory_controls import Stocktake, StocktakeLine, StockTransfer, StockTransferLine
 from app.models.operations import AttendancePunch, PurchaseOrder, PurchaseOrderLine, StaffShiftSchedule
 from app.models.outbox import OutboxEvent
@@ -71,6 +72,7 @@ __all__ = [
     "LoyaltyAccount",
     "LoyaltyTransaction",
     "MembershipBranch",
+    "MobileMoneyCollection",
     "OutboxEvent",
     "Payment",
     "PlatformEvent",
