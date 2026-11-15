@@ -8,6 +8,7 @@ import 'package:khanya_pos/core/storage/app_database.dart';
 import 'package:khanya_pos/core/sync/sync_service.dart';
 import 'package:khanya_pos/features/customers/data/customer_database.dart';
 import 'package:khanya_pos/features/pos/domain/cart.dart';
+import 'package:khanya_pos/features/pos/domain/payment_authorization_policy.dart';
 import 'package:khanya_pos/features/pos/domain/sales_history.dart';
 import 'package:uuid/uuid.dart';
 
@@ -60,6 +61,12 @@ class SalesRepository {
     if (paidMinor < 0 || paidMinor > totalMinor) {
       throw StateError('Immediate payment must be between zero and the sale total.');
     }
+    // Never store or sync an unverified mobile-money payment as a paid sale,
+    // even when a caller bypasses the CheckoutBloc.
+    PaymentAuthorizationPolicy.requireCheckoutReady(
+      method: paymentMethod,
+      immediatePaymentMinor: paidMinor,
+    );
     final creditMinor = totalMinor - paidMinor;
     if (creditMinor > 0 && customerId == null) {
       throw StateError('A customer is required when any amount is sold on credit.');
