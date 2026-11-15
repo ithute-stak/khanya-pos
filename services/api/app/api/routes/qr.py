@@ -1,12 +1,16 @@
 """Authenticated QR resolution; scanning is never an authorization to mutate."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import TenantContext, get_tenant_context
+from app.api.deps import TenantContext, get_tenant_context, require_permissions
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.services.qr_identity import QRIdentityError, read_qr_identity
+from app.services.qr_product_labels import ProductQRLabelNotFound, issue_product_qr_label
 from app.services.qr_resource_resolver import (
     QRResourceForbidden,
     QRResourceNotFound,
@@ -74,3 +78,36 @@ async def resolve_qr(
         resource_id=str(resolved.resource_id),
         destination=resolved.destination,
     )
+
+
+class ProductQRLabelView(BaseModel):
+    kind: str
+    resource_id: UUID
+    product_name: str
+    sku: str
+    qr_token: str
+    expires_at: datetime
+
+
+@router.post("/products/{product_id}/label", response_model=ProductQRLabelView)
+async def create_product_qr_label(
+    product_id: UUID,
+    valid_days: int = Query(default=365, ge=1, le=3650),
+    context: TenantContext = Depends(require_permissions("inventory.write")),
+    db: AsyncSession = Depends(get_db),
+) -> ProductQRLabelView:
+    """Generate a printable token, not a price, stock or paid-sale promise."""
+    secret = get_settings().qr_locator_signing_secret
+    if len(secret.encode("utf-8")) < 32:
+        raise HTTPException(status_code=503, detail="QR signing is not configured")
+    try:
+        label = await issue_product_qr_label(
+            db,
+            product_id=product_id,
+            tenant_id=context.tenant.id,
+            signing_secret=secret,
+            valid_days=valid_days,
+        )
+    except ProductQRLabelNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ProductQRLabelView(**label)
