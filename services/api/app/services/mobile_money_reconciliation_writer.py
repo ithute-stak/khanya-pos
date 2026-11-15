@@ -8,6 +8,7 @@ No payment initiation, sale posting, refunds, or transfers occur here.
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.audit import record_audit_event
 from app.models.mobile_money import MobileMoneyCollection
 from app.services.idempotency import acquire_operation_lock
 from app.services.mobile_money_collection_ledger import (
@@ -82,6 +83,17 @@ def decide_reconciled_status(
     return observed, current_reference
 
 
+def should_record_reconciliation_audit(
+    *,
+    previous_status: CollectionStatus,
+    next_status: CollectionStatus,
+    previous_reference: str | None,
+    next_reference: str | None,
+) -> bool:
+    """Record only durable state changes, not repeated status polls."""
+    return previous_status != next_status or previous_reference != next_reference
+
+
 async def reconcile_registered_collection(
     db: AsyncSession,
     *,
@@ -131,6 +143,37 @@ async def reconcile_registered_collection(
         current_reference=record.provider_reference,
         observed_reference=verification.provider_reference,
     )
+    if should_record_reconciliation_audit(
+        previous_status=current,
+        next_status=next_status,
+        previous_reference=record.provider_reference,
+        next_reference=next_reference,
+    ):
+        # This event shares the collection transaction; a failed DB write or
+        # rollback discards both the new status and its audit entry.
+        # Provider references, phone numbers and credentials are intentionally
+        # excluded from the audit payload.
+        record_audit_event(
+            db,
+            tenant_id=identity.tenant_id,
+            branch_id=identity.branch_id,
+            actor_user_id=None,
+            actor_name="Mobile-money reconciliation",
+            actor_email=None,
+            actor_role="system",
+            action="mobile_money.collection_reconciled",
+            entity_type="mobile_money_collection",
+            entity_id=str(record.id),
+            summary=f"Collection status: {current.value} -> {next_status.value}",
+            details={
+                "operation_id": str(identity.operation_id),
+                "rail": identity.rail.value,
+                "previous_status": current.value,
+                "new_status": next_status.value,
+                "provider_reference_present": bool(next_reference),
+            },
+        )
+
     record.status = next_status.value
     record.provider_reference = next_reference
     await db.flush()  # DB uniqueness/check constraints remain authoritative.
