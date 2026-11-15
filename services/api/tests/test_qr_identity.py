@@ -50,7 +50,9 @@ def test_changed_payload_or_signature_is_rejected():
         kind=QRKind.RECEIPT, tenant_id=tenant, resource_id=uuid4(),
         ttl=timedelta(hours=1), signing_secret=SECRET, now=NOW,
     )
-    for corrupt in [code[:-1] + ("A" if code[-1] != "A" else "B"), code + ".another", "https://example.org/qr"]:
+    head, signature = code.rsplit(".", 1)
+    altered = head + "." + ("A" if signature[0] != "A" else "B") + signature[1:]
+    for corrupt in [altered, code + ".another", "https://example.org/qr"]:
         with pytest.raises(QRIdentityError):
             read_qr_identity(corrupt, expected_tenant_id=tenant, signing_secret=SECRET, now=NOW)
 
