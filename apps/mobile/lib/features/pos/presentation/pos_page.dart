@@ -1214,6 +1214,19 @@ class _CartPanel extends StatelessWidget {
                 },
               ),
             ),
+            BlocBuilder<CartBloc, CartState>(
+              builder: (context, cart) => cart.paymentMethod == PaymentMethod.mobileMoney
+                  ? const Padding(
+                      padding: EdgeInsets.only(top: 10),
+                      child: Text(
+                        'M-Pesa / EcoCash confirmation is not connected yet. '
+                        'A mobile-money payment cannot be completed until the '
+                        'provider verifies the collection. No sale will be '
+                        'recorded as paid without verification.',
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
             const SizedBox(height: 12),
             BlocBuilder<CartBloc, CartState>(
               builder: (context, cart) => BlocBuilder<CheckoutBloc, CheckoutState>(
