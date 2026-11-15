@@ -1,10 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'package:khanya_pos/features/qr/domain/qr_scan_target.dart';
+import 'package:khanya_pos/features/qr/data/qr_resolver_repository.dart';
 
 /// One scan entry point for every Khanya module.
 ///
@@ -28,6 +31,8 @@ class _QrScannerPageState extends State<QrScannerPage> {
   QrScanTarget? _target;
   bool _cameraOn = false;
   String? _message;
+  bool _verifying = false;
+  VerifiedQrDestination? _verified;
 
   @override
   void dispose() {
@@ -36,17 +41,53 @@ class _QrScannerPageState extends State<QrScannerPage> {
     super.dispose();
   }
 
-  void _inspect(String value) {
-    final target = inspectKhanyaQrLocator(value.trim());
+  Future<void> _inspect(String value) async {
+    if (_verifying) return;
+    final code = value.trim();
+    final target = inspectKhanyaQrLocator(code);
     if (!mounted) return;
     setState(() {
       _cameraOn = false;
       _target = target;
+      _verified = null;
       _message = target == null
           ? 'This is not a supported Khanya QR code. No action was performed.'
           : null;
     });
-    _camera.stop();
+    await _camera.stop();
+    if (target == null || !mounted) return;
+
+    // Only a backend signature + permission + record lookup can authorize
+    // opening a deep link. A locally decoded QR is just a navigation hint.
+    setState(() => _verifying = true);
+    try {
+      final verified = await context.read<QrResolverRepository>().verify(code);
+      if (!mounted) return;
+      if (verified.kind != target.kind) {
+        throw const FormatException('QR kind did not match server verification');
+      }
+      setState(() {
+        _verified = verified;
+        _message = null;
+      });
+    } on DioException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _message = switch (error.response?.statusCode) {
+          503 => 'QR verification has not been configured on this server.',
+          401 || 403 => 'You are not authorized to open this QR record.',
+          404 => 'This QR record could not be found.',
+          422 => 'This QR type is not yet available for direct lookup.',
+          _ => 'Could not verify the QR code. Check your connection and try again.',
+        };
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _message = 'QR verification failed. No record was opened.');
+      }
+    } finally {
+      if (mounted) setState(() => _verifying = false);
+    }
   }
 
   void _detect(BarcodeCapture capture) {
@@ -69,6 +110,7 @@ class _QrScannerPageState extends State<QrScannerPage> {
     }
     setState(() {
       _target = null;
+      _verified = null;
       _message = null;
       _cameraOn = true;
     });
@@ -139,6 +181,11 @@ class _QrScannerPageState extends State<QrScannerPage> {
             icon: const Icon(Icons.search),
             label: const Text('Identify QR'),
           ),
+          if (_verifying) ...[
+            const SizedBox(height: 14),
+            const LinearProgressIndicator(key: Key('qr-verifying-indicator')),
+            const Text('Checking QR signature and your business permissions…'),
+          ],
           if (_message != null) ...[
             const SizedBox(height: 14),
             Text(_message!, key: const Key('qr-scan-error')),
@@ -156,18 +203,21 @@ class _QrScannerPageState extends State<QrScannerPage> {
                     const SizedBox(height: 8),
                     Text('Related module: ${target.moduleLabel}'),
                     const SizedBox(height: 8),
-                    const Text(
-                      'This code has NOT been verified by the server. '
-                      'The next screen is a normal module list, not direct '
-                      'access to the encoded record or proof of payment.',
+                    Text(
+                      _verified == null
+                          ? 'QR record access is not verified. No action is allowed.'
+                          : 'Verified by the server for your current business permissions. '
+                            'Opening this record will not authorize any transaction.',
+                      key: const Key('qr-verification-status'),
                     ),
                     const SizedBox(height: 12),
-                    FilledButton.icon(
-                      key: const Key('qr-open-module-button'),
-                      onPressed: () => context.push(target.modulePath),
-                      icon: const Icon(Icons.open_in_new),
-                      label: Text('Open ${target.moduleLabel}'),
-                    ),
+                    if (_verified case final destination?)
+                      FilledButton.icon(
+                        key: const Key('qr-open-module-button'),
+                        onPressed: () => context.push(destination.destination),
+                        icon: const Icon(Icons.verified_outlined),
+                        label: const Text('Open verified record'),
+                      ),
                   ],
                 ),
               ),
