@@ -178,7 +178,7 @@ class _PurchaseDetails extends StatelessWidget {
                     ),
                   )
                 else
-                  ...state.lines.map((line) => _PurchaseLineTile(line: line)),
+                  ...state.lines.map((line) => _PurchaseLineTile(key: ValueKey(line.product.id), line: line)),
               ],
             ),
           ),
@@ -240,12 +240,41 @@ class _PurchaseDetails extends StatelessWidget {
   }
 }
 
-class _PurchaseLineTile extends StatelessWidget {
-  const _PurchaseLineTile({required this.line});
+// A purchase line must own its editing controllers. Rebuilding from a rounded
+// BLoC amount can otherwise replace an in-progress number such as "12.".
+class _PurchaseLineTile extends StatefulWidget {
+  const _PurchaseLineTile({super.key, required this.line});
   final PurchaseDraftLine line;
 
   @override
+  State<_PurchaseLineTile> createState() => _PurchaseLineTileState();
+}
+
+class _PurchaseLineTileState extends State<_PurchaseLineTile> {
+  late final TextEditingController _quantity;
+  late final TextEditingController _cost;
+
+  @override
+  void initState() {
+    super.initState();
+    _quantity = TextEditingController(
+      text: ScaledDecimal.fromMilli(widget.line.quantityMilli),
+    );
+    _cost = TextEditingController(
+      text: ScaledDecimal.fromMinor(widget.line.unitCostMinor),
+    );
+  }
+
+  @override
+  void dispose() {
+    _quantity.dispose();
+    _cost.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final line = widget.line;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: DecoratedBox(
@@ -277,8 +306,7 @@ class _PurchaseLineTile extends StatelessWidget {
                 children: [
                   Expanded(
                     child: TextFormField(
-                      key: ValueKey('qty-${line.product.id}'),
-                      initialValue: ScaledDecimal.fromMilli(line.quantityMilli),
+                      controller: _quantity,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(labelText: 'Quantity (${line.product.unit})'),
                       onChanged: (value) => context.read<PurchaseDraftBloc>().add(
@@ -292,8 +320,7 @@ class _PurchaseLineTile extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: TextFormField(
-                      key: ValueKey('cost-${line.product.id}'),
-                      initialValue: ScaledDecimal.fromMinor(line.unitCostMinor),
+                      controller: _cost,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(labelText: 'Unit cost (M)'),
                       onChanged: (value) => context.read<PurchaseDraftBloc>().add(
@@ -372,11 +399,9 @@ class _ReceiptPaymentSummary extends StatelessWidget {
                   },
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
+                PurchasePaymentAmount(
+                  amountPaidMinor: state.amountPaidMinor,
                   enabled: state.paymentMethod != 'supplier_credit',
-                  initialValue: ScaledDecimal.fromMinor(state.amountPaidMinor),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Amount paid now (M)'),
                   onChanged: (value) => context
                       .read<PurchaseDraftBloc>()
                       .add(PurchaseDraftAmountPaidChanged(value)),
@@ -442,6 +467,66 @@ class _ReceiptPaymentSummary extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// Do not assign a normalized BLoC amount back into the text field on
+// each keystroke: that would resurrect deleted digits and collapse the caret.
+class PurchasePaymentAmount extends StatefulWidget {
+  const PurchasePaymentAmount({
+    required this.amountPaidMinor,
+    required this.enabled,
+    required this.onChanged,
+  });
+  final int amountPaidMinor;
+  final bool enabled;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<PurchasePaymentAmount> createState() => PurchasePaymentAmountState();
+}
+
+class PurchasePaymentAmountState extends State<PurchasePaymentAmount> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: ScaledDecimal.fromMinor(widget.amountPaidMinor),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant PurchasePaymentAmount oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Supplier credit forcibly clears the payment. This is a deliberate
+    // external reset, not a response to a cashier's typing.
+    if (oldWidget.enabled && !widget.enabled) {
+      _controller.value = TextEditingValue(
+        text: ScaledDecimal.fromMinor(widget.amountPaidMinor),
+        selection: TextSelection.collapsed(
+          offset: ScaledDecimal.fromMinor(widget.amountPaidMinor).length,
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: _controller,
+      enabled: widget.enabled,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: const InputDecoration(labelText: 'Amount paid now (M)'),
+      onChanged: widget.onChanged,
     );
   }
 }
