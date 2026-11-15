@@ -20,7 +20,7 @@ def upgrade() -> None:
     # Fail migration rather than silently manufacture provider evidence for
     # pre-existing confirmed rows. Live collections remain disabled today.
     op.create_check_constraint(
-        "ck_mobile_money_collections_mobile_collection_confirmed_timestamp",
+        "ck_mobile_money_collections_confirmed_timestamp",
         "mobile_money_collections",
         "(status = 'confirmed') = (confirmed_at IS NOT NULL)",
     )
@@ -28,7 +28,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_constraint(
-        "ck_mobile_money_collections_mobile_collection_confirmed_timestamp",
+        "ck_mobile_money_collections_confirmed_timestamp",
         "mobile_money_collections",
         type_="check",
     )
