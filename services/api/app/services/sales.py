@@ -135,6 +135,17 @@ async def complete_sale(
                 raise InsufficientStockError(product.name, available, requested[product_id])
         subtotal += line_total(product.selling_price, requested[product_id])
 
+    # A client-supplied payment method/reference is never proof of settlement.
+    # Until a trusted, server-side payment authorization and reconciliation
+    # service is connected, reject positive mobile-money payments before any
+    # Sale, Payment, inventory, accounting or outbox records can be created.
+    if any(payment.method == "mobile_money" for payment in payload.payments):
+        raise PaymentMismatchError(
+            "Mobile-money collection verification is not configured. "
+            "Do not mark M-Pesa or EcoCash payments as received until "
+            "the provider confirms settlement through the server."
+        )
+
     subtotal = money(subtotal)
     payment_total = money(
         sum((money(payment.amount) for payment in payload.payments), Decimal("0.00"))
