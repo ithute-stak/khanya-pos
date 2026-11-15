@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.mobile_money import MobileMoneyCollection
 from app.services.idempotency import acquire_operation_lock
 from app.services.mobile_money_collection_ledger import (
-    CollectionIdentityConflict,
     assert_same_collection,
     get_collection_intent,
 )
