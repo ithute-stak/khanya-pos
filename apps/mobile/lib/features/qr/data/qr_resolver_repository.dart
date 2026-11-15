@@ -34,7 +34,7 @@ class QrResolverRepository {
       throw const FormatException('Unexpected QR response');
     }
     const allowed = {'product', 'sale', 'receipt', 'customer'};
-    final uuid = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    final uuid = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
     if (!allowed.contains(kind) || !uuid.hasMatch(resourceId)) {
       throw const FormatException('Unsupported QR destination');
     }
