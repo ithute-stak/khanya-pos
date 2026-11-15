@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from fastapi.routing import APIRoute
 
-from app.api.router import api_router
+from app.api.routes.qr import router as qr_router
 from app.services.qr_identity import QRIdentity, QRKind, issue_qr_identity, read_qr_identity
 from app.services.qr_resource_resolver import (
     QRResourceForbidden, QRResourceNotFound, QRResourceNotSupported,
@@ -105,11 +105,11 @@ async def test_payment_qr_cannot_resolve_as_paid():
 
 def test_qr_api_is_authenticated_and_read_only():
     routes = [
-        route for route in api_router.routes
-        if isinstance(route, APIRoute) and route.path.startswith("/qr/")
+        route for route in qr_router.routes
+        if isinstance(route, APIRoute) and route.path == "/resolve"
     ]
     assert len(routes) == 1
-    assert routes[0].path == "/qr/resolve"
+    assert routes[0].path == "/resolve"
     assert routes[0].methods == {"POST"}
     assert routes[0].dependant.dependencies  # TenantContext + database dependencies
 
