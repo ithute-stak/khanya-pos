@@ -14,7 +14,12 @@ class CollectionIdentityConflict(ValueError):
     """An operation ID was reused with different merchant/payment details."""
 
 
-def assert_same_collection(\n    record: MobileMoneyCollection,\n    expected: CollectionIdentity,\n    *,\n    sale_operation_id: UUID | None = None,\n) -> None:
+def assert_same_collection(
+    record: MobileMoneyCollection,
+    expected: CollectionIdentity,
+    *,
+    sale_operation_id: UUID | None = None,
+) -> None:
     if (
         record.tenant_id != expected.tenant_id
         or record.branch_id != expected.branch_id
