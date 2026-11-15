@@ -132,6 +132,22 @@ jobs:
         run: bash tool/android/bootstrap.sh
       - name: Verify Android release internet permission
         run: grep -F 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml
+      # Android Lint currently crashes in a third-party image_picker_android
+      # JavaDoc parser. Exclude only this plugin's broken release lint task.
+      - name: Work around image picker lint toolchain crash
+        run: |
+          mkdir -p "$HOME/.gradle/init.d"
+          cat > "$HOME/.gradle/init.d/khanya-image-picker-lint.gradle" <<'GRADLE'
+          gradle.beforeProject { project ->
+              if (project.name == 'image_picker_android') {
+                  project.tasks.configureEach { task ->
+                      if (task.name == 'lintVitalAnalyzeRelease') {
+                          task.enabled = false
+                      }
+                  }
+              }
+          }
+          GRADLE
       - name: Build Android release APK
         run: >-
           flutter build apk --release
