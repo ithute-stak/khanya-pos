@@ -89,6 +89,7 @@ jobs:
           tests/test_till_service_integration.py
           tests/test_inventory_controls_integration.py
           tests/test_inventory_idempotency_integration.py
+          tests/test_mobile_money_reconciliation_integration.py
 
   mobile:
     name: Flutter + Android release
