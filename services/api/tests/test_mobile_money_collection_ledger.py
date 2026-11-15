@@ -73,7 +73,9 @@ def test_database_schema_prevents_invalid_confirmed_rows() -> None:
     statement = str(CreateTable(MobileMoneyCollection.__table__).compile(
         dialect=postgresql.dialect()
     ))
-    assert "mobile_collection_confirmed_reference" in statement
+    # PostgreSQL limits identifiers to 63 bytes; SQLAlchemy may truncate the
+    # auto-prefixed constraint name. Assert the actual safety condition.
     assert "provider_reference IS NOT NULL" in statement
+    assert "status != 'confirmed'" in statement
     assert "amount > 0" in statement
     assert "status IN" in statement
