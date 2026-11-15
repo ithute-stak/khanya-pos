@@ -4,10 +4,11 @@ No client-supplied status authorizes sale settlement. Records remain pending
 until a trusted provider adapter and reconciliation worker are implemented.
 """
 
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -29,6 +30,10 @@ class MobileMoneyCollection(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "status != 'confirmed' OR (provider_reference IS NOT NULL AND length(trim(provider_reference)) > 0)",
             name="mobile_collection_confirmed_reference",
         ),
+        CheckConstraint(
+            "(status = 'confirmed') = (confirmed_at IS NOT NULL)",
+            name="confirmed_timestamp",
+        ),
     )
 
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="RESTRICT"), index=True)
@@ -39,3 +44,4 @@ class MobileMoneyCollection(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     currency: Mapped[str] = mapped_column(String(3), default="LSL", nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="awaiting_customer", nullable=False)
     provider_reference: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

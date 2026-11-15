@@ -5,6 +5,8 @@ inject a trusted server-side provider adapter (never a client status object).
 No payment initiation, sale posting, refunds, or transfers occur here.
 """
 
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -174,6 +176,10 @@ async def reconcile_registered_collection(
             },
         )
 
+    if next_status == CollectionStatus.CONFIRMED and current != CollectionStatus.CONFIRMED:
+        # Assign once, inside the same transaction as the provider reference
+        # and audit event. A duplicate lookup preserves the original timestamp.
+        record.confirmed_at = datetime.now(timezone.utc)
     record.status = next_status.value
     record.provider_reference = next_reference
     await db.flush()  # DB uniqueness/check constraints remain authoritative.
