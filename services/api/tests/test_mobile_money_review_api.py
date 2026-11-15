@@ -3,26 +3,25 @@ from uuid import uuid4
 
 from fastapi.routing import APIRoute
 
-from app.api.router import api_router
-from app.api.routes.mobile_money import UnresolvedCollectionView
+from app.api.routes.mobile_money import UnresolvedCollectionView, router as mobile_money_router
 
 
 def test_review_endpoint_is_read_only():
     routes = [
-        route for route in api_router.routes
+        route for route in mobile_money_router.routes
         if isinstance(route, APIRoute)
-        and route.path.startswith("/pos/mobile-money")
+        and route.path.startswith("/unresolved")
     ]
     assert len(routes) == 1
-    assert routes[0].path == "/pos/mobile-money/unresolved"
+    assert routes[0].path == "/unresolved"
     assert routes[0].methods == {"GET"}
 
 
 def test_review_endpoint_requires_sales_read_permission():
     routes = [
-        route for route in api_router.routes
+        route for route in mobile_money_router.routes
         if isinstance(route, APIRoute)
-        and route.path == "/pos/mobile-money/unresolved"
+        and route.path == "/unresolved"
     ]
     assert len(routes) == 1
     # The authorized route has a FastAPI dependency on require_permissions.
