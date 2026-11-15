@@ -31,6 +31,13 @@ class _ProductsView extends StatefulWidget {
 
 class _ProductsViewState extends State<_ProductsView> {
   _ProductFilter _filter = _ProductFilter.all;
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   List<ProductSummary> _filteredProducts(ProductCatalogState state) {
     final products = state.visibleProducts;
@@ -118,6 +125,7 @@ class _ProductsViewState extends State<_ProductsView> {
                           .add(const ProductCatalogRefreshRequested()),
                     ),
                     _ProductsToolbar(
+                      searchController: _searchController,
                       filter: _filter,
                       onFilterChanged: (value) => setState(() => _filter = value),
                       onQueryChanged: (value) => context
@@ -296,11 +304,13 @@ class _MetricPill extends StatelessWidget {
 
 class _ProductsToolbar extends StatelessWidget {
   const _ProductsToolbar({
+    required this.searchController,
     required this.filter,
     required this.onFilterChanged,
     required this.onQueryChanged,
   });
 
+  final TextEditingController searchController;
   final _ProductFilter filter;
   final ValueChanged<_ProductFilter> onFilterChanged;
   final ValueChanged<String> onQueryChanged;
@@ -310,17 +320,11 @@ class _ProductsToolbar extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 700;
-        final search = TextField(
+        // The same controller survives compact/desktop Row <-> Column swaps.
+        // Never restore a stale BLoC query over the user's current edit.
+        final search = CatalogSearchInput(
+          controller: searchController,
           onChanged: onQueryChanged,
-          decoration: InputDecoration(
-            hintText: 'Search name, SKU or barcode',
-            prefixIcon: const Icon(Icons.search_rounded),
-            filled: true,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-          ),
         );
         final filters = SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -1058,6 +1062,36 @@ class _EmptyProducts extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Search input that leaves text and cursor position owned by its parent.
+/// It can be reparented by responsive layouts without restoring deleted text.
+class CatalogSearchInput extends StatelessWidget {
+  const CatalogSearchInput({
+    super.key,
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        hintText: 'Search name, SKU or barcode',
+        prefixIcon: const Icon(Icons.search_rounded),
+        filled: true,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
         ),
       ),
     );
