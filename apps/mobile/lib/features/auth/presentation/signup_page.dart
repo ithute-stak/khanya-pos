@@ -36,11 +36,8 @@ class _SignupPageState extends State<SignupPage> {
   void initState() {
     super.initState();
     _businessName.addListener(_suggestSlug);
-    _businessSlug.addListener(() {
-      if (_businessSlug.text.isNotEmpty && _businessSlug.text != _slugify(_businessName.text)) {
-        _slugEdited = true;
-      }
-    });
+    // Programmatic slug suggestions must never be mistaken for manual edits.
+    // An empty slug is also a valid in-progress user edit (e.g. Ctrl+A/Delete).
   }
 
   String _slugify(String value) {
@@ -188,6 +185,9 @@ class _SignupPageState extends State<SignupPage> {
                                 TextFormField(
                                   controller: _businessSlug,
                                   enabled: !_submitting,
+                                  // Once the user edits this field, including deleting it
+                                  // completely, never restore old suggested characters.
+                                  onChanged: (_) => _slugEdited = true,
                                   decoration: const InputDecoration(
                                     labelText: 'Business ID / slug',
                                     helperText: 'Lowercase letters, numbers and hyphens',
