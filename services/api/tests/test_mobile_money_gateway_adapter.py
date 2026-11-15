@@ -6,7 +6,6 @@ import pytest
 
 from app.services.mobile_money_gateway_adapter import (
     GatewayConfigurationError,
-    GatewayProtocolError,
     ReadOnlyGatewayStatusAdapter,
 )
 from app.services.mobile_money_reconciliation import (
@@ -103,6 +102,7 @@ async def test_redirect_not_followed_and_unauthorized_response_is_unknown(identi
     assert visited == ["gateway.example.test"]
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize("base_url", [
     "http://gateway.example.test",
     "https://user:pass@gateway.example.test",
@@ -110,16 +110,17 @@ async def test_redirect_not_followed_and_unauthorized_response_is_unknown(identi
     "https://gateway.example.test?redirect=true",
     "https://gateway.example.test:8080",
 ])
-def test_invalid_gateway_origins_rejected(base_url):
-    with httpx.AsyncClient() as client:
+async def test_invalid_gateway_origins_rejected(base_url):
+    async with httpx.AsyncClient() as client:
         with pytest.raises(GatewayConfigurationError):
             ReadOnlyGatewayStatusAdapter(
                 base_url=base_url, bearer_token="secret", client=client,
             )
 
 
-def test_bearer_token_is_required():
-    with httpx.AsyncClient() as client:
+async @pytest.mark.asyncio
+async def test_bearer_token_is_required():
+    async with httpx.AsyncClient() as client:
         with pytest.raises(GatewayConfigurationError):
             ReadOnlyGatewayStatusAdapter(
                 base_url="https://gateway.example.test", bearer_token="", client=client,
