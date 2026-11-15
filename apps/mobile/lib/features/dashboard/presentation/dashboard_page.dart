@@ -46,6 +46,11 @@ class DashboardPage extends StatelessWidget {
             ),
           ),
           IconButton(
+            tooltip: 'Scan Khanya QR',
+            onPressed: () => context.push('/scan'),
+            icon: const Icon(Icons.qr_code_scanner),
+          ),
+          IconButton(
             tooltip: 'Sign out',
             onPressed: () => context.read<SessionBloc>().add(const SessionSignedOut()),
             icon: const Icon(Icons.logout),
@@ -96,6 +101,13 @@ class DashboardPage extends StatelessWidget {
                     mainAxisSpacing: 12,
                   ),
                   delegate: SliverChildListDelegate.fixed([
+                    _ModuleCard(
+                      title: 'Scan QR',
+                      description: 'Open products, receipts, inventory, loyalty and more',
+                      icon: Icons.qr_code_scanner,
+                      accent: KhanyaBrand.forest,
+                      onTap: () => context.push('/scan'),
+                    ),
                     _ModuleCard(
                       title: services ? 'New Service Sale' : 'New Sale',
                       description: 'Fast checkout, offline queue and payments',
