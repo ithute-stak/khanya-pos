@@ -399,9 +399,12 @@ class _ReceiptPaymentSummary extends StatelessWidget {
                   },
                 ),
                 const SizedBox(height: 12),
-                _PurchasePaymentAmount(
+                PurchasePaymentAmount(
                   amountPaidMinor: state.amountPaidMinor,
                   enabled: state.paymentMethod != 'supplier_credit',
+                  onChanged: (value) => context
+                      .read<PurchaseDraftBloc>()
+                      .add(PurchaseDraftAmountPaidChanged(value)),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -470,19 +473,21 @@ class _ReceiptPaymentSummary extends StatelessWidget {
 
 // Do not assign a normalized BLoC amount back into the text field on
 // each keystroke: that would resurrect deleted digits and collapse the caret.
-class _PurchasePaymentAmount extends StatefulWidget {
-  const _PurchasePaymentAmount({
+class PurchasePaymentAmount extends StatefulWidget {
+  const PurchasePaymentAmount({
     required this.amountPaidMinor,
     required this.enabled,
+    required this.onChanged,
   });
   final int amountPaidMinor;
   final bool enabled;
+  final ValueChanged<String> onChanged;
 
   @override
-  State<_PurchasePaymentAmount> createState() => _PurchasePaymentAmountState();
+  State<PurchasePaymentAmount> createState() => PurchasePaymentAmountState();
 }
 
-class _PurchasePaymentAmountState extends State<_PurchasePaymentAmount> {
+class PurchasePaymentAmountState extends State<PurchasePaymentAmount> {
   late final TextEditingController _controller;
 
   @override
@@ -494,7 +499,7 @@ class _PurchasePaymentAmountState extends State<_PurchasePaymentAmount> {
   }
 
   @override
-  void didUpdateWidget(covariant _PurchasePaymentAmount oldWidget) {
+  void didUpdateWidget(covariant PurchasePaymentAmount oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Supplier credit forcibly clears the payment. This is a deliberate
     // external reset, not a response to a cashier's typing.
@@ -521,9 +526,7 @@ class _PurchasePaymentAmountState extends State<_PurchasePaymentAmount> {
       enabled: widget.enabled,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       decoration: const InputDecoration(labelText: 'Amount paid now (M)'),
-      onChanged: (value) => context
-          .read<PurchaseDraftBloc>()
-          .add(PurchaseDraftAmountPaidChanged(value)),
+      onChanged: widget.onChanged,
     );
   }
 }
