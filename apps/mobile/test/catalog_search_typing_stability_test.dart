@@ -46,4 +46,57 @@ void main() {
     expect(controller.text, 'khali');
     expect(edits, ['khanya', 'kha', 'khali']);
   });
+  testWidgets('IME delete and retype keeps exact field value after rebuild', (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    final edits = <String>[];
+    late StateSetter rebuild;
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: StatefulBuilder(
+          builder: (context, setState) {
+            rebuild = setState;
+            return CatalogSearchInput(
+              controller: controller,
+              onChanged: edits.add,
+            );
+          },
+        ),
+      ),
+    ));
+    await tester.showKeyboard(find.byType(TextField));
+
+    // Simulate the editing values delivered by a platform keyboard.
+    void sendEdit(String text) {
+      tester.testTextInput.updateEditingValue(TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      ));
+    }
+
+    sendEdit('khanya');
+    await tester.pump();
+    sendEdit('khan');
+    await tester.pump();
+    rebuild(() {});
+    await tester.pump();
+    expect(controller.text, 'khan');
+    expect(controller.selection.baseOffset, 4);
+
+    sendEdit('');
+    await tester.pump();
+    rebuild(() {});
+    await tester.pump();
+    expect(controller.text, '');
+
+    sendEdit('shop');
+    await tester.pump();
+    rebuild(() {});
+    await tester.pump();
+    expect(controller.text, 'shop');
+    expect(controller.selection.baseOffset, 4);
+    expect(edits, ['khanya', 'khan', '', 'shop']);
+  });
+
 }
