@@ -3,7 +3,7 @@
    tenant and QR permissions are verified by the existing FastAPI backend. */
 const $ = id => document.getElementById(id);
 const state = { access: null, refresh: null, me: null, tenant: null, branch: null,
-  products: [], customers: [], suppliers: [], cart: new Map(), busy: false, productEdit: null, pendingId: null, currentView: 'checkout', expensePending: null };
+  products: [], customers: [], suppliers: [], staff: [], cart: new Map(), busy: false, productEdit: null, pendingId: null, currentView: 'checkout', expensePending: null };
 const money = value => 'M ' + Number(value || 0).toLocaleString('en-LS', {
   minimumFractionDigits: 2, maximumFractionDigits: 2
 });
@@ -50,7 +50,7 @@ async function request(path, options = {}, retry = true) {
 function signOut(remote = true) {
   if (remote && state.access) request('/auth/logout',{method:'POST'}).catch(()=>{});
   state.access = null; state.refresh = null; state.me = null; state.tenant = null;
-  state.branch = null; state.products = []; state.customers = []; state.suppliers = []; state.productEdit = null; state.cart.clear(); state.pendingId = null; state.expensePending = null;
+  state.branch = null; state.products = []; state.customers = []; state.suppliers = []; state.staff = []; state.productEdit = null; state.cart.clear(); state.pendingId = null; state.expensePending = null;
   $('app-view').hidden = true; $('session-controls').hidden = true; $('login-view').hidden = false;
   $('password').value = ''; $('identifier').focus(); clearNotify();
 }
@@ -103,7 +103,7 @@ function switchScope(kind) {
     state.branch = (state.tenant.branches || []).find(b=>b.id === $('branch-picker').value);
     $('branch-title').textContent = (state.branch?.name || 'No active branch') + ' · ' + state.tenant.role;
   }
-  state.cart.clear(); state.customers=[]; state.suppliers=[]; $('suppliers-list').replaceChildren(); cancelProductEdit(); state.pendingId = null; $('cash-received').value = ''; renderCart();
+  state.cart.clear(); state.customers=[]; state.suppliers=[]; state.staff=[]; $('suppliers-list').replaceChildren(); $('staff-list').replaceChildren(); cancelProductEdit(); state.pendingId = null; $('cash-received').value = ''; renderCart();
   loadProducts().catch(e=>notify(e.message,true));
 }
 async function loadProducts() {
@@ -662,6 +662,33 @@ async function loadSalesReport(event){
   }catch(e){target.replaceChildren(h('p','empty','Sales report unavailable: '+e.message));}
   finally{$('run-sales-report').disabled=false;}
 }
+async function loadStaff(){
+  const target=$('staff-list'),tenant=state.tenant?.tenant_id,branch=state.branch?.id;
+  target.replaceChildren(h('p','empty','Loading staff directory…'));
+  if(!tenant||!branch)return;
+  try{
+    const data=await request('/staff');
+    if(state.tenant?.tenant_id!==tenant || state.branch?.id!==branch)return;
+    state.staff=Array.isArray(data)?data:[];
+    renderStaff();
+  }catch(e){target.replaceChildren(h('p','empty','Unable to load staff: '+e.message));}
+}
+function renderStaff(){
+  const target=$('staff-list');target.replaceChildren();
+  const term=$('staff-search').value.trim().toLowerCase();
+  const matches=state.staff.filter(p=>[p.display_name,p.email,p.role].some(v=>
+    String(v||'').toLowerCase().includes(term)));
+  for(const person of matches){
+    const row=h('div','record'),left=h('div'),right=h('div');
+    left.append(h('strong',null,person.display_name),
+      h('small',null,(person.email||'')+' · '+(person.phone||'No phone')));
+    right.append(h('strong',null,person.role||'Unassigned'),
+      h('small',null,person.is_active?'Active':'Inactive'),
+      h('small',null,(person.branch_ids||[]).length+' assigned branches'));
+    row.append(left,right);target.append(row);
+  }
+  if(!matches.length)target.append(h('p','empty','No staff members found or accessible.'));
+}
 async function verifyQr(){
   const token=$('qr-code').value.trim(),box=$('qr-result');box.hidden=false;
   if(!token.startsWith('khanyaqr:v1:')){box.textContent='This is not a Khanya QR locator.';return;}
@@ -679,6 +706,7 @@ function openView(name){
   if(name==='customers')loadCustomers();
   if(name==='suppliers')loadSuppliers();
   if(name==='expenses')loadExpenses();
+  if(name==='staff')loadStaff();
   if(name==='stock')renderStock();
 }
 $('login-form').addEventListener('submit',login);
@@ -707,6 +735,8 @@ $('supplier-form').addEventListener('submit',saveSupplier);
 $('expenses-refresh').addEventListener('click',loadExpenses);
 $('expense-form').addEventListener('submit',saveExpense);
 $('sales-report-form').addEventListener('submit',loadSalesReport);
+$('staff-refresh').addEventListener('click',loadStaff);
+$('staff-search').addEventListener('input',renderStaff);
 $('customers-search').addEventListener('input',renderCustomers);
 for(const tab of document.querySelectorAll('.tab'))tab.addEventListener('click',()=>openView(tab.dataset.view));
 renderCart();
