@@ -23,6 +23,7 @@ function harness() {
   };
   const productId = 'da25eb22-1b39-4cc7-bf2e-87ef63a8cde0';
   const responses = {
+    '/api/v1/reports/sales-summary?start=2026-11-01T00%3A00%3A00.000Z&end=2026-11-16T23%3A59%3A59.999Z': {sale_count:2,gross_sales:'120.00',returns_total:'20.00',net_sales:'100.00',tax_total:'0.00',balance_due:'0.00',cost_of_goods:'40.00',gross_profit:'60.00',refunded_amount:'20.00'},
     '/api/v1/expenses': [{id:'exp-1',expense_number:'EXP-001',category:'Transport',description:'Fuel',amount:'45.50',payment_method:'cash',expense_date:'2026-11-16'}],
     '/api/v1/suppliers': [{id:'supplier-one',code:'SUP1',name:'Supplier One',phone:'50000000',outstanding_balance:'30.50'}],
     '/api/v1/customers?limit=250': [{id:'customer-one',code:'C1',name:'Test Customer',outstanding_balance:'0.00'}],
@@ -348,4 +349,25 @@ test('expense amount validation rejects invalid decimal amounts before any write
  form.fields={category:'Travel',description:'Fuel',amount:'1.999',payment_method:'cash'};
  await vm.runInContext('saveExpense({preventDefault(){},currentTarget:document.getElementById("expense-form")})',context);
  assert.equal(calls.filter(x=>x.options.method==='POST').length,0);
+});
+
+test('sales report reads authoritative backend without changing sales', async()=>{
+ const {context,node,calls}=harness();
+ node('report-start').value='2026-11-01';
+ node('report-end').value='2026-11-16';
+ await vm.runInContext('loadSalesReport({preventDefault(){}})',context);
+ const request=calls.find(x=>x.url.startsWith('/api/v1/reports/sales-summary?'));
+ assert.ok(request);
+ assert.equal(request.options.headers['X-Tenant-ID'],'tenant-1');
+ assert.equal(request.options.headers['X-Branch-ID'],'branch-1');
+ assert.ok(node('sales-report-result').children.length>=7);
+ assert.equal(calls.some(x=>x.options.method==='POST'),false);
+});
+
+test('invalid report interval prevents backend calls', async()=>{
+ const {context,node,calls}=harness();
+ node('report-start').value='2026-11-16';
+ node('report-end').value='2026-11-01';
+ await vm.runInContext('loadSalesReport({preventDefault(){}})',context);
+ assert.equal(calls.length,0);
 });
