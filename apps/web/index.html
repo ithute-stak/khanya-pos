@@ -14,9 +14,56 @@
 <section id="login-view" class="login-wrap"><div class="login-card"><div class="eyebrow">YOUR BUSINESS, CONNECTED</div><h1>Welcome to Khanya</h1><p class="muted">Sign in to your business point of sale.</p><form id="login-form"><label>Email or phone<input id="identifier" autocomplete="username" required minlength="3"></label><label>Password<input id="password" type="password" autocomplete="current-password" required minlength="8"></label><button class="primary full" id="login-button">Sign in securely</button></form><p class="hint">Your business account must be approved before you can sign in.</p></div></section>
 <section id="app-view" hidden>
 <div class="workspace-head"><div><div class="eyebrow">BUSINESS WORKSPACE</div><h1 id="business-title">Khanya POS</h1><p class="muted" id="branch-title"></p></div><div class="selectors"><label>Business<select id="tenant-picker"></select></label><label>Branch<select id="branch-picker"></select></label></div></div>
-<nav class="tabs" aria-label="Main navigation"><button class="tab active" data-view="checkout">Checkout</button><button class="tab" data-view="catalog">Products</button><button class="tab" data-view="history">Sales history</button><button class="tab" data-view="qr">QR Centre</button></nav>
+<nav class="tabs" aria-label="Main navigation"><button class="tab active" data-view="checkout">Checkout</button><button class="tab" data-view="catalog">Products</button><button class="tab" data-view="stock">Stock</button><button class="tab" data-view="customers">Customers</button><button class="tab" data-view="history">Sales history</button><button class="tab" data-view="qr">QR Centre</button></nav>
 <div id="checkout-view" class="view"><div class="checkout-grid"><div class="panel"><div class="panel-head"><div><div class="eyebrow">QUICK SALE</div><h2>Find products</h2></div><button class="secondary" id="refresh-products">Refresh</button></div><label class="sr-only" for="product-search">Search products</label><input id="product-search" placeholder="Search by name, SKU or barcode..." autocomplete="off"><div id="product-list" class="product-list"></div></div><aside class="panel cart"><div class="panel-head"><div><div class="eyebrow">CURRENT SALE</div><h2>Your cart</h2></div><button id="clear-cart" class="ghost">Clear</button></div><div id="cart-items" class="cart-items"><p class="empty">Your cart is empty</p></div><div class="cart-summary"><div class="summary-line"><span>Items</span><span id="cart-count">0</span></div><div class="summary-line total"><strong>Total</strong><strong id="cart-total">M 0.00</strong></div><label>Cash received (M)<input id="cash-received" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Enter amount received"></label><div class="summary-line"><span>Change</span><strong id="change-total">M 0.00</strong></div><button id="complete-sale" class="primary full" disabled>Complete cash sale</button><p class="hint">Cash payments only in this browser release. A recorded sale cannot be undone by clearing the cart.</p></div></aside></div></div>
-<div id="catalog-view" class="view" hidden><div class="panel"><div class="panel-head"><h2>Product catalogue</h2><button class="secondary" id="catalog-refresh">Refresh</button></div><div id="catalog-list"></div></div></div>
+<div id="catalog-view" class="view" hidden>
+  <div class="management-grid">
+    <section class="panel"><div class="panel-head"><h2>Product catalogue</h2><button class="secondary" id="catalog-refresh">Refresh</button></div><div id="catalog-list"></div></section>
+    <section class="panel"><div class="panel-head"><h2>Add product</h2></div>
+      <form id="product-form">
+        <label>Product name<input name="name" required minlength="2" maxlength="200" autocomplete="off"></label>
+        <label>SKU<input name="sku" required maxlength="80" autocomplete="off"></label>
+        <label>Barcode (optional)<input name="barcode" maxlength="120" autocomplete="off"></label>
+        <div class="form-grid"><label>Selling price (M)<input name="selling_price" type="number" required min="0" step="0.01" value="0.00"></label>
+        <label>Cost price (M)<input name="cost_price" type="number" required min="0" step="0.01" value="0.00"></label></div>
+        <label>Unit<input name="unit" required maxlength="40" value="unit"></label>
+        <label class="check-row"><input name="track_stock" type="checkbox" checked> Track physical stock</label>
+        <button class="primary full" id="save-product" type="submit">Save product</button>
+        <p class="hint">Creating a product does not create opening stock. Use the Stock tab to record verified quantities.</p>
+      </form>
+    </section>
+  </div>
+</div>
+<div id="stock-view" class="view" hidden>
+  <div class="management-grid">
+    <section class="panel"><div class="panel-head"><h2>Branch stock</h2><button class="secondary" id="stock-refresh">Refresh</button></div><div id="stock-list"></div></section>
+    <section class="panel"><div class="panel-head"><h2>Adjust stock</h2></div>
+      <form id="stock-form">
+        <label>Product<select id="stock-product" required></select></label>
+        <label>Adjustment type<select id="stock-type" required><option value="opening_balance">Opening balance (+)</option><option value="count_gain">Stock count gain (+)</option><option value="count_loss">Stock count loss (−)</option><option value="damage">Damaged stock (−)</option><option value="expiry">Expired stock (−)</option><option value="correction">Other correction (+ or −)</option></select></label>
+        <label>Quantity change<input id="stock-delta" required type="number" step="0.001" placeholder="e.g. 10 or -2"></label>
+        <label>Reason<input id="stock-reason" required minlength="2" maxlength="240" placeholder="e.g. Initial stock count"></label>
+        <button class="primary full" id="save-stock" type="submit">Record stock adjustment</button>
+        <p class="hint">Stock adjustments are recorded on the server with your account and selected branch. Check quantities carefully before confirming.</p>
+      </form>
+    </section>
+  </div>
+</div>
+<div id="customers-view" class="view" hidden>
+  <div class="management-grid">
+    <section class="panel"><div class="panel-head"><h2>Customers</h2><button class="secondary" id="customers-refresh">Refresh</button></div><label>Find customer<input id="customers-search" placeholder="Search by name, code or phone" autocomplete="off"></label><div id="customers-list"></div></section>
+    <section class="panel"><div class="panel-head"><h2>Add customer</h2></div>
+      <form id="customer-form">
+        <label>Customer name<input name="name" minlength="2" maxlength="180" required></label>
+        <label>Customer code<input name="code" maxlength="40" required></label>
+        <label>Phone (optional)<input name="phone" maxlength="40" autocomplete="tel"></label>
+        <label>Email (optional)<input name="email" type="email" maxlength="180" autocomplete="email"></label>
+        <button class="primary full" id="save-customer" type="submit">Save customer</button>
+        <p class="hint">New customers start with a zero credit limit. Credit facilities and payment terms must be approved separately.</p>
+      </form>
+    </section>
+  </div>
+</div>
 <div id="history-view" class="view" hidden><div class="panel"><div class="panel-head"><h2>Sales history</h2><button class="secondary" id="history-refresh">Refresh</button></div><div id="history-list"></div></div></div>
 <div id="qr-view" class="view" hidden><div class="panel"><div class="panel-head"><h2>Khanya QR Centre</h2></div><p class="muted">Scan or paste a signed Khanya QR code to verify its resource against your business permissions.</p><label>QR code<input id="qr-code" placeholder="khanyaqr:v1:..." autocomplete="off"></label><button id="verify-qr" class="primary">Verify QR</button><div id="qr-result" class="notice" hidden></div><p class="hint">The code is an identifier, not proof of payment. Browser camera scanning is being added separately; USB scanners that type into fields work now.</p></div></div>
 </section>

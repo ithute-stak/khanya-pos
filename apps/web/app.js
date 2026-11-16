@@ -3,7 +3,7 @@
    tenant and QR permissions are verified by the existing FastAPI backend. */
 const $ = id => document.getElementById(id);
 const state = { access: null, refresh: null, me: null, tenant: null, branch: null,
-  products: [], cart: new Map(), busy: false, pendingId: null, currentView: 'checkout' };
+  products: [], customers: [], cart: new Map(), busy: false, pendingId: null, currentView: 'checkout' };
 const money = value => 'M ' + Number(value || 0).toLocaleString('en-LS', {
   minimumFractionDigits: 2, maximumFractionDigits: 2
 });
@@ -50,7 +50,7 @@ async function request(path, options = {}, retry = true) {
 function signOut(remote = true) {
   if (remote && state.access) request('/auth/logout',{method:'POST'}).catch(()=>{});
   state.access = null; state.refresh = null; state.me = null; state.tenant = null;
-  state.branch = null; state.products = []; state.cart.clear(); state.pendingId = null;
+  state.branch = null; state.products = []; state.customers = []; state.cart.clear(); state.pendingId = null;
   $('app-view').hidden = true; $('session-controls').hidden = true; $('login-view').hidden = false;
   $('password').value = ''; $('identifier').focus(); clearNotify();
 }
@@ -103,13 +103,13 @@ function switchScope(kind) {
     state.branch = (state.tenant.branches || []).find(b=>b.id === $('branch-picker').value);
     $('branch-title').textContent = (state.branch?.name || 'No active branch') + ' · ' + state.tenant.role;
   }
-  state.cart.clear(); state.pendingId = null; $('cash-received').value = ''; renderCart();
+  state.cart.clear(); state.customers=[]; state.pendingId = null; $('cash-received').value = ''; renderCart();
   loadProducts().catch(e=>notify(e.message,true));
 }
 async function loadProducts() {
   if (!state.branch) { notify('Select an active branch.',true); return; }
   state.products = await request('/products');
-  renderProducts(); renderCatalog();
+  renderProducts(); renderCatalog(); renderStock();
 }
 function renderProducts() {
   const target = $('product-list'); target.replaceChildren();
@@ -140,6 +140,144 @@ function renderCatalog() {
   }
   if (!state.products.length) target.append(h('p','empty','No products in this business yet.'));
 }
+
+function validAmount(value) {
+  const normalized = String(value).trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) throw new Error('Enter a non-negative amount with at most two decimals.');
+  const n = Number(normalized);
+  if (!Number.isFinite(n) || n > 999999999) throw new Error('Amount is outside supported range.');
+  return n.toFixed(2);
+}
+function validDelta(value, adjustmentType) {
+  const normalized = String(value).trim();
+  if (!/^-?\d+(?:\.\d{1,3})?$/.test(normalized)) throw new Error('Enter a quantity with at most three decimals.');
+  const n=Number(normalized);
+  if (!Number.isFinite(n) || n === 0 || Math.abs(n) > 100000000) throw new Error('Quantity change must be non-zero and within supported range.');
+  if (['opening_balance','count_gain'].includes(adjustmentType) && n < 0) throw new Error('An opening balance or count gain must be positive.');
+  if (['count_loss','damage','expiry'].includes(adjustmentType) && n > 0) throw new Error('Loss, damage and expiry must be negative.');
+  return n.toFixed(3);
+}
+function formValue(data, key) { return String(data.get(key) || '').trim(); }
+function renderStock() {
+  const target=$('stock-list'); target.replaceChildren();
+  const selector=$('stock-product'); const selected=selector.value;
+  selector.replaceChildren();
+  for (const product of state.products) {
+    const option=h('option',null,product.name + ' · '+ product.sku);
+    option.value=product.id; selector.append(option);
+    const row=h('div','record'), left=h('div');
+    left.append(h('strong',null,product.name),h('small',null,'SKU: '+product.sku));
+    const value=product.track_stock ?
+        (product.on_hand === null || product.on_hand === undefined ? 'Not counted' : String(product.on_hand)) :
+        'Not tracked';
+    row.append(left,h('strong',null,value)); target.append(row);
+  }
+  if (state.products.some(p=>p.id===selected)) selector.value=selected;
+  if (!state.products.length) target.append(h('p','empty','Create a product before adjusting stock.'));
+}
+async function saveProduct(event) {
+  event.preventDefault();
+  if (state.busy) return;
+  const form=event.currentTarget, data=new FormData(form);
+  let payload;
+  try {
+    payload={
+      name:formValue(data,'name'), sku:formValue(data,'sku').toUpperCase(),
+      barcode:formValue(data,'barcode') || null,
+      selling_price:validAmount(formValue(data,'selling_price')),
+      cost_price:validAmount(formValue(data,'cost_price')),
+      unit:formValue(data,'unit'),
+      track_stock:data.has('track_stock'),
+    };
+    if(payload.name.length<2 || !payload.sku || !payload.unit) throw new Error('Enter a product name, SKU and unit.');
+  } catch(e){notify(e.message,true);return;}
+  if(!confirm('Create '+payload.name+' in '+state.tenant.tenant_name+'?')) return;
+  state.busy=true; $('save-product').disabled=true;renderCart();
+  let created;
+  try {
+    created=await request('/products',{method:'POST',body:JSON.stringify(payload)});
+    form.reset();notify('Product '+created.name+' created.');
+  }catch(e){notify(e.message+' — Check the catalogue before attempting creation again.',true);}
+  finally{state.busy=false; $('save-product').disabled=false;renderCart();}
+  if(created) {
+    try{await loadProducts();}
+    catch(e){notify('Product created, but the catalogue could not refresh: '+e.message,true);}
+  }
+}
+async function saveStock(event) {
+  event.preventDefault();
+  if(state.busy) return;
+  const productId=$('stock-product').value;
+  const kind=$('stock-type').value;
+  const reason=$('stock-reason').value.trim();
+  let delta;
+  try{
+    if(!state.branch)throw new Error('Select a branch.');
+    if(!state.products.some(p=>p.id===productId))throw new Error('Select a valid product.');
+    if(reason.length<2 || reason.length>240)throw new Error('Enter a reason for the stock change.');
+    delta=validDelta($('stock-delta').value,kind);
+  }catch(e){notify(e.message,true);return;}
+  const product=state.products.find(p=>p.id===productId);
+  const payload={
+    client_operation_id:crypto.randomUUID(),product_id:productId,
+    quantity_delta:delta,adjustment_type:kind,reason
+  };
+  if(!confirm('Record '+delta+' units for '+product.name+' in '+state.branch.name+'? This changes real stock.'))return;
+  state.busy=true;$('save-stock').disabled=true;renderCart();
+  let completed=false;
+  try{
+    const result=await request('/inventory/adjustments',{method:'POST',body:JSON.stringify(payload)});
+    completed=true;
+    $('stock-delta').value='';$('stock-reason').value='';
+    notify('Stock adjustment recorded. Current on hand: '+result.on_hand);
+  }catch(e){notify(e.message+' — Check branch stock and audit history before submitting another adjustment.',true);}
+  finally{state.busy=false;$('save-stock').disabled=false;renderCart();}
+  if(completed){
+    try{await loadProducts();}
+    catch(e){notify('Adjustment recorded; stock refresh failed: '+e.message,true);}
+  }
+}
+async function loadCustomers(){
+  const target=$('customers-list');target.replaceChildren(h('p','empty','Loading customers…'));
+  try{
+    const customers=await request('/customers?limit=250');
+    state.customers=Array.isArray(customers)?customers:[];
+    renderCustomers();
+  }catch(e){target.replaceChildren(h('p','empty','Unable to load customers: '+e.message));}
+}
+function renderCustomers(){
+  const target=$('customers-list');target.replaceChildren();
+  const search=$('customers-search').value.trim().toLowerCase();
+  const matches=state.customers.filter(c=>[c.name,c.code,c.phone,c.email]
+    .some(x=>String(x||'').toLowerCase().includes(search)));
+  for(const c of matches){
+    const row=h('div','record'),left=h('div'),right=h('div');
+    left.append(h('strong',null,c.name),h('small',null,c.code+' · '+(c.phone||'No phone')));
+    right.append(h('small',null,'Balance: '+money(c.outstanding_balance)));
+    row.append(left,right);target.append(row);
+  }
+  if(!matches.length)target.append(h('p','empty','No customers found.'));
+}
+async function saveCustomer(event){
+  event.preventDefault();if(state.busy)return;
+  const form=event.currentTarget, data=new FormData(form);
+  const payload={
+    name:formValue(data,'name'),code:formValue(data,'code').toUpperCase(),
+    phone:formValue(data,'phone')||null,email:formValue(data,'email')||null,
+    credit_limit:'0.00',payment_terms_days:0
+  };
+  if(payload.name.length<2 || !payload.code){notify('Enter a customer name and code.',true);return;}
+  if(!confirm('Create customer '+payload.name+' with no credit facility?'))return;
+  state.busy=true;$('save-customer').disabled=true;renderCart();
+  let created;
+  try{
+    created=await request('/customers',{method:'POST',body:JSON.stringify(payload)});
+    form.reset();notify('Customer '+created.name+' created.');
+  }catch(e){notify(e.message+' — Check the customer list before creating the same customer again.',true);}
+  finally{state.busy=false;$('save-customer').disabled=false;renderCart();}
+  if(created)await loadCustomers();
+}
+
 function addProduct(id) {
   if (state.busy) return;
   const product=state.products.find(p=>p.id===id); if(!product)return;
@@ -235,6 +373,8 @@ function openView(name){
   for(const el of document.querySelectorAll('.view'))el.hidden=el.id!==name+'-view';
   for(const el of document.querySelectorAll('.tab'))el.classList.toggle('active',el.dataset.view===name);
   if(name==='history')loadHistory();
+  if(name==='customers')loadCustomers();
+  if(name==='stock')renderStock();
 }
 $('login-form').addEventListener('submit',login);
 $('logout').addEventListener('click',()=>signOut());
@@ -248,5 +388,11 @@ $('refresh-products').addEventListener('click',()=>loadProducts().catch(e=>notif
 $('catalog-refresh').addEventListener('click',()=>loadProducts().catch(e=>notify(e.message,true)));
 $('history-refresh').addEventListener('click',loadHistory);
 $('verify-qr').addEventListener('click',verifyQr);
+$('product-form').addEventListener('submit',saveProduct);
+$('stock-form').addEventListener('submit',saveStock);
+$('customer-form').addEventListener('submit',saveCustomer);
+$('stock-refresh').addEventListener('click',()=>loadProducts().catch(e=>notify(e.message,true)));
+$('customers-refresh').addEventListener('click',loadCustomers);
+$('customers-search').addEventListener('input',renderCustomers);
 for(const tab of document.querySelectorAll('.tab'))tab.addEventListener('click',()=>openView(tab.dataset.view));
 renderCart();
