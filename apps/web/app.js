@@ -141,6 +141,7 @@ function renderCatalog() {
   if (!state.products.length) target.append(h('p','empty','No products in this business yet.'));
 }
 function addProduct(id) {
+  if (state.busy) return;
   const product=state.products.find(p=>p.id===id); if(!product)return;
   const old=state.cart.get(id)||0;
   if (product.track_stock && product.on_hand != null && old+1>Number(product.on_hand)) {
@@ -157,7 +158,7 @@ function renderCart() {
     const row=h('div','cart-line'), info=h('div'), controls=h('div','qty');
     info.append(h('strong',null,p.name),h('small',null,money(p.selling_price)+' each'));
     const minus=h('button',null,'−');minus.type='button'; minus.disabled=state.busy;
-    minus.addEventListener('click',()=>{ if(qty<=1)state.cart.delete(id);else state.cart.set(id,qty-1);state.pendingId=null;renderCart();});
+    minus.addEventListener('click',()=>{ if(state.busy)return; if(qty<=1)state.cart.delete(id);else state.cart.set(id,qty-1);state.pendingId=null;renderCart();});
     const plus=h('button',null,'+');plus.type='button'; plus.disabled=state.busy;
     plus.addEventListener('click',()=>addProduct(id));
     controls.append(minus,h('span',null,qty),plus);
