@@ -100,8 +100,21 @@
 </section></div>
 <div id="purchasing-view" class="view" hidden><div class="management-grid">
 <section class="panel"><div class="panel-head"><h2>Purchases received</h2><button type="button" id="purchases-refresh" class="secondary">Refresh</button></div><div id="purchases-list"></div><p class="hint">Purchases listed here are recorded business transactions. Creating or receiving stock is not enabled in this view yet.</p></section>
-<section class="panel"><div class="panel-head"><h2>Purchase orders</h2><button type="button" id="orders-refresh" class="secondary">Refresh</button></div><div id="orders-list"></div><p class="hint">Order approval, receiving and supplier payments are being migrated separately with audit controls.</p></section>
+<section class="panel"><div class="panel-head"><h2>Purchase orders</h2><button type="button" id="order-create-open" class="secondary">New order</button><button type="button" id="orders-refresh" class="secondary">Refresh</button></div><div id="orders-list"></div><p class="hint">Order approval, receiving and supplier payments are being migrated separately with audit controls.</p></section>
 </div></div>
+<div id="order-create-view" class="view" hidden><section class="panel">
+<div class="panel-head"><h2>Create purchase order</h2><button type="button" id="order-create-back" class="secondary">Back to purchasing</button></div>
+<p class="muted">Create a purchase order for one product. This does not receive inventory or pay the supplier.</p>
+<form id="purchase-order-form">
+<label>Supplier<select name="supplier_id" id="purchase-order-supplier" required></select></label>
+<label>Product<select name="product_id" id="purchase-order-product" required></select></label>
+<div class="form-grid"><label>Quantity<input name="quantity" type="number" min="0.001" step="0.001" required></label>
+<label>Unit cost (M)<input name="unit_cost" type="number" min="0.01" step="0.01" required></label></div>
+<label>Notes (optional)<input name="notes" maxlength="240"></label>
+<button class="primary" type="submit" id="purchase-order-save">Create purchase order</button>
+<div id="purchase-order-feedback" role="status" aria-live="polite"></div>
+<p class="hint">Check the purchase-order list before trying again if the network fails after submission.</p>
+</form></section></div>
 <div id="qr-view" class="view" hidden><div class="panel"><div class="panel-head"><h2>Khanya QR Centre</h2></div><p class="muted">Scan or paste a signed Khanya QR code to verify its resource against your business permissions.</p><label>QR code<input id="qr-code" placeholder="khanyaqr:v1:..." autocomplete="off"></label><button id="verify-qr" class="primary">Verify QR</button><div id="qr-result" class="notice" hidden></div><p class="hint">The code is an identifier, not proof of payment. Browser camera scanning is being added separately; USB scanners that type into fields work now.</p></div></div>
 </section>
 </main>
