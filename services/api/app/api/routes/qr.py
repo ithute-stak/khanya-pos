@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.services.qr_identity import QRIdentityError, read_qr_identity
 from app.services.qr_product_labels import ProductQRLabelNotFound, issue_product_qr_label
+from app.services.qr_sale_receipts import SaleReceiptQRNotFound, issue_sale_receipt_qr
 from app.services.qr_resource_resolver import (
     QRResourceForbidden,
     QRResourceNotFound,
@@ -111,3 +112,35 @@ async def create_product_qr_label(
     except ProductQRLabelNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return ProductQRLabelView(**label)
+
+
+class SaleReceiptQRView(BaseModel):
+    kind: str
+    sale_id: UUID
+    sale_number: str
+    qr_token: str
+    expires_at: datetime
+
+
+@router.post("/sales/{sale_id}/receipt", response_model=SaleReceiptQRView)
+async def create_sale_receipt_qr(
+    sale_id: UUID,
+    valid_days: int = Query(default=365, ge=1, le=365),
+    context: TenantContext = Depends(require_permissions("sales.read")),
+    db: AsyncSession = Depends(get_db),
+) -> SaleReceiptQRView:
+    """Issue signed receipt locator only for authorized, recorded sale."""
+    if context.branch is None:
+        raise HTTPException(status_code=400, detail="X-Branch-ID is required")
+    secret = get_settings().qr_locator_signing_secret
+    if len(secret.encode("utf-8")) < 32:
+        raise HTTPException(status_code=503, detail="QR signing is not configured")
+    try:
+        receipt = await issue_sale_receipt_qr(
+            db, sale_id=sale_id, tenant_id=context.tenant.id,
+            branch_id=context.branch.id, signing_secret=secret,
+            valid_days=valid_days,
+        )
+    except SaleReceiptQRNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return SaleReceiptQRView(**receipt)
