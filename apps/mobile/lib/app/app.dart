@@ -29,6 +29,7 @@ import 'package:khanya_pos/features/pos/data/held_sales_repository.dart';
 import 'package:khanya_pos/features/pos/data/till_repository.dart';
 import 'package:khanya_pos/features/pos/hardware/pos_hardware_settings.dart';
 import 'package:khanya_pos/features/qr/data/qr_resolver_repository.dart';
+import 'package:khanya_pos/features/qr/data/qr_product_label_repository.dart';
 import 'package:khanya_pos/features/purchasing/data/purchase_order_repository.dart';
 import 'package:khanya_pos/features/reports/data/reports_repository.dart';
 import 'package:khanya_pos/features/settings/data/business_settings_repository.dart';
@@ -81,6 +82,9 @@ class _KhanyaPosAppState extends State<KhanyaPosApp> {
         ),
         RepositoryProvider<QrResolverRepository>(
           create: (_) => QrResolverRepository(apiClient: dependencies.apiClient),
+        ),
+        RepositoryProvider<QrProductLabelRepository>(
+          create: (_) => QrProductLabelRepository(apiClient: dependencies.apiClient),
         ),
         RepositoryProvider<ServiceRepository>(create: (_) => ServiceRepository(apiClient: dependencies.apiClient)),
         RepositoryProvider<StaffRepository>.value(value: dependencies.staffRepository),
