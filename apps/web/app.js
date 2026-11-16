@@ -703,6 +703,11 @@ async function loadPurchasing(){
       const row=h('div','record'),left=h('div'),right=h('div');
       left.append(h('strong',null,item.order_number||item.purchase_order_number||'Purchase order'),h('small',null,item.status||'Status unavailable'));
       right.append(h('strong',null,money(item.total||item.total_amount)));
+      if(item.id){
+        const details=h('button','secondary','Details');details.type='button';
+        details.addEventListener('click',()=>openPurchaseOrderDetail(item.id));
+        right.append(details);
+      }
       row.append(left,right);return row;
     }}
   ];
@@ -716,6 +721,34 @@ async function loadPurchasing(){
       if(!target.children.length)target.append(h('p','empty',kind.empty));
     }catch(e){target.replaceChildren(h('p','empty','Unable to load: '+e.message));}
   }));
+}
+async function openPurchaseOrderDetail(id){
+  if(!state.tenant||!state.branch)return;
+  const tenant=state.tenant.tenant_id,branch=state.branch.id;
+  const target=$('order-detail-content');
+  target.replaceChildren(h('p','empty','Loading purchase order…'));
+  openView('order-detail');
+  try{
+    const order=await request('/purchase-orders/'+encodeURIComponent(id));
+    if(state.tenant?.tenant_id!==tenant||state.branch?.id!==branch)return;
+    if(!order||order.id!==id||!Array.isArray(order.lines))throw new Error('Incomplete purchase order detail.');
+    target.replaceChildren();
+    const header=h('div','record'),labels=h('div'),totals=h('div');
+    labels.append(h('strong',null,order.order_number||'Purchase order'),h('small',null,'Status: '+(order.status||'unknown')));
+    totals.append(h('strong',null,money(order.total)),h('small',null,'Subtotal: '+money(order.subtotal)+' · Tax: '+money(order.tax_total)));
+    header.append(labels,totals);target.append(header);
+    const heading=h('h3',null,'Order line items');target.append(heading);
+    for(const line of order.lines){
+      const row=h('div','record'),info=h('div'),amount=h('div');
+      const product=state.products.find(p=>p.id===line.product_id);
+      info.append(h('strong',null,product?.name||'Product '+line.product_id),
+        h('small',null,'Ordered: '+line.quantity+' · Received: '+(line.quantity_received||'0')));
+      amount.append(h('strong',null,money(line.line_total)),
+        h('small',null,'Unit cost: '+money(line.unit_cost)));
+      row.append(info,amount);target.append(row);
+    }
+    if(!order.lines.length)target.append(h('p','empty','No line items available.'));
+  }catch(e){target.replaceChildren(h('p','empty','Unable to load purchase order: '+e.message));}
 }
 async function openPurchaseOrderForm(){
   if(!state.tenant||!state.branch)return;
@@ -826,6 +859,7 @@ $('purchases-refresh').addEventListener('click',loadPurchasing);
 $('orders-refresh').addEventListener('click',loadPurchasing);
 $('order-create-open').addEventListener('click',openPurchaseOrderForm);
 $('order-create-back').addEventListener('click',()=>openView('purchasing'));
+$('order-detail-back').addEventListener('click',()=>openView('purchasing'));
 $('purchase-order-form').addEventListener('submit',savePurchaseOrder);
 $('customers-search').addEventListener('input',renderCustomers);
 for(const tab of document.querySelectorAll('.tab'))tab.addEventListener('click',()=>openView(tab.dataset.view));
