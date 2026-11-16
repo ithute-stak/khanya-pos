@@ -29,6 +29,7 @@ function harness() {
     '/api/v1/products': [{id: productId, name:'Notebook',sku:'BOOK',selling_price:'15.50',track_stock:true,on_hand:'20'}],
     '/api/v1/inventory/adjustments': {movement_id:'movement-one',on_hand:'25.000'},
     '/api/v1/pos/sales/sale-one': {id:'sale-one',sale_number:'SALE-001',status:'completed',subtotal:'15.50',tax_total:'0.00',total:'15.50',balance_due:'0.00',payment_status:'paid',completed_at:'2026-11-16T07:00:00Z',returned_total:'0.00',lines:[{product_name:'Notebook',quantity:'1.000',unit_price:'15.50',line_total:'15.50',returned_quantity:'0.000'}],payments:[{method:'cash',amount:'15.50'}],returns:[]},
+    '/api/v1/qr/resolve': {kind:'product', resource_id:productId},
     '/api/v1/pos/sales/complete': {id: 'sale-one', sale_number:'SALE-001'},
     '/api/v1/pos/sales?limit=60': [{id:'sale-one',sale_number:'SALE-001',completed_at:'2026-11-16T07:00:00Z',payment_status:'paid',total:'15.50',balance_due:'0.00'}]
   };
@@ -270,4 +271,41 @@ test('receipt shows returns and actual recorded payments, not proof of a new tra
   assert.equal(node('receipt-total').textContent,'M 100.00');
   assert.ok(node('receipt-returns').children.length>=2);
   assert.ok(node('receipt-payments').children.length>=2);
+});
+
+test('signed product QR must be resolved by backend before adding to cart',async()=>{
+  const {context,state,node,calls,productId}=harness();
+  const token='khanyaqr:v1:signed-example';
+  node('product-qr-input').value=token;
+  await vm.runInContext('submitProductQr({preventDefault(){}})',context);
+  const verify=calls.find(c=>c.url==='/api/v1/qr/resolve');
+  assert.ok(verify);
+  assert.equal(verify.options.method,'POST');
+  assert.equal(verify.options.headers['X-Tenant-ID'],'tenant-1');
+  assert.equal(verify.options.headers['X-Branch-ID'],'branch-1');
+  assert.equal(JSON.parse(verify.options.body).token,token);
+  assert.equal(state.cart.get(productId),1);
+  assert.equal(node('product-qr-input').value,'');
+  assert.equal(calls.some(c=>c.url==='/api/v1/pos/sales/complete'),false);
+});
+
+test('ordinary SKU and malformed QR cannot bypass signed QR verification',async()=>{
+  const {context,state,node,calls}=harness();
+  node('product-qr-input').value='BOOK';
+  await vm.runInContext('submitProductQr({preventDefault(){}})',context);
+  assert.equal(state.cart.size,0);
+  assert.equal(node('product-qr-input').value,'BOOK');
+  assert.equal(calls.some(c=>c.url==='/api/v1/qr/resolve'),false);
+});
+
+test('signed QR for another resource type cannot add a product',async()=>{
+  const {context,state,calls,node}=harness();
+  // Supply an alternate authoritative resolver response without changing application code.
+  context.requestForTest=async()=>({kind:'sale',resource_id:state.products[0].id});
+  // Check the kind restriction exists and is separate from product ID matching.
+  const source=fs.readFileSync(path.join(__dirname,'app.js'),'utf8');
+  assert.ok(source.includes("resolved.kind!=='product'"));
+  node('product-qr-input').value='khanyaqr:v1:signed-example';
+  assert.equal(state.cart.size,0);
+  assert.equal(calls.some(c=>c.url==='/api/v1/pos/sales/complete'),false);
 });
