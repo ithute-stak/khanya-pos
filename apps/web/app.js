@@ -689,6 +689,34 @@ function renderStaff(){
   }
   if(!matches.length)target.append(h('p','empty','No staff members found or accessible.'));
 }
+async function loadPurchasing(){
+  const tenant=state.tenant?.tenant_id,branch=state.branch?.id;
+  if(!tenant||!branch)return;
+  const kinds=[
+    {path:'/purchases',target:'purchases-list',empty:'No purchases recorded.',render:(item)=>{
+      const row=h('div','record'),left=h('div'),right=h('div');
+      left.append(h('strong',null,item.purchase_number||'Purchase'),h('small',null,(item.status||'')+' · '+(item.supplier_invoice_number||'No supplier invoice')));
+      right.append(h('strong',null,money(item.total)),h('small',null,'Balance: '+money(item.balance_due)));
+      row.append(left,right);return row;
+    }},
+    {path:'/purchase-orders',target:'orders-list',empty:'No purchase orders found.',render:(item)=>{
+      const row=h('div','record'),left=h('div'),right=h('div');
+      left.append(h('strong',null,item.order_number||item.purchase_order_number||'Purchase order'),h('small',null,item.status||'Status unavailable'));
+      right.append(h('strong',null,money(item.total||item.total_amount)));
+      row.append(left,right);return row;
+    }}
+  ];
+  await Promise.all(kinds.map(async kind=>{
+    const target=$(kind.target);target.replaceChildren(h('p','empty','Loading…'));
+    try{
+      const result=await request(kind.path);
+      if(state.tenant?.tenant_id!==tenant||state.branch?.id!==branch)return;
+      target.replaceChildren();
+      for(const item of (Array.isArray(result)?result:[]))target.append(kind.render(item));
+      if(!target.children.length)target.append(h('p','empty',kind.empty));
+    }catch(e){target.replaceChildren(h('p','empty','Unable to load: '+e.message));}
+  }));
+}
 async function verifyQr(){
   const token=$('qr-code').value.trim(),box=$('qr-result');box.hidden=false;
   if(!token.startsWith('khanyaqr:v1:')){box.textContent='This is not a Khanya QR locator.';return;}
@@ -707,6 +735,7 @@ function openView(name){
   if(name==='suppliers')loadSuppliers();
   if(name==='expenses')loadExpenses();
   if(name==='staff')loadStaff();
+  if(name==='purchasing')loadPurchasing();
   if(name==='stock')renderStock();
 }
 $('login-form').addEventListener('submit',login);
@@ -737,6 +766,8 @@ $('expense-form').addEventListener('submit',saveExpense);
 $('sales-report-form').addEventListener('submit',loadSalesReport);
 $('staff-refresh').addEventListener('click',loadStaff);
 $('staff-search').addEventListener('input',renderStaff);
+$('purchases-refresh').addEventListener('click',loadPurchasing);
+$('orders-refresh').addEventListener('click',loadPurchasing);
 $('customers-search').addEventListener('input',renderCustomers);
 for(const tab of document.querySelectorAll('.tab'))tab.addEventListener('click',()=>openView(tab.dataset.view));
 renderCart();
