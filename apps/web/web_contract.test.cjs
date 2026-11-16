@@ -23,6 +23,7 @@ function harness() {
   };
   const productId = 'da25eb22-1b39-4cc7-bf2e-87ef63a8cde0';
   const responses = {
+    '/api/v1/suppliers': [{id:'supplier-one',code:'SUP1',name:'Supplier One',phone:'50000000',outstanding_balance:'30.50'}],
     '/api/v1/customers?limit=250': [{id:'customer-one',code:'C1',name:'Test Customer',outstanding_balance:'0.00'}],
     '/api/v1/customers': {id:'customer-new',code:'CNEW',name:'New Customer'},
     ['/api/v1/products/'+productId]: {id:productId,name:'Notebook',sku:'BOOK',barcode:'1234567890123',unit:'unit',selling_price:'15.50',cost_price:'5.00',track_stock:true,reorder_level:'5.000',category_id:'category-1',brand_id:'brand-1',unit_id:null,is_active:true},
@@ -308,4 +309,24 @@ test('signed QR for another resource type cannot add a product',async()=>{
   node('product-qr-input').value='khanyaqr:v1:signed-example';
   assert.equal(state.cart.size,0);
   assert.equal(calls.some(c=>c.url==='/api/v1/pos/sales/complete'),false);
+});
+
+test('supplier management uses authenticated tenant and branch scope',async()=>{
+  const {context,calls,node,state}=harness();
+  await vm.runInContext('loadSuppliers()',context);
+  const call=calls.find(c=>c.url==='/api/v1/suppliers');
+  assert.ok(call);
+  assert.equal(call.options.headers['X-Tenant-ID'],'tenant-1');
+  assert.equal(call.options.headers['X-Branch-ID'],'branch-1');
+  assert.equal(state.suppliers.length,1);
+  assert.ok(node('suppliers-list').children.length>0);
+});
+
+test('supplier search only filters loaded current business suppliers',async()=>{
+  const {context,node}=harness();
+  await vm.runInContext('loadSuppliers()',context);
+  node('suppliers-search').value='missing';
+  vm.runInContext('renderSuppliers()',context);
+  assert.equal(node('suppliers-list').children.length,1);
+  assert.equal(node('suppliers-list').children[0].textContent,'No suppliers found.');
 });
