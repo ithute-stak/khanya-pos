@@ -4,6 +4,7 @@ import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/features/catalog/data/product_repository.dart';
 import 'package:khanya_pos/features/catalog/domain/product_summary.dart';
 import 'package:khanya_pos/features/inventory/data/inventory_control_repository.dart';
+import 'package:khanya_pos/features/qr/presentation/product_qr_labels_page.dart';
 
 class ProductDetailPage extends StatefulWidget {
   const ProductDetailPage({super.key, required this.product});
@@ -72,6 +73,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       appBar: AppBar(
         title: Text(detail?.name ?? widget.product.name),
         actions: [
+          if (detail != null && detail.isActive)
+            IconButton(
+              key: const Key('product-qr-labels'),
+              tooltip: 'Print product QR labels',
+              onPressed: _loading
+                  ? null
+                  : () => Navigator.of(context).push<void>(
+                        MaterialPageRoute(
+                          builder: (_) => ProductQrLabelsPage(productId: detail.id),
+                        ),
+                      ),
+              icon: const Icon(Icons.qr_code_2_outlined),
+            ),
           if (detail != null)
             IconButton(
               tooltip: 'Edit product',
