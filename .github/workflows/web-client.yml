@@ -29,6 +29,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate JavaScript
         run: node --check apps/web/app.js
+      - name: Test browser checkout contracts
+        run: node --test apps/web/web_contract.test.cjs
       - name: Validate HTML structure and API safety
         run: |
           python3 - <<'PY'
