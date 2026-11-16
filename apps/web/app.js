@@ -3,7 +3,7 @@
    tenant and QR permissions are verified by the existing FastAPI backend. */
 const $ = id => document.getElementById(id);
 const state = { access: null, refresh: null, me: null, tenant: null, branch: null,
-  products: [], customers: [], suppliers: [], cart: new Map(), busy: false, productEdit: null, pendingId: null, currentView: 'checkout' };
+  products: [], customers: [], suppliers: [], cart: new Map(), busy: false, productEdit: null, pendingId: null, currentView: 'checkout', expensePending: null };
 const money = value => 'M ' + Number(value || 0).toLocaleString('en-LS', {
   minimumFractionDigits: 2, maximumFractionDigits: 2
 });
@@ -50,7 +50,7 @@ async function request(path, options = {}, retry = true) {
 function signOut(remote = true) {
   if (remote && state.access) request('/auth/logout',{method:'POST'}).catch(()=>{});
   state.access = null; state.refresh = null; state.me = null; state.tenant = null;
-  state.branch = null; state.products = []; state.customers = []; state.suppliers = []; state.productEdit = null; state.cart.clear(); state.pendingId = null;
+  state.branch = null; state.products = []; state.customers = []; state.suppliers = []; state.productEdit = null; state.cart.clear(); state.pendingId = null; state.expensePending = null;
   $('app-view').hidden = true; $('session-controls').hidden = true; $('login-view').hidden = false;
   $('password').value = ''; $('identifier').focus(); clearNotify();
 }
@@ -577,6 +577,56 @@ async function saveSupplier(event){
   finally{state.busy=false;$('save-supplier').disabled=false;}
 }
 
+async function loadExpenses(){
+  const target=$('expenses-list'), tenant=state.tenant?.tenant_id, branch=state.branch?.id;
+  target.replaceChildren(h('p','empty','Loading expenses…'));
+  if(!tenant||!branch)return;
+  try{
+    const entries=await request('/expenses');
+    if(state.tenant?.tenant_id!==tenant || state.branch?.id!==branch)return;
+    target.replaceChildren();
+    for(const expense of (Array.isArray(entries)?entries:[])){
+      const row=h('div','record'),left=h('div'),right=h('div');
+      left.append(h('strong',null,expense.description||expense.expense_number),
+        h('small',null,(expense.expense_number||'Expense')+' · '+(expense.category||'Uncategorised')+' · '+(expense.payment_method||'')));
+      right.append(h('strong',null,money(expense.amount)),h('small',null,expense.expense_date||''));
+      row.append(left,right);target.append(row);
+    }
+    if(!target.children.length)target.append(h('p','empty','No expenses recorded.'));
+  }catch(e){target.replaceChildren(h('p','empty','Unable to load expenses: '+e.message));}
+}
+async function saveExpense(event){
+  event.preventDefault();if(state.busy || !state.tenant || !state.branch)return;
+  const form=event.currentTarget, fields=new FormData(form);
+  const category=formValue(fields,'category'),description=formValue(fields,'description');
+  const amount=formValue(fields,'amount'),payment_method=formValue(fields,'payment_method');
+  if(category.length<2 || description.length<2 || !/^\d+(?:\.\d{1,2})?$/.test(amount) || Number(amount)<=0 ||
+    !['cash','bank_transfer','card','mobile_money'].includes(payment_method)){
+    notify('Enter a valid category, description, positive amount and payment method.',true);return;
+  }
+  if(!confirm('Record paid expense of '+money(amount)+' for '+description+'?'))return;
+  const tenant=state.tenant.tenant_id,branch=state.branch.id;
+  // Keep the operation ID stable after an uncertain server response to avoid accidental duplicate postings.
+  if(!state.expensePending)state.expensePending={id:crypto.randomUUID(),tenant,branch,
+    category,description,amount,payment_method};
+  const pending=state.expensePending;
+  if(pending.tenant!==tenant||pending.branch!==branch || pending.category!==category ||
+      pending.description!==description||pending.amount!==amount||pending.payment_method!==payment_method){
+    notify('A previous expense is awaiting confirmation. Reload the expense list before changing it.',true);
+    return;
+  }
+  state.busy=true;$('save-expense').disabled=true;
+  try{
+    await request('/expenses',{method:'POST',body:JSON.stringify({
+      client_operation_id:pending.id,category,description,amount,payment_method,receipt_document_id:null
+    })});
+    state.expensePending=null;form.reset();
+    notify('Expense recorded.');
+    if(state.tenant?.tenant_id===tenant&&state.branch?.id===branch)await loadExpenses();
+  }catch(e){notify('Expense was not confirmed: '+e.message+'. Check records before retrying.',true);}
+  finally{state.busy=false;$('save-expense').disabled=false;}
+}
+
 async function verifyQr(){
   const token=$('qr-code').value.trim(),box=$('qr-result');box.hidden=false;
   if(!token.startsWith('khanyaqr:v1:')){box.textContent='This is not a Khanya QR locator.';return;}
@@ -593,6 +643,7 @@ function openView(name){
   if(name==='history')loadHistory();
   if(name==='customers')loadCustomers();
   if(name==='suppliers')loadSuppliers();
+  if(name==='expenses')loadExpenses();
   if(name==='stock')renderStock();
 }
 $('login-form').addEventListener('submit',login);
@@ -618,6 +669,8 @@ $('customers-refresh').addEventListener('click',loadCustomers);
 $('suppliers-refresh').addEventListener('click',loadSuppliers);
 $('suppliers-search').addEventListener('input',renderSuppliers);
 $('supplier-form').addEventListener('submit',saveSupplier);
+$('expenses-refresh').addEventListener('click',loadExpenses);
+$('expense-form').addEventListener('submit',saveExpense);
 $('customers-search').addEventListener('input',renderCustomers);
 for(const tab of document.querySelectorAll('.tab'))tab.addEventListener('click',()=>openView(tab.dataset.view));
 renderCart();
