@@ -24,6 +24,7 @@ function harness() {
   const responses = {
     '/api/v1/customers?limit=250': [{id:'customer-one',code:'C1',name:'Test Customer',outstanding_balance:'0.00'}],
     '/api/v1/customers': {id:'customer-new',code:'CNEW',name:'New Customer'},
+    ['/api/v1/products/'+productId]: {id:productId,name:'Notebook',sku:'BOOK',barcode:'1234567890123',unit:'unit',selling_price:'15.50',cost_price:'5.00',track_stock:true,reorder_level:'5.000',category_id:'category-1',brand_id:'brand-1',unit_id:null,is_active:true},
     '/api/v1/products': [{id: productId, name:'Notebook',sku:'BOOK',selling_price:'15.50',track_stock:true,on_hand:'20'}],
     '/api/v1/inventory/adjustments': {movement_id:'movement-one',on_hand:'25.000'},
     '/api/v1/pos/sales/complete': {id: 'sale-one', sale_number:'SALE-001'},
@@ -163,4 +164,62 @@ test('money and quantity inputs enforce backend decimal precision',()=>{
   assert.throws(()=>vm.runInContext('validAmount("12.345")',context));
   assert.throws(()=>vm.runInContext('validDelta("-1","opening_balance")',context));
   assert.throws(()=>vm.runInContext('validDelta("1","damage")',context));
+});
+
+
+test('exact barcode and SKU scans increment cart; unknown scans never add',()=>{
+  const {context,state,node,productId}=harness();
+  state.products[0].barcode='1234567890123';
+  assert.equal(vm.runInContext('scanBarcode("1234567890123")',context),true);
+  assert.equal(vm.runInContext('scanBarcode("BOOK")',context),true);
+  assert.equal(state.cart.get(productId),2);
+  assert.equal(vm.runInContext('scanBarcode("1234")',context),false);
+  assert.equal(state.cart.get(productId),2);
+  assert.match(node('barcode-feedback').textContent,/not found/);
+});
+
+test('scanned stock cannot exceed on-hand quantity',()=>{
+  const {context,state,productId}=harness();
+  state.products[0].barcode='1234567890123';state.products[0].on_hand='1';
+  assert.equal(vm.runInContext('scanBarcode("1234567890123")',context),true);
+  assert.equal(vm.runInContext('scanBarcode("1234567890123")',context),false);
+  assert.equal(state.cart.get(productId),1);
+});
+
+test('product editor GET preserves classification, reorder level, and updates via PUT',async()=>{
+  const {context,state,calls,node,productId}=harness();
+  const fields={};
+  for(const field of ['name','sku','barcode','selling_price','cost_price','unit','track_stock'])
+    fields[field]={value:'',checked:false};
+  const form=node('product-form');
+  form.elements={namedItem(name){return fields[name];}};
+  await vm.runInContext('beginProductEdit("'+productId+'")',context);
+  assert.equal(state.productEdit.id,productId);
+  assert.equal(fields.name.value,'Notebook');
+  assert.equal(fields.barcode.value,'1234567890123');
+  assert.equal(fields.track_stock.checked,true);
+  form.fields={name:'Notebook updated',sku:'BOOK',barcode:'1234567890123',selling_price:'18.99',cost_price:'5.00',unit:'unit',track_stock:'on'};
+  await vm.runInContext('saveProduct({preventDefault(){},currentTarget:document.getElementById("product-form")})',context);
+  const put=calls.find(x=>x.url==='/api/v1/products/'+productId && x.options.method==='PUT');
+  assert.ok(put,'full-schema PUT must be used, not a partial PATCH');
+  const payload=JSON.parse(put.options.body);
+  assert.equal(payload.name,'Notebook updated');
+  assert.equal(payload.category_id,'category-1');
+  assert.equal(payload.brand_id,'brand-1');
+  assert.equal(payload.reorder_level,'5.000');
+  assert.equal(payload.is_active,true);
+  assert.equal(payload.selling_price,'18.99');
+  assert.equal(calls.filter(x=>x.url==='/api/v1/products'&&x.options.method==='POST').length,0);
+});
+
+test('scanner submit clears only after product is accepted',()=>{
+  const {context,state,node,productId}=harness();
+  state.products[0].barcode='1234567890123';
+  node('barcode-input').value='1234567890123';
+  vm.runInContext('submitBarcode({preventDefault(){}})',context);
+  assert.equal(node('barcode-input').value,'');
+  assert.equal(state.cart.get(productId),1);
+  node('barcode-input').value='invalid-code';
+  vm.runInContext('submitBarcode({preventDefault(){}})',context);
+  assert.equal(node('barcode-input').value,'invalid-code');
 });

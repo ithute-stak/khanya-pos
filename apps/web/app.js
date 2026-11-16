@@ -3,7 +3,7 @@
    tenant and QR permissions are verified by the existing FastAPI backend. */
 const $ = id => document.getElementById(id);
 const state = { access: null, refresh: null, me: null, tenant: null, branch: null,
-  products: [], customers: [], cart: new Map(), busy: false, pendingId: null, currentView: 'checkout' };
+  products: [], customers: [], cart: new Map(), busy: false, productEdit: null, pendingId: null, currentView: 'checkout' };
 const money = value => 'M ' + Number(value || 0).toLocaleString('en-LS', {
   minimumFractionDigits: 2, maximumFractionDigits: 2
 });
@@ -50,7 +50,7 @@ async function request(path, options = {}, retry = true) {
 function signOut(remote = true) {
   if (remote && state.access) request('/auth/logout',{method:'POST'}).catch(()=>{});
   state.access = null; state.refresh = null; state.me = null; state.tenant = null;
-  state.branch = null; state.products = []; state.customers = []; state.cart.clear(); state.pendingId = null;
+  state.branch = null; state.products = []; state.customers = []; state.productEdit = null; state.cart.clear(); state.pendingId = null;
   $('app-view').hidden = true; $('session-controls').hidden = true; $('login-view').hidden = false;
   $('password').value = ''; $('identifier').focus(); clearNotify();
 }
@@ -103,7 +103,7 @@ function switchScope(kind) {
     state.branch = (state.tenant.branches || []).find(b=>b.id === $('branch-picker').value);
     $('branch-title').textContent = (state.branch?.name || 'No active branch') + ' · ' + state.tenant.role;
   }
-  state.cart.clear(); state.customers=[]; state.pendingId = null; $('cash-received').value = ''; renderCart();
+  state.cart.clear(); state.customers=[]; cancelProductEdit(); state.pendingId = null; $('cash-received').value = ''; renderCart();
   loadProducts().catch(e=>notify(e.message,true));
 }
 async function loadProducts() {
@@ -136,6 +136,9 @@ function renderCatalog() {
     l.append(h('strong',null,p.name),h('small',null,'SKU: '+p.sku+(p.barcode?' · '+p.barcode:'')));
     right.append(h('strong',null,money(p.selling_price)),h('small',null,
       p.on_hand == null ? 'No branch stock count' : 'On hand: '+p.on_hand));
+    const edit=h('button','secondary','Edit'); edit.type='button'; edit.disabled=state.busy;
+    edit.addEventListener('click',()=>beginProductEdit(p.id));
+    right.append(edit);
     row.append(l,right); target.append(row);
   }
   if (!state.products.length) target.append(h('p','empty','No products in this business yet.'));
@@ -175,6 +178,61 @@ function renderStock() {
   if (state.products.some(p=>p.id===selected)) selector.value=selected;
   if (!state.products.length) target.append(h('p','empty','Create a product before adjusting stock.'));
 }
+
+function cancelProductEdit(){
+  state.productEdit=null;
+  const form=$('product-form'); if (form.reset) form.reset();
+  $('product-editor-title').textContent='Add product';
+  $('save-product').textContent='Save product';
+  $('cancel-product-edit').hidden=true;
+}
+async function beginProductEdit(id){
+  if(state.busy) return;
+  state.busy=true;$('save-product').disabled=true;
+  try{
+    const product=await request('/products/'+encodeURIComponent(id));
+    if(!state.products.some(p=>p.id===product.id))throw new Error('The product is no longer in this catalogue.');
+    state.productEdit=product;
+    const form=$('product-form');
+    for(const field of ['name','sku','barcode','selling_price','cost_price','unit']){
+      const input=form.elements?.namedItem(field);
+      if(input)input.value=product[field] ?? '';
+    }
+    const track=form.elements?.namedItem('track_stock');
+    if(track)track.checked=Boolean(product.track_stock);
+    $('product-editor-title').textContent='Edit product';
+    $('save-product').textContent='Save changes';
+    $('cancel-product-edit').hidden=false;
+    notify('Editing '+product.name+'. Prices and stock movements remain server-controlled.');
+  }catch(e){notify('Could not load product details: '+e.message,true);}
+  finally{state.busy=false;$('save-product').disabled=false;}
+}
+function scanBarcode(value){
+  if(state.busy)return false;
+  const code=String(value||'').trim().toLowerCase();
+  if(!code)return false;
+  const matches=state.products.filter(p=>
+    (p.barcode && p.barcode.trim().toLowerCase()===code) ||
+    (p.sku && p.sku.trim().toLowerCase()===code)
+  );
+  if(matches.length!==1){
+    const message=matches.length?'Multiple products matched this identifier.':'Barcode/SKU not found in this business.';
+    $('barcode-feedback').textContent=message;
+    notify(message,true);return false;
+  }
+  const product=matches[0],before=state.cart.get(product.id)||0;
+  addProduct(product.id);
+  const added=(state.cart.get(product.id)||0)>before;
+  $('barcode-feedback').textContent=added?product.name+' added to cart.':'Could not add product. Check current stock.';
+  return added;
+}
+function submitBarcode(event){
+  event.preventDefault();
+  const input=$('barcode-input');
+  if(scanBarcode(input.value)) input.value='';
+  if(input.focus)input.focus();
+}
+
 async function saveProduct(event) {
   event.preventDefault();
   if (state.busy) return;
@@ -191,13 +249,28 @@ async function saveProduct(event) {
     };
     if(payload.name.length<2 || !payload.sku || !payload.unit) throw new Error('Enter a product name, SKU and unit.');
   } catch(e){notify(e.message,true);return;}
-  if(!confirm('Create '+payload.name+' in '+state.tenant.tenant_name+'?')) return;
+  const edit=state.productEdit;
+  if(!confirm((edit?'Update ':'Create ')+payload.name+' in '+state.tenant.tenant_name+'?')) return;
   state.busy=true; $('save-product').disabled=true;renderCart();
   let created;
   try {
-    created=await request('/products',{method:'POST',body:JSON.stringify(payload)});
-    form.reset();notify('Product '+created.name+' created.');
-  }catch(e){notify(e.message+' — Check the catalogue before attempting creation again.',true);}
+    if(edit){
+      // PUT expects the full product schema; retain existing classifications and reorder settings.
+      created=await request('/products/'+encodeURIComponent(edit.id),{
+        method:'PUT',
+        body:JSON.stringify({
+          ...payload,
+          category_id:edit.category_id ?? null,brand_id:edit.brand_id ?? null,
+          unit_id:edit.unit_id ?? null,reorder_level:edit.reorder_level ?? '0',
+          is_active:edit.is_active
+        })
+      });
+    }else{
+      created=await request('/products',{method:'POST',body:JSON.stringify(payload)});
+    }
+    cancelProductEdit();
+    notify('Product '+created.name+(edit?' updated.':' created.'));
+  }catch(e){notify(e.message+' — Check the catalogue before repeating this operation.',true);}
   finally{state.busy=false; $('save-product').disabled=false;renderCart();}
   if(created) {
     try{await loadProducts();}
@@ -389,6 +462,8 @@ $('catalog-refresh').addEventListener('click',()=>loadProducts().catch(e=>notify
 $('history-refresh').addEventListener('click',loadHistory);
 $('verify-qr').addEventListener('click',verifyQr);
 $('product-form').addEventListener('submit',saveProduct);
+$('cancel-product-edit').addEventListener('click',()=>{if(!state.busy)cancelProductEdit();});
+$('barcode-form').addEventListener('submit',submitBarcode);
 $('stock-form').addEventListener('submit',saveStock);
 $('customer-form').addEventListener('submit',saveCustomer);
 $('stock-refresh').addEventListener('click',()=>loadProducts().catch(e=>notify(e.message,true)));
