@@ -728,6 +728,7 @@ async function openPurchaseOrderDetail(id){
   const target=$('order-detail-content');
   target.replaceChildren(h('p','empty','Loading purchase order…'));
   $('order-status-panel').hidden=true;
+  $('order-receiving-preview').replaceChildren();
   openView('order-detail');
   try{
     const order=await request('/purchase-orders/'+encodeURIComponent(id));
@@ -750,7 +751,31 @@ async function openPurchaseOrderDetail(id){
     }
     if(!order.lines.length)target.append(h('p','empty','No line items available.'));
     renderPurchaseOrderActions(order,tenant,branch);
+    renderReceivingReadiness(order);
   }catch(e){target.replaceChildren(h('p','empty','Unable to load purchase order: '+e.message));}
+}
+function renderReceivingReadiness(order){
+  const target=$('order-receiving-preview');target.replaceChildren();
+  if(!order||!Array.isArray(order.lines))return;
+  const heading=h('h3',null,'Goods receiving readiness');target.append(heading);
+  const remaining=order.lines.map(line=>{
+    const ordered=Number(line.quantity),received=Number(line.quantity_received||0);
+    return {line,ordered,received,outstanding:ordered-received};
+  });
+  const corrupt=remaining.some(r=>!Number.isFinite(r.ordered)||!Number.isFinite(r.received)||
+    r.ordered<=0||r.received<0||r.outstanding<0);
+  if(corrupt){target.append(h('p','empty','Invalid receipt quantities. Contact an administrator before receiving goods.'));return;}
+  for(const {line,outstanding} of remaining){
+    const p=state.products.find(item=>item.id===line.product_id);
+    const row=h('div','record');
+    row.append(h('strong',null,p?.name||'Product '+line.product_id),
+      h('span',null,'Remaining: '+outstanding.toFixed(3)));
+    target.append(row);
+  }
+  const ready=['approved','part_received'].includes(order.status);
+  target.append(h('p','hint',ready?
+    'Order is eligible for receiving, but web receipt posting is disabled until duplicate protection and stock-ledger updates are verified.':
+    'Goods cannot be received until the order is approved. Receipt posting is currently disabled.'));
 }
 function renderPurchaseOrderActions(order,tenant,branch){
   const panel=$('order-status-panel'),actions=$('order-status-actions');

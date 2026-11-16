@@ -502,3 +502,22 @@ test('manager approval requests only status change with authoritative server per
   assert.equal(patches[0].options.headers['X-Branch-ID'],'branch-1');
   assert.equal(calls.some(c=>c.url.endsWith('/receive')),false);
 });
+
+test('goods receiving preview displays remaining quantity without inventory writes',async()=>{
+ const {context,node,calls}=harness();
+ await vm.runInContext('openPurchaseOrderDetail("order-1")',context);
+ const preview=node('order-receiving-preview');
+ assert.ok(preview.children.length>=3);
+ const remaining=preview.children.find(child=>child.textContent==='Remaining: 1.000');
+ assert.ok(remaining || preview.children.some(child=>child.children?.some(c=>c.textContent==='Remaining: 1.000')));
+ assert.equal(calls.filter(c=>c.options.method==='POST').length,0);
+ assert.equal(calls.some(c=>c.url.endsWith('/receive')),false);
+});
+
+test('receiving preview rejects inconsistent quantity records',async()=>{
+ const {context,node,calls}=harness();
+ vm.runInContext('renderReceivingReadiness({status:"approved",lines:[{product_id:"sample",quantity:"1.000",quantity_received:"2.000"}]})',context);
+ assert.ok(node('order-receiving-preview').children.some(child=>
+   String(child.textContent).includes('Invalid receipt quantities')));
+ assert.equal(calls.length,0);
+});
