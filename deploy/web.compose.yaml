@@ -1,0 +1,17 @@
+services:
+  web:
+    image: ghcr.io/ithute-stak/khanya-pos-web:${KHANYA_WEB_IMAGE_TAG:?Set exact tested 40-character web release SHA}
+    restart: unless-stopped
+    networks:
+      public-edge:
+        aliases:
+          - khanya-web
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+networks:
+  public-edge:
+    name: public-edge
+    external: true
