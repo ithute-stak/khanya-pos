@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
 
 import 'package:khanya_pos/features/qr/data/qr_product_label_repository.dart';
 import 'package:khanya_pos/features/qr/printing/product_qr_labels.dart';
