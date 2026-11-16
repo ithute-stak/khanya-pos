@@ -71,7 +71,7 @@ async function login(event) {
     $('welcome').textContent = me.display_name || me.email || 'Signed in';
     $('login-view').hidden = true; $('app-view').hidden = false; $('session-controls').hidden = false;
     fillTenants(); await loadProducts();
-  } catch (error) { notify(error.message, true); if (!state.me) signOut(false); notify(error.message, true); }
+  } catch (error) { if (!state.me) signOut(false); notify(error.message, true); }
   finally { state.busy = false; $('login-button').disabled = false; }
 }
 function fillTenants() {
@@ -95,6 +95,7 @@ function fillBranches() {
       ' · ' + state.tenant.role;
 }
 function switchScope(kind) {
+  if (state.busy) return;
   if (kind === 'tenant') {
     state.tenant = state.me.memberships.find(m => m.tenant_id === $('tenant-picker').value);
     fillBranches();
@@ -155,9 +156,9 @@ function renderCart() {
     total+=Math.round(Number(p.selling_price)*100)*qty;count+=qty;
     const row=h('div','cart-line'), info=h('div'), controls=h('div','qty');
     info.append(h('strong',null,p.name),h('small',null,money(p.selling_price)+' each'));
-    const minus=h('button',null,'−');minus.type='button';
+    const minus=h('button',null,'−');minus.type='button'; minus.disabled=state.busy;
     minus.addEventListener('click',()=>{ if(qty<=1)state.cart.delete(id);else state.cart.set(id,qty-1);state.pendingId=null;renderCart();});
-    const plus=h('button',null,'+');plus.type='button';
+    const plus=h('button',null,'+');plus.type='button'; plus.disabled=state.busy;
     plus.addEventListener('click',()=>addProduct(id));
     controls.append(minus,h('span',null,qty),plus);
     row.append(info,controls);box.append(row);
@@ -166,8 +167,12 @@ function renderCart() {
   $('cart-count').textContent=String(count);$('cart-total').textContent=money(total/100);
   const received=Number($('cash-received').value);
   $('change-total').textContent=money(Math.max(0,received-total/100));
+  const validCash=/^\d+(?:\.\d{1,2})?$/.test($('cash-received').value.trim());
+  $('clear-cart').disabled=state.busy;
+  $('tenant-picker').disabled=state.busy;
+  $('branch-picker').disabled=state.busy;
   $('complete-sale').disabled=!count || state.busy || !state.branch ||
-      !Number.isFinite(received) || received < total/100 || !$('cash-received').value;
+      !validCash || !Number.isFinite(received) || received < total/100;
 }
 async function checkout() {
   if ($('complete-sale').disabled || state.busy) return;
@@ -178,13 +183,14 @@ async function checkout() {
     return sum + (p?Math.round(Number(p.selling_price)*100)*qty:0);
   },0);
   const cashCents=Math.round(Number($('cash-received').value)*100);
-  if(!Number.isSafeInteger(cashCents)||cashCents<totalCents) {notify('Cash received is below the sale total.',true);return;}
+  if(!/^\d+(?:\.\d{1,2})?$/.test($('cash-received').value.trim()) || !Number.isSafeInteger(cashCents)||cashCents<totalCents) {notify('Cash received is below the sale total.',true);return;}
   if(!confirm('Record a CASH sale of '+money(totalCents/100)+'?'))return;
   state.busy=true;renderCart();clearNotify();
   const operation=state.pendingId || crypto.randomUUID();
   state.pendingId=operation;
+  let sale;
   try {
-    const sale=await request('/sales/complete',{
+    sale=await request('/pos/sales/complete',{
       method:'POST',body:JSON.stringify({
         client_operation_id:operation,
         items, payments:[{method:'cash',amount:(totalCents/100).toFixed(2)}]
@@ -192,14 +198,17 @@ async function checkout() {
     });
     state.cart.clear();state.pendingId=null;$('cash-received').value='';
     notify('Sale '+sale.sale_number+' recorded successfully. Change: '+money((cashCents-totalCents)/100));
-    await loadProducts();
   }catch(e){notify(e.message+' — Do not repeat the transaction until you confirm whether the sale was recorded.',true);}
   finally{state.busy=false;renderCart();}
+  if (sale) {
+    try { await loadProducts(); }
+    catch(e) { notify('Sale '+sale.sale_number+' recorded successfully, but refreshing products failed: '+e.message,true); }
+  }
 }
 async function loadHistory(){
   const box=$('history-list');box.replaceChildren(h('p','empty','Loading sales…'));
   try{
-    const sales=await request('/sales?limit=60');box.replaceChildren();
+    const sales=await request('/pos/sales?limit=60');box.replaceChildren();
     for(const sale of sales){
       const row=h('div','record'),left=h('div'),right=h('div');
       left.append(h('strong',null,sale.sale_number),h('small',null,
@@ -232,7 +241,7 @@ $('tenant-picker').addEventListener('change',()=>switchScope('tenant'));
 $('branch-picker').addEventListener('change',()=>switchScope('branch'));
 $('product-search').addEventListener('input',renderProducts);
 $('cash-received').addEventListener('input',renderCart);
-$('clear-cart').addEventListener('click',()=>{state.cart.clear();state.pendingId=null;renderCart();});
+$('clear-cart').addEventListener('click',()=>{if(state.busy)return;state.cart.clear();state.pendingId=null;renderCart();});
 $('complete-sale').addEventListener('click',checkout);
 $('refresh-products').addEventListener('click',()=>loadProducts().catch(e=>notify(e.message,true)));
 $('catalog-refresh').addEventListener('click',()=>loadProducts().catch(e=>notify(e.message,true)));
