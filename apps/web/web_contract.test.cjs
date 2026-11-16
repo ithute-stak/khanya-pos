@@ -27,6 +27,7 @@ function harness() {
     '/api/v1/staff': [{membership_id:'staff-1',user_id:'u-1',display_name:'Counter Manager',email:'manager@example.test',role:'manager',phone:null,is_active:true,branch_ids:['branch-1']}],
     '/api/v1/purchases': [{id:'purchase-1',purchase_number:'PUR-001',status:'received',supplier_invoice_number:'INV-01',total:'80.00',balance_due:'10.00'}],
     '/api/v1/purchase-orders': [{id:'order-1',order_number:'PO-001',status:'draft',total:'80.00'}],
+    '/api/v1/purchase-orders/order-1': {id:'order-1',order_number:'PO-001',status:'approved',subtotal:'80.00',tax_total:'0.00',total:'80.00',lines:[{id:'line-1',product_id:productId,quantity:'2.000',quantity_received:'1.000',unit_cost:'40.00',line_total:'80.00'}]},
     '/api/v1/expenses': [{id:'exp-1',expense_number:'EXP-001',category:'Transport',description:'Fuel',amount:'45.50',payment_method:'cash',expense_date:'2026-11-16'}],
     '/api/v1/suppliers': [{id:'supplier-one',code:'SUP1',name:'Supplier One',phone:'50000000',outstanding_balance:'30.50'}],
     '/api/v1/customers?limit=250': [{id:'customer-one',code:'C1',name:'Test Customer',outstanding_balance:'0.00'}],
@@ -444,4 +445,21 @@ test('purchase order uses purchase order endpoint only and never receives stock'
   assert.equal(data.lines[0].unit_cost,'10.50');
   assert.equal(calls.some(c=>c.url==='/api/v1/purchases'&&c.options.method==='POST'),false);
   assert.equal(node('purchase-order-save').disabled,true);
+});
+
+test('purchase order detail only reads authoritative backend line quantities',async()=>{
+  const {context,calls,node}=harness();
+  await vm.runInContext('openPurchaseOrderDetail("order-1")',context);
+  const req=calls.find(c=>c.url==='/api/v1/purchase-orders/order-1');
+  assert.ok(req);
+  assert.equal(req.options.headers['X-Tenant-ID'],'tenant-1');
+  assert.equal(req.options.headers['X-Branch-ID'],'branch-1');
+  assert.ok(node('order-detail-content').children.length>=3);
+  assert.equal(calls.some(c=>c.options.method==='POST'||c.options.method==='PATCH'),false);
+});
+
+test('purchase order detail without complete server lines does not fabricate inventory',async()=>{
+  const {context,calls}=harness();
+  await vm.runInContext('openPurchaseOrderDetail("missing")',context);
+  assert.equal(calls.some(c=>c.options.method==='POST'),false);
 });
