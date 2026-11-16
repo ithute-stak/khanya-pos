@@ -16,7 +16,7 @@ function harness() {
         append(...values) { this.children.push(...values); },
         reset() { this.fields = {}; },
         replaceChildren(...values) { this.children = values; },
-        addEventListener() {}
+        addEventListener(event, callback) { (this.handlers ||= {})[event] = callback; }
       });
     }
     return nodes.get(id);
@@ -462,4 +462,43 @@ test('purchase order detail without complete server lines does not fabricate inv
   const {context,calls}=harness();
   await vm.runInContext('openPurchaseOrderDetail("missing")',context);
   assert.equal(calls.some(c=>c.options.method==='POST'),false);
+});
+
+test('draft purchase order offers submission but not stock receiving',async()=>{
+  const {context,node,state,calls}=harness();
+  state.tenant.role='cashier';
+  vm.runInContext('renderPurchaseOrderActions({id:"order-1",order_number:"PO-001",status:"draft"},"tenant-1","branch-1")',context);
+  assert.equal(node('order-status-panel').hidden,false);
+  const action=node('order-status-actions').children[0];
+  assert.equal(action.textContent,'Submit for approval');
+  await action.handlers.click();
+  const patches=calls.filter(c=>c.options.method==='PATCH');
+  assert.equal(patches.length,1);
+  assert.equal(patches[0].url,'/api/v1/purchase-orders/order-1/status');
+  assert.equal(JSON.parse(patches[0].options.body).status,'submitted');
+  assert.equal(calls.some(c=>c.url.includes('/receive')||c.url==='/api/v1/purchases'),false);
+});
+
+test('approval action is not displayed for non-management role',async()=>{
+  const {context,node,state,calls}=harness();
+  state.tenant.role='cashier';
+  vm.runInContext('renderPurchaseOrderActions({id:"order-1",status:"submitted"},"tenant-1","branch-1")',context);
+  assert.equal(node('order-status-panel').hidden,true);
+  assert.equal(node('order-status-actions').children.length,0);
+  assert.equal(calls.length,0);
+});
+
+test('manager approval requests only status change with authoritative server permission',async()=>{
+  const {context,node,state,calls}=harness();
+  state.tenant.role='manager';
+  vm.runInContext('renderPurchaseOrderActions({id:"order-1",order_number:"PO-001",status:"submitted"},"tenant-1","branch-1")',context);
+  const action=node('order-status-actions').children[0];
+  assert.equal(action.textContent,'Approve purchase order');
+  await action.handlers.click();
+  const patches=calls.filter(c=>c.options.method==='PATCH');
+  assert.equal(patches.length,1);
+  assert.equal(JSON.parse(patches[0].options.body).status,'approved');
+  assert.equal(patches[0].options.headers['X-Tenant-ID'],'tenant-1');
+  assert.equal(patches[0].options.headers['X-Branch-ID'],'branch-1');
+  assert.equal(calls.some(c=>c.url.endsWith('/receive')),false);
 });

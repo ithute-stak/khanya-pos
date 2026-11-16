@@ -727,6 +727,7 @@ async function openPurchaseOrderDetail(id){
   const tenant=state.tenant.tenant_id,branch=state.branch.id;
   const target=$('order-detail-content');
   target.replaceChildren(h('p','empty','Loading purchase order…'));
+  $('order-status-panel').hidden=true;
   openView('order-detail');
   try{
     const order=await request('/purchase-orders/'+encodeURIComponent(id));
@@ -748,7 +749,37 @@ async function openPurchaseOrderDetail(id){
       row.append(info,amount);target.append(row);
     }
     if(!order.lines.length)target.append(h('p','empty','No line items available.'));
+    renderPurchaseOrderActions(order,tenant,branch);
   }catch(e){target.replaceChildren(h('p','empty','Unable to load purchase order: '+e.message));}
+}
+function renderPurchaseOrderActions(order,tenant,branch){
+  const panel=$('order-status-panel'),actions=$('order-status-actions');
+  panel.hidden=true;actions.replaceChildren();$('order-status-feedback').textContent='';
+  if(!order?.id || !state.access || !state.tenant || !state.branch ||
+     state.tenant.tenant_id!==tenant||state.branch.id!==branch)return;
+  const transitions={draft:'submitted',submitted:'approved'};
+  const target=transitions[order.status];
+  if(!target)return;
+  // Server enforces purchases.write and purchases.approve. Client role is only a presentation hint.
+  if(target==='approved' && !['owner','admin','manager'].includes(String(state.tenant.role||'').toLowerCase()))return;
+  const button=h('button','primary',target==='approved'?'Approve purchase order':'Submit for approval');
+  button.type='button';
+  button.addEventListener('click',async()=>{
+    if(state.busy||button.disabled || state.tenant?.tenant_id!==tenant || state.branch?.id!==branch)return;
+    if(!confirm((target==='approved'?'Approve':'Submit')+' purchase order '+(order.order_number||'')+'? This does not receive stock.'))return;
+    state.busy=true;button.disabled=true;
+    $('order-status-feedback').textContent='Updating order status…';
+    try{
+      await request('/purchase-orders/'+encodeURIComponent(order.id)+'/status',
+        {method:'PATCH',body:JSON.stringify({status:target})});
+      $('order-status-feedback').textContent='Status updated. Refreshing order details…';
+      if(state.tenant?.tenant_id===tenant&&state.branch?.id===branch)await openPurchaseOrderDetail(order.id);
+    }catch(e){
+      $('order-status-feedback').textContent='Status change not confirmed: '+e.message+
+        '. Review the current order before attempting another change.';
+    }finally{state.busy=false;}
+  });
+  actions.append(button);panel.hidden=false;
 }
 async function openPurchaseOrderForm(){
   if(!state.tenant||!state.branch)return;
