@@ -1,0 +1,16 @@
+# Browser POS and API, served from one HTTPS origin.
+# Only Khanya web + API services share the external public-edge network.
+pos.ithute.co.ls {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+    }
+    handle /api/* {
+        reverse_proxy khanya-api:8009
+    }
+    handle {
+        reverse_proxy khanya-web:8080
+    }
+}
