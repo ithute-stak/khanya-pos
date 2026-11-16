@@ -409,3 +409,39 @@ test('purchasing overview is read-only and uses current business scope',async()=
  assert.ok(node('orders-list').children.length>0);
  assert.equal(calls.some(c=>c.options.method==='POST'||c.options.method==='PATCH'),false);
 });
+
+test('purchase order form loads current suppliers and branch products',async()=>{
+  const {context,calls,node}=harness();
+  await vm.runInContext('openPurchaseOrderForm()',context);
+  const suppliers=calls.find(c=>c.url==='/api/v1/suppliers');
+  assert.ok(suppliers);
+  assert.equal(suppliers.options.headers['X-Tenant-ID'],'tenant-1');
+  assert.equal(suppliers.options.headers['X-Branch-ID'],'branch-1');
+  assert.equal(node('purchase-order-save').disabled,false);
+  assert.ok(node('purchase-order-product').children.length>0);
+});
+
+test('invalid purchase order cannot post or receive stock',async()=>{
+  const {context,node,calls}=harness();
+  await vm.runInContext('openPurchaseOrderForm()',context);
+  node('purchase-order-form').fields={supplier_id:'supplier-one',product_id:'da25eb22-1b39-4cc7-bf2e-87ef63a8cde0',quantity:'1.0009',unit_cost:'10.50'};
+  await vm.runInContext('savePurchaseOrder({preventDefault(){},currentTarget:document.getElementById("purchase-order-form")})',context);
+  assert.equal(calls.some(c=>c.options.method==='POST'),false);
+});
+
+test('purchase order uses purchase order endpoint only and never receives stock',async()=>{
+  const {context,node,calls,productId}=harness();
+  await vm.runInContext('openPurchaseOrderForm()',context);
+  node('purchase-order-form').fields={supplier_id:'supplier-one',product_id:productId,quantity:'2.000',unit_cost:'10.50',notes:'Regular order'};
+  // POST is not simulated as successful in this test fixture, so the catch path must deny repeat submission.
+  await vm.runInContext('savePurchaseOrder({preventDefault(){},currentTarget:document.getElementById("purchase-order-form")})',context);
+  const posts=calls.filter(c=>c.options.method==='POST');
+  assert.equal(posts.length,1);
+  assert.equal(posts[0].url,'/api/v1/purchase-orders');
+  const data=JSON.parse(posts[0].options.body);
+  assert.equal(data.lines[0].product_id,productId);
+  assert.equal(data.lines[0].quantity,'2.000');
+  assert.equal(data.lines[0].unit_cost,'10.50');
+  assert.equal(calls.some(c=>c.url==='/api/v1/purchases'&&c.options.method==='POST'),false);
+  assert.equal(node('purchase-order-save').disabled,true);
+});
