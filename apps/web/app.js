@@ -3,7 +3,7 @@
    tenant and QR permissions are verified by the existing FastAPI backend. */
 const $ = id => document.getElementById(id);
 const state = { access: null, refresh: null, me: null, tenant: null, branch: null,
-  products: [], customers: [], cart: new Map(), busy: false, productEdit: null, pendingId: null, currentView: 'checkout' };
+  products: [], customers: [], suppliers: [], cart: new Map(), busy: false, productEdit: null, pendingId: null, currentView: 'checkout' };
 const money = value => 'M ' + Number(value || 0).toLocaleString('en-LS', {
   minimumFractionDigits: 2, maximumFractionDigits: 2
 });
@@ -50,7 +50,7 @@ async function request(path, options = {}, retry = true) {
 function signOut(remote = true) {
   if (remote && state.access) request('/auth/logout',{method:'POST'}).catch(()=>{});
   state.access = null; state.refresh = null; state.me = null; state.tenant = null;
-  state.branch = null; state.products = []; state.customers = []; state.productEdit = null; state.cart.clear(); state.pendingId = null;
+  state.branch = null; state.products = []; state.customers = []; state.suppliers = []; state.productEdit = null; state.cart.clear(); state.pendingId = null;
   $('app-view').hidden = true; $('session-controls').hidden = true; $('login-view').hidden = false;
   $('password').value = ''; $('identifier').focus(); clearNotify();
 }
@@ -103,7 +103,7 @@ function switchScope(kind) {
     state.branch = (state.tenant.branches || []).find(b=>b.id === $('branch-picker').value);
     $('branch-title').textContent = (state.branch?.name || 'No active branch') + ' · ' + state.tenant.role;
   }
-  state.cart.clear(); state.customers=[]; cancelProductEdit(); state.pendingId = null; $('cash-received').value = ''; renderCart();
+  state.cart.clear(); state.customers=[]; state.suppliers=[]; $('suppliers-list').replaceChildren(); cancelProductEdit(); state.pendingId = null; $('cash-received').value = ''; renderCart();
   loadProducts().catch(e=>notify(e.message,true));
 }
 async function loadProducts() {
@@ -538,6 +538,45 @@ async function loadHistory(){
     if(!sales.length)box.append(h('p','empty','No sales recorded yet.'));
   }catch(e){box.replaceChildren(h('p','empty',e.message));}
 }
+async function loadSuppliers(){
+  const target=$('suppliers-list');target.replaceChildren(h('p','empty','Loading suppliers…'));
+  const tenant=state.tenant?.tenant_id;
+  try {
+    const suppliers=await request('/suppliers');
+    if(!state.tenant || state.tenant.tenant_id!==tenant)return;
+    state.suppliers=Array.isArray(suppliers)?suppliers:[];
+    renderSuppliers();
+  }catch(e){target.replaceChildren(h('p','empty','Unable to load suppliers: '+e.message));}
+}
+function renderSuppliers(){
+  const target=$('suppliers-list');target.replaceChildren();
+  const term=$('suppliers-search').value.trim().toLowerCase();
+  const found=state.suppliers.filter(p=>[p.name,p.code,p.phone]
+    .some(value=>String(value||'').toLowerCase().includes(term)));
+  for(const supplier of found){
+    const row=h('div','record'),left=h('div'),right=h('div');
+    left.append(h('strong',null,supplier.name),h('small',null,supplier.code+' · '+(supplier.phone||'No phone')));
+    right.append(h('small',null,'Outstanding: '+money(supplier.outstanding_balance)));
+    row.append(left,right);target.append(row);
+  }
+  if(!found.length)target.append(h('p','empty','No suppliers found.'));
+}
+async function saveSupplier(event){
+  event.preventDefault();if(state.busy || !state.tenant || !state.branch)return;
+  const data=new FormData(event.currentTarget);
+  const payload={name:formValue(data,'name'),code:formValue(data,'code').toUpperCase(),phone:formValue(data,'phone')||null};
+  if(payload.name.length<2 || !payload.code){notify('Enter supplier name and code.',true);return;}
+  if(!confirm('Create supplier '+payload.name+' for the current business?'))return;
+  const tenant=state.tenant.tenant_id;
+  state.busy=true;$('save-supplier').disabled=true;
+  try {
+    await request('/suppliers',{method:'POST',body:JSON.stringify(payload)});
+    if(state.tenant?.tenant_id===tenant){event.currentTarget.reset();await loadSuppliers();}
+    notify('Supplier saved.');
+  }catch(e){notify('Supplier was not confirmed: '+e.message+'; check the list before retrying.',true);}
+  finally{state.busy=false;$('save-supplier').disabled=false;}
+}
+
 async function verifyQr(){
   const token=$('qr-code').value.trim(),box=$('qr-result');box.hidden=false;
   if(!token.startsWith('khanyaqr:v1:')){box.textContent='This is not a Khanya QR locator.';return;}
@@ -553,6 +592,7 @@ function openView(name){
   for(const el of document.querySelectorAll('.tab'))el.classList.toggle('active',el.dataset.view===name);
   if(name==='history')loadHistory();
   if(name==='customers')loadCustomers();
+  if(name==='suppliers')loadSuppliers();
   if(name==='stock')renderStock();
 }
 $('login-form').addEventListener('submit',login);
@@ -575,6 +615,9 @@ $('stock-form').addEventListener('submit',saveStock);
 $('customer-form').addEventListener('submit',saveCustomer);
 $('stock-refresh').addEventListener('click',()=>loadProducts().catch(e=>notify(e.message,true)));
 $('customers-refresh').addEventListener('click',loadCustomers);
+$('suppliers-refresh').addEventListener('click',loadSuppliers);
+$('suppliers-search').addEventListener('input',renderSuppliers);
+$('supplier-form').addEventListener('submit',saveSupplier);
 $('customers-search').addEventListener('input',renderCustomers);
 for(const tab of document.querySelectorAll('.tab'))tab.addEventListener('click',()=>openView(tab.dataset.view));
 renderCart();
