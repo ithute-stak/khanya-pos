@@ -91,6 +91,10 @@
 <div id="sales-report-result" role="status" aria-live="polite"><p class="muted">Select a date range to load authoritative sales results.</p></div>
 <p class="hint">Totals come from the backend; report access follows your current business and branch permissions.</p>
 </section></div>
+<div id="purchasing-view" class="view" hidden><div class="management-grid">
+<section class="panel"><div class="panel-head"><h2>Purchases received</h2><button type="button" id="purchases-refresh" class="secondary">Refresh</button></div><div id="purchases-list"></div><p class="hint">Purchases listed here are recorded business transactions. Creating or receiving stock is not enabled in this view yet.</p></section>
+<section class="panel"><div class="panel-head"><h2>Purchase orders</h2><button type="button" id="orders-refresh" class="secondary">Refresh</button></div><div id="orders-list"></div><p class="hint">Order approval, receiving and supplier payments are being migrated separately with audit controls.</p></section>
+</div></div>
 <div id="qr-view" class="view" hidden><div class="panel"><div class="panel-head"><h2>Khanya QR Centre</h2></div><p class="muted">Scan or paste a signed Khanya QR code to verify its resource against your business permissions.</p><label>QR code<input id="qr-code" placeholder="khanyaqr:v1:..." autocomplete="off"></label><button id="verify-qr" class="primary">Verify QR</button><div id="qr-result" class="notice" hidden></div><p class="hint">The code is an identifier, not proof of payment. Browser camera scanning is being added separately; USB scanners that type into fields work now.</p></div></div>
 </section>
 </main>
