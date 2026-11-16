@@ -7,6 +7,7 @@ const path = require('node:path');
 function harness() {
   const nodes = new Map();
   const calls = [];
+  const prints = [];
   const node = (id) => {
     if (!nodes.has(id)) {
       nodes.set(id, {
@@ -27,6 +28,7 @@ function harness() {
     ['/api/v1/products/'+productId]: {id:productId,name:'Notebook',sku:'BOOK',barcode:'1234567890123',unit:'unit',selling_price:'15.50',cost_price:'5.00',track_stock:true,reorder_level:'5.000',category_id:'category-1',brand_id:'brand-1',unit_id:null,is_active:true},
     '/api/v1/products': [{id: productId, name:'Notebook',sku:'BOOK',selling_price:'15.50',track_stock:true,on_hand:'20'}],
     '/api/v1/inventory/adjustments': {movement_id:'movement-one',on_hand:'25.000'},
+    '/api/v1/pos/sales/sale-one': {id:'sale-one',sale_number:'SALE-001',status:'completed',subtotal:'15.50',tax_total:'0.00',total:'15.50',balance_due:'0.00',payment_status:'paid',completed_at:'2026-11-16T07:00:00Z',returned_total:'0.00',lines:[{product_name:'Notebook',quantity:'1.000',unit_price:'15.50',line_total:'15.50',returned_quantity:'0.000'}],payments:[{method:'cash',amount:'15.50'}],returns:[]},
     '/api/v1/pos/sales/complete': {id: 'sale-one', sale_number:'SALE-001'},
     '/api/v1/pos/sales?limit=60': [{id:'sale-one',sale_number:'SALE-001',completed_at:'2026-11-16T07:00:00Z',payment_status:'paid',total:'15.50',balance_due:'0.00'}]
   };
@@ -40,6 +42,7 @@ function harness() {
     crypto: { randomUUID: () => 'a2ea51c2-3043-46ea-91f6-a51e8b010da1' },
     FormData: class { constructor(form) {this.fields=form.fields||{};} get(k) {return this.fields[k]??null;} has(k){return Object.prototype.hasOwnProperty.call(this.fields,k);} },
     confirm: () => true,
+    window: {print:()=>prints.push(true)},
     console
   });
   const source = fs.readFileSync(path.join(__dirname,'app.js'),'utf8');
@@ -49,7 +52,7 @@ function harness() {
   state.tenant = {tenant_id:'tenant-1'};
   state.branch = {id:'branch-1'};
   state.products = responses['/api/v1/products'];
-  return {context, state, calls, node, productId};
+  return {context, state, calls, node, productId, prints};
 }
 
 test('cash checkout posts an idempotent operation to the actual backend sale route', async () => {
@@ -222,4 +225,49 @@ test('scanner submit clears only after product is accepted',()=>{
   node('barcode-input').value='invalid-code';
   vm.runInContext('submitBarcode({preventDefault(){}})',context);
   assert.equal(node('barcode-input').value,'invalid-code');
+});
+
+
+test('print recorded receipt uses exact authorized sale detail endpoint',async()=>{
+  const {context,calls,node,prints,state}=harness();
+  state.tenant.tenant_name='Test Shop';
+  state.branch.name='Main Counter';
+  await vm.runInContext('printSaleReceipt("sale-one")',context);
+  const call=calls.find(x=>x.url==='/api/v1/pos/sales/sale-one');
+  assert.ok(call,'Receipt must be fetched from the current branch sale detail');
+  assert.equal(call.options.headers['X-Tenant-ID'],'tenant-1');
+  assert.equal(call.options.headers['X-Branch-ID'],'branch-1');
+  assert.equal(node('receipt-merchant').textContent,'Test Shop');
+  assert.equal(node('receipt-branch').textContent,'Main Counter');
+  assert.equal(node('receipt-number').textContent,'Sale SALE-001');
+  assert.equal(node('receipt-total').textContent,'M 15.50');
+  assert.equal(node('receipt-payment-status').textContent,'Payment status: paid');
+  assert.equal(prints.length,1);
+  assert.equal(node('receipt-print').hidden,true);
+  assert.equal(state.busy,false);
+  assert.equal(calls.some(x=>x.options.method==='POST'),false);
+});
+
+test('receipt printing refuses incomplete server data and never prints cart values',async()=>{
+  const {context,prints,node}=harness();
+  assert.throws(()=>vm.runInContext('renderSaleReceipt({sale_number:"SALE-4",status:"draft",lines:[],payments:[]})',context));
+  assert.equal(prints.length,0);
+  assert.equal(node('receipt-total').textContent,'');
+});
+
+test('receipt shows returns and actual recorded payments, not proof of a new transaction',()=>{
+  const {context,node}=harness();
+  const sale={
+    sale_number:'SALE-001',status:'completed',completed_at:'2026-11-16T07:00:00Z',
+    payment_status:'partially_refunded',subtotal:'100.00',tax_total:'0.00',
+    total:'100.00',balance_due:'0.00',returned_total:'25.00',
+    lines:[{product_name:'Original product',quantity:'2.000',unit_price:'50.00',line_total:'100.00',returned_quantity:'0.500'}],
+    payments:[{method:'cash',amount:'100.00'}],
+    returns:[{return_number:'RET-1',total:'25.00'}]
+  };
+  context.saleForTest=sale;
+  vm.runInContext('renderSaleReceipt(saleForTest)',context);
+  assert.equal(node('receipt-total').textContent,'M 100.00');
+  assert.ok(node('receipt-returns').children.length>=2);
+  assert.ok(node('receipt-payments').children.length>=2);
 });

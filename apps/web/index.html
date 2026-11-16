@@ -68,6 +68,14 @@
 <div id="qr-view" class="view" hidden><div class="panel"><div class="panel-head"><h2>Khanya QR Centre</h2></div><p class="muted">Scan or paste a signed Khanya QR code to verify its resource against your business permissions.</p><label>QR code<input id="qr-code" placeholder="khanyaqr:v1:..." autocomplete="off"></label><button id="verify-qr" class="primary">Verify QR</button><div id="qr-result" class="notice" hidden></div><p class="hint">The code is an identifier, not proof of payment. Browser camera scanning is being added separately; USB scanners that type into fields work now.</p></div></div>
 </section>
 </main>
+<section id="receipt-print" class="receipt-paper" hidden aria-label="Sale receipt">
+  <div class="receipt-header"><strong id="receipt-merchant"></strong><div id="receipt-branch"></div><small>KHANYA POS · SALES RECEIPT</small></div>
+  <div class="receipt-meta"><div id="receipt-number"></div><div id="receipt-date"></div><div id="receipt-payment-status"></div></div>
+  <div id="receipt-lines"></div>
+  <div class="receipt-totals"><div><span>Subtotal</span><strong id="receipt-subtotal"></strong></div><div><span>Tax</span><strong id="receipt-tax"></strong></div><div><span>Total</span><strong id="receipt-total"></strong></div><div><span>Balance due</span><strong id="receipt-balance"></strong></div></div>
+  <div id="receipt-payments"></div><div id="receipt-returns"></div>
+  <div class="receipt-foot">Thank you for shopping with us.<div>Printed from a recorded Khanya POS sale.</div></div>
+</section>
 <div id="toast" role="status" aria-live="polite" hidden></div>
 <footer>KHANYA POS · People | Process | Profit · A Brighter Tomorrow</footer>
 </body></html>
