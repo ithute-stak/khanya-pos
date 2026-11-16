@@ -233,6 +233,45 @@ function submitBarcode(event){
   if(input.focus)input.focus();
 }
 
+// A signed QR is a locator only. Never accept client-supplied product IDs without server resolution.
+async function scanProductQr(value) {
+  if (state.busy || !state.access || !state.tenant || !state.branch) return false;
+  const token=String(value||'').trim(), feedback=$('product-qr-feedback');
+  if (!token.startsWith('khanyaqr:v1:') || token.length>4096) {
+    feedback.textContent='Scan a valid signed Khanya product QR.';
+    return false;
+  }
+  const tenantId=state.tenant.tenant_id, branchId=state.branch.id;
+  feedback.textContent='Verifying product QR…';
+  $('product-qr-add').disabled=true;
+  try {
+    const resolved=await request('/qr/resolve',{method:'POST',body:JSON.stringify({token})});
+    if(!state.tenant || !state.branch || state.tenant.tenant_id!==tenantId || state.branch.id!==branchId) {
+      feedback.textContent='Business or branch changed; scan again.'; return false;
+    }
+    if(resolved.kind!=='product' || typeof resolved.resource_id!=='string') {
+      feedback.textContent='This QR is not a product QR.';return false;
+    }
+    const matches=state.products.filter(p=>p.id===resolved.resource_id);
+    if(matches.length!==1) {
+      feedback.textContent='Product not found in the current branch. Refresh products and scan again.';
+      return false;
+    }
+    const p=matches[0], before=state.cart.get(p.id)||0;
+    addProduct(p.id);
+    const added=(state.cart.get(p.id)||0)>before;
+    feedback.textContent=added?p.name+' added to cart.':'Could not add product. Check available stock.';
+    return added;
+  } catch(e) { feedback.textContent='QR verification failed: '+e.message;return false; }
+  finally { $('product-qr-add').disabled=false; }
+}
+async function submitProductQr(event) {
+  event.preventDefault();
+  const input=$('product-qr-input');
+  if(await scanProductQr(input.value))input.value='';
+  if(input.focus)input.focus();
+}
+
 async function saveProduct(event) {
   event.preventDefault();
   if (state.busy) return;
@@ -531,6 +570,7 @@ $('verify-qr').addEventListener('click',verifyQr);
 $('product-form').addEventListener('submit',saveProduct);
 $('cancel-product-edit').addEventListener('click',()=>{if(!state.busy)cancelProductEdit();});
 $('barcode-form').addEventListener('submit',submitBarcode);
+$('product-qr-form').addEventListener('submit',submitProductQr);
 $('stock-form').addEventListener('submit',saveStock);
 $('customer-form').addEventListener('submit',saveCustomer);
 $('stock-refresh').addEventListener('click',()=>loadProducts().catch(e=>notify(e.message,true)));
