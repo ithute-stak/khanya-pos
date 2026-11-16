@@ -26,7 +26,7 @@ function harness() {
     '/api/v1/pos/sales?limit=60': [{id:'sale-one',sale_number:'SALE-001',completed_at:'2026-11-16T07:00:00Z',payment_status:'paid',total:'15.50',balance_due:'0.00'}]
   };
   const context = vm.createContext({
-    document: { getElementById: node, querySelectorAll: () => [] },
+    document: { getElementById: node, createElement: tag => node('created-' + tag + '-' + nodes.size), querySelectorAll: () => [] },
     fetch: async (url, options) => {
       calls.push({url, options});
       assert.ok(url in responses, 'Unknown backend route: ' + url);
