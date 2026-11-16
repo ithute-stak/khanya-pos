@@ -717,6 +717,62 @@ async function loadPurchasing(){
     }catch(e){target.replaceChildren(h('p','empty','Unable to load: '+e.message));}
   }));
 }
+async function openPurchaseOrderForm(){
+  if(!state.tenant||!state.branch)return;
+  const tenant=state.tenant.tenant_id,branch=state.branch.id;
+  const supplierSelect=$('purchase-order-supplier'),productSelect=$('purchase-order-product');
+  supplierSelect.replaceChildren();productSelect.replaceChildren();
+  $('purchase-order-save').disabled=true;
+  $('purchase-order-feedback').textContent='Loading current suppliers and products…';
+  openView('order-create');
+  try{
+    const suppliers=await request('/suppliers');
+    if(state.tenant?.tenant_id!==tenant||state.branch?.id!==branch)return;
+    for(const p of (Array.isArray(suppliers)?suppliers:[])){
+      if(!p.id)continue;
+      const option=h('option',null,p.name||p.code);option.value=p.id;supplierSelect.append(option);
+    }
+    for(const p of state.products.filter(item=>item.id&&item.is_active!==false)){
+      const option=h('option',null,p.name+' · '+(p.sku||''));option.value=p.id;productSelect.append(option);
+    }
+    const ready=!!supplierSelect.children.length&&!!productSelect.children.length;
+    $('purchase-order-save').disabled=!ready;
+    $('purchase-order-feedback').textContent=ready?'': 'Create a supplier and an active product first.';
+  }catch(e){$('purchase-order-feedback').textContent='Unable to load suppliers: '+e.message;}
+}
+async function savePurchaseOrder(event){
+  event.preventDefault();
+  if(state.busy||$('purchase-order-save').disabled||!state.tenant||!state.branch)return;
+  const form=event.currentTarget,fields=new FormData(form);
+  const supplier_id=formValue(fields,'supplier_id'),product_id=formValue(fields,'product_id');
+  const quantity=formValue(fields,'quantity'),unit_cost=formValue(fields,'unit_cost');
+  const notes=formValue(fields,'notes')||null;
+  if(!Array.from($('purchase-order-supplier').children).some(x=>x.value===supplier_id) ||
+     !state.products.some(p=>p.id===product_id&&p.is_active!==false) ||
+     !/^\d+(?:\.\d{1,3})?$/.test(quantity) || Number(quantity)<=0 ||
+     !/^\d+(?:\.\d{1,2})?$/.test(unit_cost) || Number(unit_cost)<=0){
+    $('purchase-order-feedback').textContent='Select a valid supplier, product, quantity and unit cost.';
+    return;
+  }
+  if(!confirm('Create purchase order? This does not receive stock or pay a supplier.'))return;
+  const tenant=state.tenant.tenant_id,branch=state.branch.id;
+  state.busy=true;$('purchase-order-save').disabled=true;
+  $('purchase-order-feedback').textContent='Submitting purchase order…';
+  try{
+    await request('/purchase-orders',{method:'POST',body:JSON.stringify({
+      supplier_id,notes,lines:[{product_id,quantity,unit_cost,tax_total:0}]
+    })});
+    $('purchase-order-feedback').textContent='Purchase order created.';
+    form.reset();
+    if(state.tenant?.tenant_id===tenant&&state.branch?.id===branch){
+      openView('purchasing');
+    }
+  }catch(e){
+    // The order endpoint has no documented idempotency contract: refuse blind resubmits.
+    $('purchase-order-feedback').textContent='Submission is unconfirmed: '+e.message+
+      '. Return to Purchasing, refresh orders and verify before trying again.';
+  }finally{state.busy=false;}
+}
 async function verifyQr(){
   const token=$('qr-code').value.trim(),box=$('qr-result');box.hidden=false;
   if(!token.startsWith('khanyaqr:v1:')){box.textContent='This is not a Khanya QR locator.';return;}
@@ -768,6 +824,9 @@ $('staff-refresh').addEventListener('click',loadStaff);
 $('staff-search').addEventListener('input',renderStaff);
 $('purchases-refresh').addEventListener('click',loadPurchasing);
 $('orders-refresh').addEventListener('click',loadPurchasing);
+$('order-create-open').addEventListener('click',openPurchaseOrderForm);
+$('order-create-back').addEventListener('click',()=>openView('purchasing'));
+$('purchase-order-form').addEventListener('submit',savePurchaseOrder);
 $('customers-search').addEventListener('input',renderCustomers);
 for(const tab of document.querySelectorAll('.tab'))tab.addEventListener('click',()=>openView(tab.dataset.view));
 renderCart();
