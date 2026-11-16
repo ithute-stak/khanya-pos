@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
+import 'package:khanya_pos/features/qr/data/qr_sale_receipt_repository.dart';
+import 'package:khanya_pos/features/qr/printing/signed_receipt_qr_pdf.dart';
 import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/features/pos/data/sales_repository.dart';
 import 'package:khanya_pos/features/pos/domain/sales_history.dart';
@@ -134,6 +138,27 @@ class SaleDetailPage extends StatelessWidget {
 class _SaleDetailView extends StatelessWidget {
   const _SaleDetailView();
 
+  Future<void> _printReceiptQr(BuildContext context, SaleDetail sale) async {
+    try {
+      final receipt = await context.read<QrSaleReceiptRepository>().issue(sale.id);
+      final bytes = await buildSignedReceiptQrPdf(receipt);
+      if (!context.mounted) return;
+      await Printing.layoutPdf(
+        name: 'Khanya-Receipt-QR-${receipt.saleNumber}.pdf',
+        format: PdfPageFormat.a6,
+        onLayout: (_) async => bytes,
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Receipt QR is unavailable. Check your connection, permissions and QR server configuration.'),
+        ),
+      );
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<SaleDetailCubit, SaleDetailState>(
@@ -152,6 +177,13 @@ class _SaleDetailView extends StatelessWidget {
           appBar: AppBar(
             title: Text(sale?.saleNumber ?? 'Sale Details'),
             actions: [
+              if (sale != null)
+                IconButton(
+                  key: const Key('print-sale-receipt-qr'),
+                  tooltip: 'Print sale receipt QR',
+                  onPressed: state.busy ? null : () => _printReceiptQr(context, sale),
+                  icon: const Icon(Icons.qr_code_2_outlined),
+                ),
               IconButton(
                 tooltip: 'Refresh sale',
                 onPressed: state.busy ? null : () => context.read<SaleDetailCubit>().load(),
