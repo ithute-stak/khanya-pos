@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
+import 'package:khanya_pos/features/qr/data/qr_customer_card_repository.dart';
+import 'package:khanya_pos/features/qr/printing/customer_qr_card_pdf.dart';
 import 'package:khanya_pos/core/money/scaled_decimal.dart';
 import 'package:khanya_pos/core/sync/sync_bloc.dart';
 import 'package:khanya_pos/features/customers/data/customer_repository.dart';
@@ -38,6 +42,26 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
     setState(_reload);
   }
 
+  Future<void> _printCustomerQrCard() async {
+    try {
+      final card = await context.read<QrCustomerCardRepository>().issue(widget.customerId);
+      final bytes = await buildCustomerQrCardPdf(card);
+      if (!mounted) return;
+      await Printing.layoutPdf(
+        name: 'Khanya-Customer-QR-${card.customerCode}.pdf',
+        format: PdfPageFormat.a6,
+        onLayout: (_) async => bytes,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Customer QR card unavailable. Check server configuration and access permissions.'),
+        ),
+      );
+    }
+  }
+
   Future<void> _recordPayment(CustomerDetail detail) async {
     final saved = await showDialog<bool>(
       context: context,
@@ -69,6 +93,12 @@ class _CustomerDetailPageState extends State<CustomerDetailPage> {
       appBar: AppBar(
         title: const Text('Customer Credit'),
         actions: [
+          IconButton(
+            key: const Key('print-customer-qr'),
+            tooltip: 'Print customer QR card',
+            onPressed: _printCustomerQrCard,
+            icon: const Icon(Icons.qr_code_2_outlined),
+          ),
           IconButton(
             tooltip: 'Refresh customer',
             onPressed: _refresh,

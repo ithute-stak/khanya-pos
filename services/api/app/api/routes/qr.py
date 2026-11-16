@@ -10,6 +10,7 @@ from app.api.deps import TenantContext, get_tenant_context, require_permissions
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.services.qr_identity import QRIdentityError, read_qr_identity
+from app.services.qr_customer_cards import CustomerQRNotFound, issue_customer_qr_card
 from app.services.qr_product_labels import ProductQRLabelNotFound, issue_product_qr_label
 from app.services.qr_resource_resolver import (
     QRResourceForbidden,
@@ -111,3 +112,36 @@ async def create_product_qr_label(
     except ProductQRLabelNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return ProductQRLabelView(**label)
+
+
+class CustomerQRCardView(BaseModel):
+    kind: str
+    customer_id: UUID
+    customer_name: str
+    customer_code: str
+    qr_token: str
+    expires_at: datetime
+
+
+@router.post("/customers/{customer_id}/card", response_model=CustomerQRCardView)
+async def create_customer_qr_card(
+    customer_id: UUID,
+    valid_days: int = Query(default=30, ge=1, le=30),
+    context: TenantContext = Depends(require_permissions("customers.read")),
+    db: AsyncSession = Depends(get_db),
+) -> CustomerQRCardView:
+    """Authenticated lookup card; does not approve credit or grant loyalty points."""
+    secret = get_settings().qr_locator_signing_secret
+    if len(secret.encode("utf-8")) < 32:
+        raise HTTPException(status_code=503, detail="QR signing is not configured")
+    try:
+        card = await issue_customer_qr_card(
+            db,
+            tenant_id=context.tenant.id,
+            customer_id=customer_id,
+            signing_secret=secret,
+            valid_days=valid_days,
+        )
+    except CustomerQRNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return CustomerQRCardView(**card)
