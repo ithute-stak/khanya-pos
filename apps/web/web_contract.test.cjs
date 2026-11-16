@@ -24,6 +24,7 @@ function harness() {
   const productId = 'da25eb22-1b39-4cc7-bf2e-87ef63a8cde0';
   const responses = {
     '/api/v1/reports/sales-summary?start=2026-11-01T00%3A00%3A00.000Z&end=2026-11-16T23%3A59%3A59.999Z': {sale_count:2,gross_sales:'120.00',returns_total:'20.00',net_sales:'100.00',tax_total:'0.00',balance_due:'0.00',cost_of_goods:'40.00',gross_profit:'60.00',refunded_amount:'20.00'},
+    '/api/v1/staff': [{membership_id:'staff-1',user_id:'u-1',display_name:'Counter Manager',email:'manager@example.test',role:'manager',phone:null,is_active:true,branch_ids:['branch-1']}],
     '/api/v1/expenses': [{id:'exp-1',expense_number:'EXP-001',category:'Transport',description:'Fuel',amount:'45.50',payment_method:'cash',expense_date:'2026-11-16'}],
     '/api/v1/suppliers': [{id:'supplier-one',code:'SUP1',name:'Supplier One',phone:'50000000',outstanding_balance:'30.50'}],
     '/api/v1/customers?limit=250': [{id:'customer-one',code:'C1',name:'Test Customer',outstanding_balance:'0.00'}],
@@ -370,4 +371,25 @@ test('invalid report interval prevents backend calls', async()=>{
  node('report-end').value='2026-11-01';
  await vm.runInContext('loadSalesReport({preventDefault(){}})',context);
  assert.equal(calls.length,0);
+});
+
+test('staff directory is read-only and requests tenant-scoped staff endpoint', async()=>{
+ const {context,calls,node,state}=harness();
+ await vm.runInContext('loadStaff()',context);
+ const call=calls.find(c=>c.url==='/api/v1/staff');
+ assert.ok(call);
+ assert.equal(call.options.headers['X-Tenant-ID'],'tenant-1');
+ assert.equal(call.options.headers['X-Branch-ID'],'branch-1');
+ assert.equal(state.staff.length,1);
+ assert.ok(node('staff-list').children.length>0);
+ assert.equal(calls.some(c=>c.options.method==='POST'||c.options.method==='PATCH'),false);
+});
+
+test('staff directory client filter does not modify server data', async()=>{
+ const {context,node,state}=harness();
+ await vm.runInContext('loadStaff()',context);
+ node('staff-search').value='nothing matches';
+ vm.runInContext('renderStaff()',context);
+ assert.equal(state.staff.length,1);
+ assert.equal(node('staff-list').children[0].textContent,'No staff members found or accessible.');
 });
