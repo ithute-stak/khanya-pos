@@ -417,6 +417,69 @@ async function checkout() {
     catch(e) { notify('Sale '+sale.sale_number+' recorded successfully, but refreshing products failed: '+e.message,true); }
   }
 }
+
+function receiptLine(label, value, className=''){
+  const line=h('div','receipt-row '+className);
+  line.append(h('span',null,label),h('strong',null,value));
+  return line;
+}
+function renderSaleReceipt(detail) {
+  if (!detail || detail.status!=='completed' || !Array.isArray(detail.lines) ||
+      !Array.isArray(detail.payments) || !detail.sale_number) {
+    throw new Error('The server did not return a completed sale receipt.');
+  }
+  const merchant=state.tenant?.tenant_name || '';
+  const branch=state.branch?.name || '';
+  $('receipt-merchant').textContent=merchant;
+  $('receipt-branch').textContent=branch;
+  $('receipt-number').textContent='Sale '+detail.sale_number;
+  $('receipt-date').textContent='Date: '+new Date(detail.completed_at).toLocaleString();
+  $('receipt-payment-status').textContent='Payment status: '+String(detail.payment_status || 'unknown');
+  const lines=$('receipt-lines');lines.replaceChildren();
+  for(const item of detail.lines){
+    const row=h('div','receipt-item');
+    row.append(h('strong',null,item.product_name||'Item'),
+      receiptLine(String(item.quantity)+' × '+money(item.unit_price),money(item.line_total)));
+    if(Number(item.returned_quantity)>0) row.append(h('small',null,'Returned: '+item.returned_quantity));
+    lines.append(row);
+  }
+  $('receipt-subtotal').textContent=money(detail.subtotal);
+  $('receipt-tax').textContent=money(detail.tax_total);
+  $('receipt-total').textContent=money(detail.total);
+  $('receipt-balance').textContent=money(detail.balance_due);
+  const payments=$('receipt-payments'); payments.replaceChildren(h('strong',null,'Payments'));
+  if(detail.payments.length){
+    for(const payment of detail.payments) payments.append(receiptLine(
+      String(payment.method).replace(/_/g,' '),money(payment.amount)));
+  }else payments.append(h('div',null,'No payments recorded'));
+  const returns=$('receipt-returns');returns.replaceChildren();
+  if(Number(detail.returned_total)>0){
+    returns.append(h('strong',null,'Returns / refunds recorded'),
+      receiptLine('Returned value',money(detail.returned_total)));
+    for(const item of detail.returns||[]){
+      returns.append(receiptLine(item.return_number||'Return',money(item.total)));
+    }
+  }
+}
+async function printSaleReceipt(saleId){
+  if(state.busy || !state.branch || !state.tenant)return;
+  state.busy=true;
+  try{
+    const detail=await request('/pos/sales/'+encodeURIComponent(saleId));
+    // Only the authoritative server detail is printed, never locally cached cart prices.
+    renderSaleReceipt(detail);
+    $('receipt-print').hidden=false;
+    // The browser's native print dialog prints a dedicated thermal-width layout.
+    // If the user cancels, no sale, payment or inventory action is performed.
+    window.print();
+  }catch(e){
+    notify('Cannot print sale receipt: '+e.message,true);
+  }finally{
+    $('receipt-print').hidden=true;
+    state.busy=false;
+  }
+}
+
 async function loadHistory(){
   const box=$('history-list');box.replaceChildren(h('p','empty','Loading sales…'));
   try{
@@ -427,6 +490,10 @@ async function loadHistory(){
         new Date(sale.completed_at).toLocaleString()+' · '+sale.payment_status));
       right.append(h('strong',null,money(sale.total)),h('small',null,
         'Balance: '+money(sale.balance_due)));
+      const receiptButton=h('button','secondary','Print receipt');
+      receiptButton.type='button';
+      receiptButton.addEventListener('click',()=>printSaleReceipt(sale.id));
+      right.append(receiptButton);
       row.append(left,right);box.append(row);
     }
     if(!sales.length)box.append(h('p','empty','No sales recorded yet.'));
