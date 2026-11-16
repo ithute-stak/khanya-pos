@@ -24,6 +24,8 @@ function harness() {
   const productId = 'da25eb22-1b39-4cc7-bf2e-87ef63a8cde0';
   const responses = {
     '/api/v1/reports/sales-summary?start=2026-11-01T00%3A00%3A00.000Z&end=2026-11-16T23%3A59%3A59.999Z': {sale_count:2,gross_sales:'120.00',returns_total:'20.00',net_sales:'100.00',tax_total:'0.00',balance_due:'0.00',cost_of_goods:'40.00',gross_profit:'60.00',refunded_amount:'20.00'},
+    '/api/v1/purchases': [{id:'purchase-1',purchase_number:'PUR-001',status:'received',supplier_invoice_number:'INV-01',total:'80.00',balance_due:'10.00'}],
+    '/api/v1/purchase-orders': [{id:'order-1',order_number:'PO-001',status:'draft',total:'80.00'}],
     '/api/v1/expenses': [{id:'exp-1',expense_number:'EXP-001',category:'Transport',description:'Fuel',amount:'45.50',payment_method:'cash',expense_date:'2026-11-16'}],
     '/api/v1/suppliers': [{id:'supplier-one',code:'SUP1',name:'Supplier One',phone:'50000000',outstanding_balance:'30.50'}],
     '/api/v1/customers?limit=250': [{id:'customer-one',code:'C1',name:'Test Customer',outstanding_balance:'0.00'}],
@@ -370,4 +372,18 @@ test('invalid report interval prevents backend calls', async()=>{
  node('report-end').value='2026-11-01';
  await vm.runInContext('loadSalesReport({preventDefault(){}})',context);
  assert.equal(calls.length,0);
+});
+
+test('purchasing overview is read-only and uses current business scope',async()=>{
+ const {context,node,calls}=harness();
+ await vm.runInContext('loadPurchasing()',context);
+ for(const route of ['/api/v1/purchases','/api/v1/purchase-orders']){
+   const call=calls.find(c=>c.url===route);
+   assert.ok(call,route);
+   assert.equal(call.options.headers['X-Tenant-ID'],'tenant-1');
+   assert.equal(call.options.headers['X-Branch-ID'],'branch-1');
+ }
+ assert.ok(node('purchases-list').children.length>0);
+ assert.ok(node('orders-list').children.length>0);
+ assert.equal(calls.some(c=>c.options.method==='POST'||c.options.method==='PATCH'),false);
 });
