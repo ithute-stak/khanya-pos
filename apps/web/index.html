@@ -102,6 +102,11 @@
 <section class="panel"><div class="panel-head"><h2>Purchases received</h2><button type="button" id="purchases-refresh" class="secondary">Refresh</button></div><div id="purchases-list"></div><p class="hint">Purchases listed here are recorded business transactions. Creating or receiving stock is not enabled in this view yet.</p></section>
 <section class="panel"><div class="panel-head"><h2>Purchase orders</h2><button type="button" id="order-create-open" class="secondary">New order</button><button type="button" id="orders-refresh" class="secondary">Refresh</button></div><div id="orders-list"></div><p class="hint">Order approval, receiving and supplier payments are being migrated separately with audit controls.</p></section>
 </div></div>
+<div id="order-detail-view" class="view" hidden><section class="panel">
+<div class="panel-head"><h2>Purchase order details</h2><button type="button" id="order-detail-back" class="secondary">Back to purchasing</button></div>
+<div id="order-detail-content" role="status" aria-live="polite"></div>
+<p class="hint">This view is read-only. Approval and inventory receipt are separate operations.</p>
+</section></div>
 <div id="order-create-view" class="view" hidden><section class="panel">
 <div class="panel-head"><h2>Create purchase order</h2><button type="button" id="order-create-back" class="secondary">Back to purchasing</button></div>
 <p class="muted">Create a purchase order for one product. This does not receive inventory or pay the supplier.</p>
