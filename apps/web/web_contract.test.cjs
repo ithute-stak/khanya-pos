@@ -23,6 +23,7 @@ function harness() {
   };
   const productId = 'da25eb22-1b39-4cc7-bf2e-87ef63a8cde0';
   const responses = {
+    '/api/v1/expenses': [{id:'exp-1',expense_number:'EXP-001',category:'Transport',description:'Fuel',amount:'45.50',payment_method:'cash',expense_date:'2026-11-16'}],
     '/api/v1/suppliers': [{id:'supplier-one',code:'SUP1',name:'Supplier One',phone:'50000000',outstanding_balance:'30.50'}],
     '/api/v1/customers?limit=250': [{id:'customer-one',code:'C1',name:'Test Customer',outstanding_balance:'0.00'}],
     '/api/v1/customers': {id:'customer-new',code:'CNEW',name:'New Customer'},
@@ -329,4 +330,22 @@ test('supplier search only filters loaded current business suppliers',async()=>{
   vm.runInContext('renderSuppliers()',context);
   assert.equal(node('suppliers-list').children.length,1);
   assert.equal(node('suppliers-list').children[0].textContent,'No suppliers found.');
+});
+
+test('expense history requests existing backend with current tenant and branch scope',async()=>{
+ const {context,calls,node}=harness();
+ await vm.runInContext('loadExpenses()',context);
+ const call=calls.find(x=>x.url==='/api/v1/expenses');
+ assert.ok(call);
+ assert.equal(call.options.headers['X-Tenant-ID'],'tenant-1');
+ assert.equal(call.options.headers['X-Branch-ID'],'branch-1');
+ assert.ok(node('expenses-list').children.length>0);
+});
+
+test('expense amount validation rejects invalid decimal amounts before any writes',async()=>{
+ const {context,node,calls}=harness();
+ const form=node('expense-form');
+ form.fields={category:'Travel',description:'Fuel',amount:'1.999',payment_method:'cash'};
+ await vm.runInContext('saveExpense({preventDefault(){},currentTarget:document.getElementById("expense-form")})',context);
+ assert.equal(calls.filter(x=>x.options.method==='POST').length,0);
 });
