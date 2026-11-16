@@ -1,0 +1,71 @@
+name: Khanya Web Client
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "deploy/web.compose.yaml"
+      - "deploy/caddy/pos.Caddyfile"
+      - ".github/workflows/web-client.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "deploy/web.compose.yaml"
+      - "deploy/caddy/pos.Caddyfile"
+      - ".github/workflows/web-client.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    name: Validate and publish Khanya web image
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JavaScript
+        run: node --check apps/web/app.js
+      - name: Validate HTML structure and API safety
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          html = Path("apps/web/index.html").read_text()
+          js = Path("apps/web/app.js").read_text()
+          assert '<script src="/app.js" defer></script>' in html
+          assert '/api/v1' in js
+          assert "client_operation_id:operation" in js
+          assert "method:'cash'" in js
+          assert "sessionStorage" not in js and "localStorage" not in js
+          assert "innerHTML" not in js
+          print("Khanya web smoke assertions passed")
+          PY
+      - uses: docker/setup-buildx-action@v3
+      - name: Validate production container build
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/web
+          push: false
+          tags: khanya-pos-web:validation
+      - name: Authenticate GitHub Container Registry
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish immutable web image
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/web
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/khanya-pos-web:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/khanya-pos-web:main
+      - name: Verify image exists in GHCR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: docker buildx imagetools inspect "ghcr.io/${{ github.repository_owner }}/khanya-pos-web:${{ github.sha }}"
