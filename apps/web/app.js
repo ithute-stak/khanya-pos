@@ -627,6 +627,41 @@ async function saveExpense(event){
   finally{state.busy=false;$('save-expense').disabled=false;}
 }
 
+async function loadSalesReport(event){
+  event.preventDefault();
+  const start=$('report-start').value,end=$('report-end').value;
+  const target=$('sales-report-result');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!/^\d{4}-\d{2}-\d{2}$/.test(end)||start>end){
+    target.replaceChildren(h('p','empty','Select a valid beginning and ending date.'));return;
+  }
+  if(!state.tenant || !state.branch)return;
+  const tenant=state.tenant.tenant_id,branch=state.branch.id;
+  $('run-sales-report').disabled=true;
+  target.replaceChildren(h('p','empty','Loading sales report…'));
+  try{
+    const startIso=start+'T00:00:00.000Z', endIso=end+'T23:59:59.999Z';
+    const report=await request('/reports/sales-summary?start='+encodeURIComponent(startIso)+'&end='+encodeURIComponent(endIso));
+    if(state.tenant?.tenant_id!==tenant || state.branch?.id!==branch)return;
+    target.replaceChildren();
+    const records=[
+      ['Completed sales',String(report.sale_count??0)],
+      ['Gross sales',money(report.gross_sales)],
+      ['Returns',money(report.returns_total)],
+      ['Net sales',money(report.net_sales)],
+      ['Tax',money(report.tax_total)],
+      ['Outstanding',money(report.balance_due)],
+      ['Cost of goods',money(report.cost_of_goods)],
+      ['Gross profit',money(report.gross_profit)],
+      ['Refunded amount',money(report.refunded_amount)]
+    ];
+    for(const [name,value] of records){
+      const line=h('div','record');
+      line.append(h('strong',null,name),h('span',null,value));
+      target.append(line);
+    }
+  }catch(e){target.replaceChildren(h('p','empty','Sales report unavailable: '+e.message));}
+  finally{$('run-sales-report').disabled=false;}
+}
 async function verifyQr(){
   const token=$('qr-code').value.trim(),box=$('qr-result');box.hidden=false;
   if(!token.startsWith('khanyaqr:v1:')){box.textContent='This is not a Khanya QR locator.';return;}
@@ -671,6 +706,7 @@ $('suppliers-search').addEventListener('input',renderSuppliers);
 $('supplier-form').addEventListener('submit',saveSupplier);
 $('expenses-refresh').addEventListener('click',loadExpenses);
 $('expense-form').addEventListener('submit',saveExpense);
+$('sales-report-form').addEventListener('submit',loadSalesReport);
 $('customers-search').addEventListener('input',renderCustomers);
 for(const tab of document.querySelectorAll('.tab'))tab.addEventListener('click',()=>openView(tab.dataset.view));
 renderCart();
