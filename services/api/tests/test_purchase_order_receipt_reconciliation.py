@@ -31,7 +31,7 @@ async def test_evidence_cannot_automatically_clear_invoice_link_even_with_moveme
     )
     db.scalar.side_effect = [order, 1, 1]
     rows = MagicMock()
-    rows.all.return_value = [(LINE, ACTOR, True)]
+    rows.all.return_value = [(LINE, ACTOR, True, 1)]
     db.execute.return_value = rows
     operations = MagicMock()
     operations.all.return_value = [operation]
@@ -57,7 +57,7 @@ async def test_evidence_detects_missing_stock_ledger_movement():
     db.execute = AsyncMock()
     db.scalars = AsyncMock()
     rows = MagicMock()
-    rows.all.return_value = [(LINE, ACTOR, True)]
+    rows.all.return_value = [(LINE, ACTOR, True, 1)]
     db.execute.return_value = rows
     operations = MagicMock()
     operations.all.return_value = [
@@ -94,3 +94,24 @@ async def test_reconciliation_route_requires_branch_and_returns_404_for_missing_
     assert error.value.status_code == 404
     assert spy.await_args.kwargs["tenant_id"] == TENANT
     assert spy.await_args.kwargs["branch_id"] == BRANCH
+
+
+@pytest.mark.asyncio
+async def test_historical_received_counters_without_receipt_operations_are_flagged():
+    db = MagicMock(spec=AsyncSession)
+    db.scalar = AsyncMock(return_value=SimpleNamespace(status="part_received"))
+    db.execute = AsyncMock()
+    db.scalars = AsyncMock()
+    rows = MagicMock()
+    rows.all.return_value = [(LINE, ACTOR, True, 2)]
+    db.execute.return_value = rows
+    operations = MagicMock()
+    operations.all.return_value = []
+    db.scalars.return_value = operations
+    report = await receipt_reconciliation_evidence(
+        db, tenant_id=TENANT, branch_id=BRANCH, order_id=ORDER
+    )
+    assert report["received_line_count"] == 1
+    assert report["receipt_operation_count"] == 0
+    assert report["historical_unattributed_receipts_possible"] is True
+    assert report["activation_allowed"] is False
