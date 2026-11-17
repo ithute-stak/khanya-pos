@@ -152,6 +152,7 @@ async def test_approved_purchase_order_updates_stock_once_and_records_movement(m
     )
     stock = SimpleNamespace(on_hand=Decimal("10.000"), reserved=Decimal("0.000"))
     db.scalar.side_effect = [None, order, product, stock]
+    db.scalars.return_value = MagicMock()
     db.scalars.return_value.all.return_value = [line]
 
     result = await apply_purchase_order_receipt(
