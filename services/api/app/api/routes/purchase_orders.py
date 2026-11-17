@@ -286,7 +286,17 @@ async def receive_purchase_order_lines(
     payload: PurchaseOrderReceive,
     context: TenantContext = Depends(require_permissions("purchases.write")),
     db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, object]:
+    # Historical implementation only increments order counters, without an
+    # idempotent receipt operation or authoritative stock ledger movement.
+    # Deny it before touching the database unless an explicit compatibility
+    # override is set. The V2 endpoint has its own independent release gate.
+    if not settings.purchase_order_legacy_receive_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Legacy purchase-order receipt posting is disabled; use the audited V2 workflow once enabled",
+        )
     order = await db.scalar(
         select(PurchaseOrder)
         .where(PurchaseOrder.id == order_id, PurchaseOrder.tenant_id == context.tenant.id)
