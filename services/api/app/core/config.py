@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     max_receipt_upload_bytes: int = 15 * 1024 * 1024
     # Disabled by default. Read-only lookup NEVER permits charging or settling.
     # Release gate: never enable until accounting/reconciliation and API tests are approved.
+    # Historical endpoint updates order-line counters without stock movements.
+    # Keep unavailable until it is retired or migrated to the audited V2 flow.
+    purchase_order_legacy_receive_enabled: bool = False
     purchase_order_receipt_v2_enabled: bool = False
     mobile_money_status_lookup_enabled: bool = False
     mobile_money_gateway_https_origin: str = ""
