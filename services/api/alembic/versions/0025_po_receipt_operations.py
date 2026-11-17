@@ -3,6 +3,8 @@
 Revision ID: 0025_po_receipt_operations
 Revises: 0024_mobile_money_sale_intent
 """
+from pathlib import Path
+print("RECEIPT_MIGRATION_DIAGNOSTIC:", [(p.name, next((line.strip() for line in p.read_text().splitlines() if line.strip().startswith("revision =") or line.strip().startswith("revision:")), "?"), next((line.strip() for line in p.read_text().splitlines() if line.strip().startswith("down_revision =") or line.strip().startswith("down_revision:")), "?")) for p in sorted(Path(__file__).parent.glob("*.py")) if not p.name.startswith("__")], flush=True)
 from alembic import op
 import sqlalchemy as sa
 
