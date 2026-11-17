@@ -94,7 +94,7 @@ async def receipt_reconciliation_evidence(
             # No PO-to-purchase invoice foreign key currently exists.
             # A journal alone must not imply supplier-invoice ownership.
             "supplier_invoice_link_verified": False,
-            "requires_review": not matches_stock or journal_count != 1 or True,
+            "requires_review": True,  # No persisted invoice attribution: never auto-clear
         })
 
     # Explicitly fail closed: the historic receipt endpoint could have updated
