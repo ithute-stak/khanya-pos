@@ -33,7 +33,7 @@ from app.models.identity import (
 )
 from app.models.mobile_money import MobileMoneyCollection, MobileMoneyConsumption
 from app.models.inventory_controls import Stocktake, StocktakeLine, StockTransfer, StockTransferLine
-from app.models.operations import AttendancePunch, PurchaseOrder, PurchaseOrderLine, StaffShiftSchedule
+from app.models.operations import AttendancePunch, PurchaseOrder, PurchaseOrderLine, PurchaseOrderReceiptOperation, StaffShiftSchedule
 from app.models.outbox import OutboxEvent
 from app.models.platform import PlatformEvent
 from app.models.purchasing import (
@@ -86,6 +86,7 @@ __all__ = [
     "PurchaseLine",
     "PurchaseOrder",
     "PurchaseOrderLine",
+    "PurchaseOrderReceiptOperation",
     "Sale",
     "SaleLine",
     "SaleReturn",
