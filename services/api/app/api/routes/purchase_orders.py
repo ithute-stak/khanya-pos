@@ -11,11 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import Principal, TenantContext, get_current_principal, require_permissions
 from app.core.database import get_db
+from app.core.config import Settings, get_settings
 from app.models.commerce import Product
 from app.models.operations import PurchaseOrder, PurchaseOrderLine
 from app.models.purchasing import Supplier
 from app.security.permissions import role_has_permissions
 from app.services.pricing import money
+from app.services.purchase_order_receipt_service import ReceiptConflict, apply_purchase_order_receipt
 
 router = APIRouter()
 
@@ -45,6 +47,11 @@ class PurchaseOrderReceiveLine(BaseModel):
 
 class PurchaseOrderReceive(BaseModel):
     lines: list[PurchaseOrderReceiveLine] = Field(min_length=1)
+
+class PurchaseOrderReceiveV2(BaseModel):
+    client_operation_id: UUID
+    lines: list[PurchaseOrderReceiveLine] = Field(min_length=1)
+
 
 
 def _po_payload(row: PurchaseOrder) -> dict[str, object]:
@@ -224,6 +231,54 @@ async def update_purchase_order_status(
     await db.commit()
     return _po_payload(order)
 
+
+
+@router.post("/{order_id}/receive-v2", status_code=status.HTTP_201_CREATED)
+async def receive_purchase_order_v2(
+    order_id: UUID,
+    payload: PurchaseOrderReceiveV2,
+    context: TenantContext = Depends(require_permissions("purchases.write")),
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, object]:
+    """Release-gated replay-safe receipt entrypoint.
+
+    Disabled until the separate accounting and reconciliation acceptance gate
+    is satisfied. Do not bypass the settings flag in production.
+    """
+    if not settings.purchase_order_receipt_v2_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Idempotent purchase-order receiving is not enabled",
+        )
+    if context.branch is None:
+        raise HTTPException(status_code=400, detail="X-Branch-ID is required")
+    try:
+        result = await apply_purchase_order_receipt(
+            db,
+            tenant_id=context.tenant.id,
+            branch_id=context.branch.id,
+            order_id=order_id,
+            actor_id=principal.user.id,
+            operation_id=payload.client_operation_id,
+            lines=[(line.line_id, line.quantity_received) for line in payload.lines],
+        )
+        await db.commit()
+    except ReceiptConflict as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
+    except Exception:
+        await db.rollback()
+        raise
+    return {
+        "purchase_order_id": result.purchase_order_id,
+        "client_operation_id": result.operation_id,
+        "status": result.status,
+        "idempotent_replay": result.idempotent_replay,
+    }
 
 @router.post("/{order_id}/receive")
 async def receive_purchase_order_lines(
