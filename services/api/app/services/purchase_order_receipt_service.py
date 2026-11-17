@@ -152,7 +152,7 @@ async def apply_purchase_order_receipt(
         stocks[product_id] = stock
 
     operation = PurchaseOrderReceiptOperation(
-        tenant_id=tenant_id, branch_id=branch_id,
+        id=uuid4(), tenant_id=tenant_id, branch_id=branch_id,
         purchase_order_id=order_id, client_operation_id=operation_id,
         payload_fingerprint=fingerprint,
         received_lines=[{"line_id":line_id,"quantity":qty} for line_id,qty in normalized],
