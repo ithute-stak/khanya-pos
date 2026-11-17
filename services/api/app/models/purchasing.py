@@ -94,6 +94,27 @@ class PurchaseLine(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     line_total: Mapped[Decimal] = mapped_column(Numeric(18, 2))
 
 
+class PurchaseOrderInvoiceLink(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Explicit audited PO-to-purchase association; no implicit matching.
+
+    A posted purchase can belong to at most one order. A purchase order may
+    reference multiple supplier invoices, subject to future allocation rules.
+    """
+
+    __tablename__ = "purchase_order_invoice_links"
+    __table_args__ = (
+        UniqueConstraint("purchase_id", name="uq_po_invoice_link_purchase"),
+        UniqueConstraint("tenant_id", "purchase_order_id", "purchase_id", name="uq_po_invoice_link_scope"),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    branch_id: Mapped[UUID] = mapped_column(ForeignKey("branches.id", ondelete="RESTRICT"), nullable=False, index=True)
+    purchase_order_id: Mapped[UUID] = mapped_column(ForeignKey("purchase_orders.id", ondelete="RESTRICT"), nullable=False, index=True)
+    purchase_id: Mapped[UUID] = mapped_column(ForeignKey("purchases.id", ondelete="RESTRICT"), nullable=False)
+    linked_by_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    link_reason: Mapped[str] = mapped_column(String(240), nullable=False)
+
+
 class SupplierPayment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "supplier_payments"
     __table_args__ = (
