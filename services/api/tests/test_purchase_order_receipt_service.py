@@ -178,3 +178,36 @@ async def test_approved_purchase_order_updates_stock_once_and_records_movement(m
     assert notifications[0]["payload"]["on_hand"] == "12.000"
     db.flush.assert_awaited_once()
     db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_over_receipt_rejected_without_stock_mutation(monkeypatch):
+    from types import SimpleNamespace
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from unittest.mock import AsyncMock, MagicMock
+    from app.services import purchase_order_receipt_service as service
+
+    db = MagicMock(spec=AsyncSession)
+    db.scalar = AsyncMock()
+    db.execute = AsyncMock()
+    db.scalars = AsyncMock()
+    db.flush = AsyncMock()
+    monkeypatch.setattr(service, "acquire_operation_lock", AsyncMock())
+    order = SimpleNamespace(id=ORDER, status="approved")
+    line = SimpleNamespace(
+        id=LINE, product_id=UUID("00000000-0000-4000-8000-000000000007"),
+        quantity=Decimal("3.000"), quantity_received=Decimal("2.500"),
+    )
+    db.scalar.side_effect = [None, order]
+    rows = MagicMock()
+    rows.all.return_value = [line]
+    db.scalars.return_value = rows
+    with pytest.raises(ReceiptConflict, match="exceeds"):
+        await apply_purchase_order_receipt(
+            db, tenant_id=TENANT, branch_id=BRANCH,
+            order_id=ORDER, actor_id=ACTOR, operation_id=OPERATION,
+            lines=[(LINE, Decimal("1.000"))],
+        )
+    assert line.quantity_received == Decimal("2.500")
+    db.add.assert_not_called()
+    db.flush.assert_not_awaited()
