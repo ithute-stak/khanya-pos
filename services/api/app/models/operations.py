@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -85,3 +85,31 @@ class PurchaseOrderLine(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     tax_total: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0.00"))
     line_total: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+
+
+class PurchaseOrderReceiptOperation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Durable replay record; receipt execution must write this in its stock transaction."""
+
+    __tablename__ = "purchase_order_receipt_operations"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "client_operation_id",
+            name="uq_po_receipt_tenant_operation",
+        ),
+        CheckConstraint(
+            "length(payload_fingerprint) = 64",
+            name="ck_po_receipt_fingerprint_length",
+        ),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
+    branch_id: Mapped[UUID] = mapped_column(ForeignKey("branches.id", ondelete="CASCADE"), index=True)
+    purchase_order_id: Mapped[UUID] = mapped_column(
+        ForeignKey("purchase_orders.id", ondelete="RESTRICT"), index=True
+    )
+    client_operation_id: Mapped[UUID] = mapped_column(nullable=False)
+    payload_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    received_lines: Mapped[list] = mapped_column(JSON(), nullable=False)
+    created_by_user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
