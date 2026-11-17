@@ -18,6 +18,7 @@ from app.models.purchasing import Supplier
 from app.security.permissions import role_has_permissions
 from app.services.pricing import money
 from app.services.purchase_order_receipt_service import ReceiptConflict, apply_purchase_order_receipt
+from app.services.purchase_order_receipt_reconciliation import receipt_reconciliation_evidence
 
 router = APIRouter()
 
@@ -231,6 +232,23 @@ async def update_purchase_order_status(
     await db.commit()
     return _po_payload(order)
 
+
+
+@router.get("/{order_id}/receipt-reconciliation")
+async def purchase_order_receipt_reconciliation(
+    order_id: UUID,
+    context: TenantContext = Depends(require_permissions("purchases.read", "accounting.read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Read-only scoped evidence. Never imply that an invoice has been matched."""
+    if context.branch is None:
+        raise HTTPException(status_code=400, detail="X-Branch-ID is required")
+    report = await receipt_reconciliation_evidence(
+        db, tenant_id=context.tenant.id, branch_id=context.branch.id, order_id=order_id
+    )
+    if report is None:
+        raise HTTPException(status_code=404, detail="Purchase order not found for this branch")
+    return report
 
 
 @router.post("/{order_id}/receive-v2", status_code=status.HTTP_201_CREATED)
