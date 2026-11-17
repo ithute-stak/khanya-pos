@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 
 from app.core.database import SessionLocal
 from app.models.commerce import BranchProductStock, Product, StockMovement
+from app.models.accounting import JournalEntry
 from app.models.identity import Branch, Tenant, User
 from app.models.operations import PurchaseOrder, PurchaseOrderLine, PurchaseOrderReceiptOperation
 from app.models.outbox import OutboxEvent
@@ -177,4 +178,39 @@ async def test_over_receipt_rolls_back_all_financial_and_inventory_effects():
         await db.rollback()
     assert await snapshot(tenant_id, branch_id, order_id, product_id, line_id) == (
         Decimal("10.000"), Decimal("0.000"), "approved", 0, 0, 0, 0,
+    )
+
+
+@pytest.mark.asyncio
+async def test_receipt_is_not_a_supplier_invoice_or_payment():
+    """Until invoice reconciliation policy is approved, receiving does not
+    create a second payable, accounting journal, purchase or payment.
+    """
+    from app.models.purchasing import Purchase
+
+    ids = await prepare_order()
+    tenant_id, branch_id, order_id, _, product_id, line_id = ids
+    result = await receive(ids, uuid4(), Decimal("2.000"))
+    assert result.status == "part_received"
+    async with SessionLocal() as db:
+        purchase_count = await db.scalar(
+            select(func.count()).select_from(Purchase).where(
+                Purchase.tenant_id == tenant_id,
+            )
+        )
+        journal_count = await db.scalar(
+            select(func.count()).select_from(JournalEntry).where(
+                JournalEntry.tenant_id == tenant_id,
+            )
+        )
+        payment_count = await db.scalar(
+            select(func.count()).select_from(SupplierPayment).where(
+                SupplierPayment.tenant_id == tenant_id,
+            )
+        )
+    assert (purchase_count, journal_count, payment_count) == (0, 0, 0)
+    # Inventory has moved despite the accounting liability not being posted.
+    # This is an activation blocker, not a production-ready financial state.
+    assert await snapshot(tenant_id, branch_id, order_id, product_id, line_id) == (
+        Decimal("12.000"), Decimal("2.000"), "part_received", 1, 1, 1, 0,
     )
