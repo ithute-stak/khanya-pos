@@ -6,6 +6,7 @@ has no authoritative PO-to-purchase-invoice relationship.
 """
 from __future__ import annotations
 
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -36,14 +37,14 @@ async def receipt_reconciliation_evidence(
         return None
 
     lines = (await db.execute(
-        select(PurchaseOrderLine.id, PurchaseOrderLine.product_id, Product.track_stock)
+        select(PurchaseOrderLine.id, PurchaseOrderLine.product_id, Product.track_stock, PurchaseOrderLine.quantity_received)
         .join(Product, Product.id == PurchaseOrderLine.product_id)
         .where(
             PurchaseOrderLine.purchase_order_id == order_id,
             Product.tenant_id == tenant_id,
         )
     )).all()
-    tracked = {str(line_id) for line_id, _, is_tracked in lines if is_tracked}
+    tracked = {str(line_id) for line_id, _, is_tracked, _ in lines if is_tracked}
     operations = (await db.scalars(
         select(PurchaseOrderReceiptOperation)
         .where(
@@ -54,6 +55,7 @@ async def receipt_reconciliation_evidence(
         .order_by(PurchaseOrderReceiptOperation.created_at, PurchaseOrderReceiptOperation.id)
     )).all()
 
+    received_line_count = sum(1 for _, _, _, received in lines if Decimal(received or 0) > 0)
     receipt_rows = []
     for operation in operations:
         movement_count = int(await db.scalar(
@@ -103,6 +105,8 @@ async def receipt_reconciliation_evidence(
         "order_id": order_id,
         "order_status": order.status,
         "receipt_operation_count": len(receipt_rows),
+        "received_line_count": received_line_count,
+        "historical_unattributed_receipts_possible": received_line_count > 0 and not operations,
         "receipts": receipt_rows,
         "supplier_invoice_link_verified": False,
         "accounting_reconciliation_ready": False,
