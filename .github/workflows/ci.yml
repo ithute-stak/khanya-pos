@@ -81,6 +81,7 @@ jobs:
           tests/test_sale_return_constraints_integration.py
           tests/test_sale_return_till_guard_integration.py
           tests/test_purchase_service_integration.py
+          tests/test_purchase_order_receipt_integration.py
           tests/test_supplier_payment_integration.py
           tests/test_accounting_service_integration.py
           tests/test_cash_flow_integration.py
