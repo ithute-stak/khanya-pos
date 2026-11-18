@@ -44,7 +44,8 @@ def check():
     assert "data-open-form" in js
     assert "data-back-view" in js
     assert "openView(section+'-form')" in js
-    assert "if(name==='purchasing' || name==='purchases')loadPurchasing()" in js
+    assert "purchasing:['orders-list',()=>loadPurchasing('orders-list')]" in js
+    assert "purchases:['purchases-list',()=>loadPurchasing('purchases-list')]" in js
     assert "mobile-cart-mode" in css
     assert ".screen-content" in css
     assert "receipt-print" in html
