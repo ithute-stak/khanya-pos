@@ -30,7 +30,7 @@ def test_mobile_nav_markup_and_navigation_sections():
     assert len(inspector.ids) == len(set(inspector.ids)), "Duplicate DOM IDs"
     assert inspector.mobile_views == ["checkout", "catalog", "stock", "customers"]
     assert inspector.more_views == [
-        "suppliers", "expenses", "reports", "staff",
+        "overview", "suppliers", "expenses", "reports", "staff",
         "purchasing", "history", "qr",
     ]
     assert all(f'{name}-view' in inspector.ids for name in inspector.mobile_views + inspector.more_views)
