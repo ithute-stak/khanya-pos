@@ -51,6 +51,7 @@ function signOut(remote = true) {
   if (remote && state.access) request('/auth/logout',{method:'POST'}).catch(()=>{});
   state.access = null; state.refresh = null; state.me = null; state.tenant = null;
   state.branch = null; state.products = []; state.customers = []; state.suppliers = []; state.staff = []; state.productEdit = null; state.cart.clear(); state.pendingId = null; state.expensePending = null;
+  closeMobileMenus(); $('mobile-bottom-nav').hidden = true;
   $('app-view').hidden = true; $('session-controls').hidden = true; $('login-view').hidden = false;
   $('password').value = ''; $('identifier').focus(); clearNotify();
 }
@@ -70,6 +71,8 @@ async function login(event) {
     }
     $('welcome').textContent = me.display_name || me.email || 'Signed in';
     $('login-view').hidden = true; $('app-view').hidden = false; $('session-controls').hidden = false;
+    $('mobile-bottom-nav').hidden = false;
+    openView('checkout');
     fillTenants(); await loadProducts();
   } catch (error) { if (!state.me) signOut(false); notify(error.message, true); }
   finally { state.busy = false; $('login-button').disabled = false; }
@@ -871,8 +874,37 @@ async function verifyQr(){
     box.textContent='Verified '+response.kind+' · '+response.resource_id+'\nAccessible within your current business.';
   }catch(e){box.textContent='QR verification failed: '+e.message;}
 }
+const primaryMobileViews = new Set(['checkout','catalog','stock','customers']);
+function closeMobileMenus() {
+  $('mobile-more-menu').hidden = true;
+  $('mobile-more-toggle').setAttribute('aria-expanded', 'false');
+  $('account-menu').hidden = true;
+  $('account-toggle').setAttribute('aria-expanded', 'false');
+}
+function syncMobileNavigation(name) {
+  for (const item of document.querySelectorAll('[data-mobile-view]')) {
+    const selected = item.dataset.mobileView === name;
+    item.classList.toggle('active', selected);
+    if (selected) item.setAttribute('aria-current', 'page');
+    else item.removeAttribute('aria-current');
+  }
+  const moreIsActive = !primaryMobileViews.has(name);
+  $('mobile-more-toggle').classList.toggle('active', moreIsActive);
+  if (moreIsActive) $('mobile-more-toggle').setAttribute('aria-current', 'page');
+  else $('mobile-more-toggle').removeAttribute('aria-current');
+}
+function setAccountMenu(open) {
+  $('account-menu').hidden = !open;
+  $('account-toggle').setAttribute('aria-expanded', String(open));
+  if (open) {
+    $('mobile-more-menu').hidden = true;
+    $('mobile-more-toggle').setAttribute('aria-expanded', 'false');
+  }
+}
 function openView(name){
+  closeMobileMenus();
   state.currentView=name;
+  syncMobileNavigation(name);
   for(const el of document.querySelectorAll('.view'))el.hidden=el.id!==name+'-view';
   for(const el of document.querySelectorAll('.tab'))el.classList.toggle('active',el.dataset.view===name);
   if(name==='history')loadHistory();
@@ -919,4 +951,37 @@ $('order-detail-back').addEventListener('click',()=>openView('purchasing'));
 $('purchase-order-form').addEventListener('submit',savePurchaseOrder);
 $('customers-search').addEventListener('input',renderCustomers);
 for(const tab of document.querySelectorAll('.tab'))tab.addEventListener('click',()=>openView(tab.dataset.view));
+for(const action of document.querySelectorAll('[data-mobile-view]')) action.addEventListener('click',()=>openView(action.dataset.mobileView));
+for(const action of document.querySelectorAll('[data-mobile-more-view]')) action.addEventListener('click',()=>openView(action.dataset.mobileMoreView));
+$('mobile-more-toggle').addEventListener('click',()=>{
+  const opening = $('mobile-more-menu').hidden;
+  closeMobileMenus();
+  $('mobile-more-menu').hidden = !opening;
+  $('mobile-more-toggle').setAttribute('aria-expanded',String(opening));
+  if(opening) $('mobile-more-close').focus();
+});
+$('mobile-more-close').addEventListener('click',()=>{
+  closeMobileMenus(); $('mobile-more-toggle').focus();
+});
+$('account-toggle').addEventListener('click',()=>{
+  const opening = $('account-menu').hidden;
+  setAccountMenu(opening);
+});
+$('account-logout').addEventListener('click',()=>signOut());
+$('account-workspace').addEventListener('click',()=>{
+  closeMobileMenus();
+  $('tenant-picker').focus({preventScroll:true});
+  document.querySelector('.workspace-head').scrollIntoView({behavior:'smooth',block:'start'});
+});
+document.addEventListener('keydown',event=>{
+  if(event.key === 'Escape') closeMobileMenus();
+});
+document.addEventListener('click',event=>{
+  if(!$('mobile-more-menu').hidden && !event.target.closest('#mobile-more-menu, #mobile-more-toggle')){
+    $('mobile-more-menu').hidden=true;
+    $('mobile-more-toggle').setAttribute('aria-expanded','false');
+  }
+  if(!$('account-menu').hidden && !event.target.closest('#account-menu, #account-toggle'))setAccountMenu(false);
+});
+
 renderCart();
