@@ -52,6 +52,12 @@ jobs:
           cache-dependency-path: services/api/pyproject.toml
       - name: Install
         run: pip install -e ".[dev]"
+      - name: Validate VPS image launcher syntax and safe default
+        run: |
+          bash -n ../../scripts/pull-khanya-latest.sh
+          grep -F 'Only --pull-only is supported' ../../scripts/pull-khanya-latest.sh
+          grep -F 'docker manifest inspect "$api_image"' ../../scripts/pull-khanya-latest.sh
+          grep -F 'docker manifest inspect "$web_image"' ../../scripts/pull-khanya-latest.sh
       - name: Compile
         run: python -m compileall app alembic
       - name: Apply migrations
