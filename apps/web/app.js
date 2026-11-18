@@ -370,7 +370,7 @@ async function loadCustomers(){
     if(state.tenant?.tenant_id!==tenant || state.branch?.id!==branch)return;
     state.customers=Array.isArray(customers)?customers:[];
     renderCustomers();
-  }catch(e){target.replaceChildren(h('p','empty','Unable to load customers: '+e.message));}
+  }catch(e){target.replaceChildren(h('p','empty','Unable to load customers: '+e.message));return false;}
 }
 function renderCustomers(){
   const target=$('customers-list');target.replaceChildren();
@@ -555,7 +555,7 @@ async function loadHistory(){
       row.append(left,right);box.append(row);
     }
     if(!sales.length)box.append(h('p','empty','No sales recorded yet.'));
-  }catch(e){box.replaceChildren(h('p','empty',e.message));}
+  }catch(e){box.replaceChildren(h('p','empty',e.message));return false;}
 }
 async function loadSuppliers(){
   const target=$('suppliers-list');showLazySkeleton('suppliers-list');
@@ -565,7 +565,7 @@ async function loadSuppliers(){
     if(!state.tenant || state.tenant.tenant_id!==tenant)return;
     state.suppliers=Array.isArray(suppliers)?suppliers:[];
     renderSuppliers();
-  }catch(e){target.replaceChildren(h('p','empty','Unable to load suppliers: '+e.message));}
+  }catch(e){target.replaceChildren(h('p','empty','Unable to load suppliers: '+e.message));return false;}
 }
 function renderSuppliers(){
   const target=$('suppliers-list');target.replaceChildren();
@@ -613,7 +613,7 @@ async function loadExpenses(){
       row.append(left,right);target.append(row);
     }
     if(!target.children.length)target.append(h('p','empty','No expenses recorded.'));
-  }catch(e){target.replaceChildren(h('p','empty','Unable to load expenses: '+e.message));}
+  }catch(e){target.replaceChildren(h('p','empty','Unable to load expenses: '+e.message));return false;}
 }
 async function saveExpense(event){
   event.preventDefault();if(state.busy || !state.tenant || !state.branch)return;
@@ -691,7 +691,7 @@ async function loadStaff(){
     if(state.tenant?.tenant_id!==tenant || state.branch?.id!==branch)return;
     state.staff=Array.isArray(data)?data:[];
     renderStaff();
-  }catch(e){target.replaceChildren(h('p','empty','Unable to load staff: '+e.message));}
+  }catch(e){target.replaceChildren(h('p','empty','Unable to load staff: '+e.message));return false;}
 }
 function renderStaff(){
   const target=$('staff-list');target.replaceChildren();
@@ -731,6 +731,7 @@ async function loadPurchasing(only = null){
       row.append(left,right);return row;
     }}
   ];
+  let failed=false;
   await Promise.all(kinds.filter(kind => !only || kind.target === only).map(async kind=>{
     const target=$(kind.target);showLazySkeleton(kind.target);
     try{
@@ -739,8 +740,9 @@ async function loadPurchasing(only = null){
       target.replaceChildren();
       for(const item of (Array.isArray(result)?result:[]))target.append(kind.render(item));
       if(!target.children.length)target.append(h('p','empty',kind.empty));
-    }catch(e){target.replaceChildren(h('p','empty','Unable to load: '+e.message));}
+    }catch(e){failed=true;target.replaceChildren(h('p','empty','Unable to load: '+e.message));}
   }));
+  return !failed;
 }
 async function openPurchaseOrderDetail(id){
   if(!state.tenant||!state.branch)return;
@@ -966,8 +968,11 @@ function loadScreenOnDemand(name,{force=false}={}){
   if(spec.target)showLazySkeleton(spec.target);
   const entry={promise:null,ok:false,at:0};
   lazyScreenCache.set(key,entry);
-  const task=Promise.resolve().then(spec.run).then(()=>{
-    if(lazyScreenCache.get(key)===entry){entry.ok=true;entry.at=Date.now();}
+  const task=Promise.resolve().then(spec.run).then(success=>{
+    if(lazyScreenCache.get(key)===entry){
+      if(success===false) lazyScreenCache.delete(key);
+      else{entry.ok=true;entry.at=Date.now();}
+    }
   }).catch(error=>{
     if(lazyScreenCache.get(key)===entry){
       lazyScreenCache.delete(key);
