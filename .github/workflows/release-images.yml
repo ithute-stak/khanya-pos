@@ -4,7 +4,6 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-  workflow_dispatch:
 
 concurrency:
   group: khanya-release-images
@@ -16,17 +15,17 @@ permissions:
 
 jobs:
   publish:
-    name: Publish tested API image
+    name: Publish tested API + Web images
     if: >-
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main')
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       API_IMAGE: ghcr.io/${{ github.repository_owner }}/khanya-pos-api
+      WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/khanya-pos-web
 
     steps:
       - name: Checkout tested commit
@@ -54,11 +53,24 @@ jobs:
             ${{ env.API_IMAGE }}:${{ env.RELEASE_SHA }}
             ${{ env.API_IMAGE }}:main
 
-      - name: Verify published image
-        run: docker buildx imagetools inspect "${API_IMAGE}:${RELEASE_SHA}"
+      - name: Publish Khanya Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/web
+          file: apps/web/Dockerfile
+          push: true
+          tags: |
+            ${{ env.WEB_IMAGE }}:${{ env.RELEASE_SHA }}
+            ${{ env.WEB_IMAGE }}:main
+
+      - name: Verify both published images
+        run: |
+          docker buildx imagetools inspect "${API_IMAGE}:${RELEASE_SHA}"
+          docker buildx imagetools inspect "${WEB_IMAGE}:${RELEASE_SHA}"
 
       - name: Release summary
         run: |
           echo "Khanya image published only; production VPS is unchanged."
           echo "API: ${API_IMAGE}:${RELEASE_SHA}"
+          echo "WEB: ${WEB_IMAGE}:${RELEASE_SHA}"
           echo "The VPS must pull the tested immutable image explicitly."
