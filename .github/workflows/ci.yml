@@ -63,6 +63,7 @@ jobs:
           python ../../scripts/test_web_mobile_shell.py
           python ../../scripts/test_web_task_screens.py
           node --check ../../apps/web/app.js
+          node --test ../../apps/web/lazy_screen.test.cjs
       - name: Compile
         run: python -m compileall app alembic
       - name: Apply migrations
