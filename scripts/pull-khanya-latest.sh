@@ -70,8 +70,8 @@ fi
 # --deploy only modifies the verified API and Web projects; NEVER "down" or "rm".
 old_api="$(docker inspect -f '{{.Config.Image}}' khanya-pos-api-1)"
 old_web="$(docker inspect -f '{{.Config.Image}}' khanya-web-web-1)"
-old_api_sha="\${old_api##*:}"
-old_web_sha="\${old_web##*:}"
+old_api_sha="${old_api##*:}"
+old_web_sha="${old_web##*:}"
 [[ "$old_api_sha" =~ ^[0-9a-f]{40}$ && "$old_web_sha" =~ ^[0-9a-f]{40}$ ]] || {
   echo "[Khanya] Running images lack immutable 40-character tags; refusing cutover." >&2; exit 1
 }
@@ -82,12 +82,12 @@ fi
 export KHANYA_IMAGE_TAG="$sha" KHANYA_WEB_IMAGE_TAG="$sha" KHANYA_ENV_FILE="$api_dir/.env"
 api_compose=(docker compose -p khanya-pos --env-file "$api_dir/.env" -f "$api_dir/compose.images.yaml")
 web_compose=(docker compose -p khanya-web --env-file "$web_dir/web.env" -f "$web_dir/web.compose.yaml")
-"\${api_compose[@]}" config --quiet
-"\${web_compose[@]}" config --quiet
+"${api_compose[@]}" config --quiet
+"${web_compose[@]}" config --quiet
 echo "[Khanya] Checking candidate backend imports"
 docker run --rm --entrypoint python "$api_image" -c 'import app.main; import alembic' >/dev/null
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
-backup="/opt/khanya-pos/backups/khanya-before-\${sha}-\${timestamp}.dump"
+backup="/opt/khanya-pos/backups/khanya-before-${sha}-${timestamp}.dump"
 echo "[Khanya] Backing up the ACTUAL khanya-pos DB container"
 docker exec khanya-pos-db-1 sh -c 'exec pg_dump -Fc -U "$POSTGRES_USER" "$POSTGRES_DB"' > "$backup"
 test -s "$backup"
@@ -100,17 +100,17 @@ rollback_apps() {
   if (( cutover == 1 )); then
     echo "[Khanya] Failure: restoring previous application images (NOT reverting DB migrations)" >&2
     export KHANYA_IMAGE_TAG="$old_api_sha" KHANYA_WEB_IMAGE_TAG="$old_web_sha"
-    "\${api_compose[@]}" up -d --no-deps --pull never api outbox-worker || true
-    "\${web_compose[@]}" up -d --no-deps --pull never web || true
+    "${api_compose[@]}" up -d --no-deps --pull never api outbox-worker || true
+    "${web_compose[@]}" up -d --no-deps --pull never web || true
     echo "[Khanya] Manual DB recovery backup: $backup" >&2
   fi
 }
 trap 'rollback_apps; rm -rf "$tmp"' ERR
 echo "[Khanya] Running Alembic migration from tested image"
-"\${api_compose[@]}" run --rm --no-deps --entrypoint alembic api upgrade head
+"${api_compose[@]}" run --rm --no-deps --entrypoint alembic api upgrade head
 cutover=1
 echo "[Khanya] Replacing API without touching persistent containers"
-"\${api_compose[@]}" up -d --no-deps --pull never api
+"${api_compose[@]}" up -d --no-deps --pull never api
 healthy() {
   local container="$1" n state
   for n in $(seq 1 40); do
@@ -122,10 +122,10 @@ healthy() {
   return 1
 }
 healthy khanya-pos-api-1
-"\${api_compose[@]}" up -d --no-deps --pull never outbox-worker
+"${api_compose[@]}" up -d --no-deps --pull never outbox-worker
 [[ "$(docker inspect -f '{{.State.Running}}' khanya-pos-outbox-worker-1)" == true ]]
 echo "[Khanya] Replacing Web in separate khanya-web project"
-"\${web_compose[@]}" up -d --no-deps --pull never web
+"${web_compose[@]}" up -d --no-deps --pull never web
 healthy khanya-web-web-1
 curl --retry 5 --retry-delay 2 -fsS --max-time 15 https://api.khanya.ithute.co.ls/api/v1/health >/dev/null
 curl --retry 5 --retry-delay 2 -fsS --max-time 15 https://pos.ithute.co.ls/ >/dev/null
