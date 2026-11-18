@@ -835,6 +835,9 @@ async function openPurchaseOrderForm(){
   $('purchase-order-feedback').textContent='Loading current suppliers and products…';
   openView('order-create');
   try{
+    // Product choices must be loaded even when the user has not visited the catalogue.
+    await loadScreenOnDemand('order-create');
+    if(state.tenant?.tenant_id!==tenant||state.branch?.id!==branch)return;
     const suppliers=await request('/suppliers');
     if(state.tenant?.tenant_id!==tenant||state.branch?.id!==branch)return;
     for(const p of (Array.isArray(suppliers)?suppliers:[])){
