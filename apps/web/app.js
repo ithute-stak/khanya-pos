@@ -887,13 +887,14 @@ function closeMobileMenus() {
   $('account-toggle').setAttribute?.('aria-expanded', 'false');
 }
 function syncMobileNavigation(name) {
+  const section = ({'catalog-form':'catalog','stock-form':'stock','customers-form':'customers'})[name] || name;
   for (const item of document.querySelectorAll('[data-mobile-view]')) {
-    const selected = item.dataset.mobileView === name;
+    const selected = item.dataset.mobileView === section;
     item.classList?.toggle?.('active', selected);
     if (selected) item.setAttribute?.('aria-current', 'page');
     else item.removeAttribute?.('aria-current');
   }
-  const moreIsActive = !primaryMobileViews.has(name);
+  const moreIsActive = !primaryMobileViews.has(section);
   $('mobile-more-toggle').classList?.toggle?.('active', moreIsActive);
   if (moreIsActive) $('mobile-more-toggle').setAttribute?.('aria-current', 'page');
   else $('mobile-more-toggle').removeAttribute?.('aria-current');
