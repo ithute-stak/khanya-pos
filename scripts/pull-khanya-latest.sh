@@ -3,7 +3,8 @@
 # Pulls only: no Compose up, migration, DB recreation, or release cutover.
 set -Eeuo pipefail
 if (( EUID != 0 )); then exec sudo bash "$0" "$@"; fi
-[[ $# -eq 0 || "$1" == "--pull-only" ]] || { echo "Only --pull-only is supported until production cutover is approved" >&2; exit 2; }
+mode="${1:---pull-only}"
+[[ $# -le 1 && ( "$mode" == "--pull-only" || "$mode" == "--deploy" ) ]] || { echo "Usage: $0 [--pull-only|--deploy]" >&2; exit 2; }
 exec 9>/opt/khanya-pos/releases/khanya-image-pull.lock
 flock -n 9 || { echo "[Khanya] Another pull is running" >&2; exit 1; }
 repo="ithute-stak/khanya-pos"
@@ -54,9 +55,82 @@ echo "[Khanya] Pulling current infrastructure images without replacing container
 docker pull postgres:17-alpine
 docker pull redis:8-alpine
 docker pull quay.io/minio/aistor/minio:latest
-echo "[Khanya] Running containers, release, and persistent data are unchanged."
+echo "[Khanya] Pull stage complete."
 echo "[Khanya] Release available locally: $sha"
 echo "[Khanya] API image: $api_image"
 echo "[Khanya] Web image: $web_image"
 echo "[Khanya] Worker uses the same API image."
 echo "[Khanya] Database, Redis, and MinIO images pulled, NOT restarted."
+if [[ "$mode" == "--pull-only" ]]; then
+  echo "[Khanya] All running containers and persistent data remain unchanged."
+  exit 0
+fi
+
+
+# --deploy only modifies the verified API and Web projects; NEVER "down" or "rm".
+old_api="$(docker inspect -f '{{.Config.Image}}' khanya-pos-api-1)"
+old_web="$(docker inspect -f '{{.Config.Image}}' khanya-web-web-1)"
+old_api_sha="\${old_api##*:}"
+old_web_sha="\${old_web##*:}"
+[[ "$old_api_sha" =~ ^[0-9a-f]{40}$ && "$old_web_sha" =~ ^[0-9a-f]{40}$ ]] || {
+  echo "[Khanya] Running images lack immutable 40-character tags; refusing cutover." >&2; exit 1
+}
+docker image inspect "$old_api" "$old_web" >/dev/null
+if grep -Eiq '^[[:space:]]*PURCHASE_ORDER_RECEIPT_V2_ENABLED[[:space:]]*=[[:space:]]*(1|true|yes)' "$api_dir/.env"; then
+  echo "[Khanya] Unfinished goods-receiving gate enabled; refusing deployment." >&2; exit 1
+fi
+export KHANYA_IMAGE_TAG="$sha" KHANYA_WEB_IMAGE_TAG="$sha" KHANYA_ENV_FILE="$api_dir/.env"
+api_compose=(docker compose -p khanya-pos --env-file "$api_dir/.env" -f "$api_dir/compose.images.yaml")
+web_compose=(docker compose -p khanya-web --env-file "$web_dir/web.env" -f "$web_dir/web.compose.yaml")
+"\${api_compose[@]}" config --quiet
+"\${web_compose[@]}" config --quiet
+echo "[Khanya] Checking candidate backend imports"
+docker run --rm --entrypoint python "$api_image" -c 'import app.main; import alembic' >/dev/null
+timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+backup="/opt/khanya-pos/backups/khanya-before-\${sha}-\${timestamp}.dump"
+echo "[Khanya] Backing up the ACTUAL khanya-pos DB container"
+docker exec khanya-pos-db-1 sh -c 'exec pg_dump -Fc -U "$POSTGRES_USER" "$POSTGRES_DB"' > "$backup"
+test -s "$backup"
+docker exec -i khanya-pos-db-1 pg_restore --list < "$backup" >/dev/null
+chmod 600 "$backup"
+echo "[Khanya] Verified backup: $backup"
+
+cutover=0
+rollback_apps() {
+  if (( cutover == 1 )); then
+    echo "[Khanya] Failure: restoring previous application images (NOT reverting DB migrations)" >&2
+    export KHANYA_IMAGE_TAG="$old_api_sha" KHANYA_WEB_IMAGE_TAG="$old_web_sha"
+    "\${api_compose[@]}" up -d --no-deps --pull never api outbox-worker || true
+    "\${web_compose[@]}" up -d --no-deps --pull never web || true
+    echo "[Khanya] Manual DB recovery backup: $backup" >&2
+  fi
+}
+trap 'rollback_apps; rm -rf "$tmp"' ERR
+echo "[Khanya] Running Alembic migration from tested image"
+"\${api_compose[@]}" run --rm --no-deps --entrypoint alembic api upgrade head
+cutover=1
+echo "[Khanya] Replacing API without touching persistent containers"
+"\${api_compose[@]}" up -d --no-deps --pull never api
+healthy() {
+  local container="$1" n state
+  for n in $(seq 1 40); do
+    state="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")"
+    [[ "$state" == healthy ]] && return 0
+    [[ "$state" == unhealthy || "$state" == exited ]] && return 1
+    sleep 3
+  done
+  return 1
+}
+healthy khanya-pos-api-1
+"\${api_compose[@]}" up -d --no-deps --pull never outbox-worker
+[[ "$(docker inspect -f '{{.State.Running}}' khanya-pos-outbox-worker-1)" == true ]]
+echo "[Khanya] Replacing Web in separate khanya-web project"
+"\${web_compose[@]}" up -d --no-deps --pull never web
+healthy khanya-web-web-1
+curl --retry 5 --retry-delay 2 -fsS --max-time 15 https://api.khanya.ithute.co.ls/api/v1/health >/dev/null
+curl --retry 5 --retry-delay 2 -fsS --max-time 15 https://pos.ithute.co.ls/ >/dev/null
+printf '%s\n' "$sha" > /opt/khanya-pos/releases/current.sha
+printf '%s\n' "$old_api_sha" > /opt/khanya-pos/releases/previous-api.sha
+printf '%s\n' "$old_web_sha" > /opt/khanya-pos/releases/previous-web.sha
+cutover=0
+echo "[Khanya] Production healthy: $sha | Backup: $backup"
