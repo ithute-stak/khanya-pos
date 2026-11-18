@@ -55,7 +55,7 @@ jobs:
       - name: Validate VPS image launcher syntax and safe default
         run: |
           bash -n ../../scripts/pull-khanya-latest.sh
-          grep -F 'Only --pull-only is supported' ../../scripts/pull-khanya-latest.sh
+          grep -F 'mode="${1:---pull-only}"' ../../scripts/pull-khanya-latest.sh
           grep -F 'docker manifest inspect "$api_image"' ../../scripts/pull-khanya-latest.sh
           grep -F 'docker manifest inspect "$web_image"' ../../scripts/pull-khanya-latest.sh
       - name: Compile
