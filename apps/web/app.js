@@ -72,7 +72,7 @@ async function login(event) {
     $('welcome').textContent = me.display_name || me.email || 'Signed in';
     $('login-view').hidden = true; $('app-view').hidden = false; $('session-controls').hidden = false;
     $('mobile-bottom-nav').hidden = false;
-    openView('checkout');
+    openView('overview');
     fillTenants(); await loadProducts();
   } catch (error) { if (!state.me) signOut(false); notify(error.message, true); }
   finally { state.busy = false; $('login-button').disabled = false; }
@@ -922,6 +922,7 @@ function openView(name){
   if(name==='stock')renderStock();
 }
 /* Task-focused screens reuse the existing authenticated API operations and form IDs. */
+for(const action of document.querySelectorAll('[data-workspace-view]')) action.addEventListener('click',()=>openView(action.dataset.workspaceView));
 for(const action of document.querySelectorAll('[data-open-form]'))action.addEventListener('click',()=>{
   if(state.busy)return;
   const section=action.dataset.openForm;
