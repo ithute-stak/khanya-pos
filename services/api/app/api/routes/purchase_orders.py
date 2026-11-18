@@ -20,6 +20,7 @@ from app.services.pricing import money
 from app.services.purchase_order_receipt_service import ReceiptConflict, apply_purchase_order_receipt
 from app.services.purchase_order_receipt_reconciliation import receipt_reconciliation_evidence
 from app.services.purchase_order_invoice_link import InvoiceLinkConflict, link_purchase_invoice
+from app.services.purchase_order_invoice_stock_audit import linked_invoice_stock_audit
 from sqlalchemy.exc import IntegrityError
 
 router = APIRouter()
@@ -282,6 +283,23 @@ async def create_purchase_order_invoice_link(
         "accounting_reconciliation_ready": False,
         "goods_receiving_activation_allowed": False,
     }
+
+
+@router.get("/{order_id}/linked-invoice-stock-audit")
+async def purchase_order_linked_invoice_stock_audit(
+    order_id: UUID,
+    context: TenantContext = Depends(require_permissions("purchases.read", "accounting.read")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Read-only product overlap evidence; never declares a duplicate proven."""
+    if context.branch is None:
+        raise HTTPException(status_code=400, detail="X-Branch-ID is required")
+    report = await linked_invoice_stock_audit(
+        db, tenant_id=context.tenant.id, branch_id=context.branch.id, order_id=order_id
+    )
+    if report is None:
+        raise HTTPException(status_code=404, detail="Purchase order not found for this branch")
+    return report
 
 
 @router.get("/{order_id}/receipt-reconciliation")
