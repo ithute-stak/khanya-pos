@@ -963,7 +963,10 @@ function loadScreenOnDemand(name,{force=false}={}){
   const scope=state.tenant.tenant_id+':'+state.branch.id;
   const key=scope+':'+spec.id;
   const previous=lazyScreenCache.get(key);
-  if(!force && previous?.promise)return previous.promise; // Avoid duplicate requests.
+  if(!force && previous?.promise){
+    if(spec.target)showLazySkeleton(spec.target);
+    return previous.promise; // One request, a loading state for every dependent screen.
+  }
   if(!force && previous?.ok && Date.now()-previous.at<LAZY_REFRESH_MS)return Promise.resolve();
   if(spec.target)showLazySkeleton(spec.target);
   const entry={promise:null,ok:false,at:0};
