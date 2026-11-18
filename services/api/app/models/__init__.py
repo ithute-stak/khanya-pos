@@ -41,6 +41,7 @@ from app.models.purchasing import (
     Expense,
     Purchase,
     PurchaseLine,
+    PurchaseOrderInvoiceLink,
     Supplier,
     SupplierPayment,
 )
@@ -84,6 +85,7 @@ __all__ = [
     "Promotion",
     "Purchase",
     "PurchaseLine",
+    "PurchaseOrderInvoiceLink",
     "PurchaseOrder",
     "PurchaseOrderLine",
     "PurchaseOrderReceiptOperation",
