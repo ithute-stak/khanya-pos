@@ -19,6 +19,8 @@ from app.security.permissions import role_has_permissions
 from app.services.pricing import money
 from app.services.purchase_order_receipt_service import ReceiptConflict, apply_purchase_order_receipt
 from app.services.purchase_order_receipt_reconciliation import receipt_reconciliation_evidence
+from app.services.purchase_order_invoice_link import InvoiceLinkConflict, link_purchase_invoice
+from sqlalchemy.exc import IntegrityError
 
 router = APIRouter()
 
@@ -48,6 +50,12 @@ class PurchaseOrderReceiveLine(BaseModel):
 
 class PurchaseOrderReceive(BaseModel):
     lines: list[PurchaseOrderReceiveLine] = Field(min_length=1)
+
+class PurchaseInvoiceLinkRequest(BaseModel):
+    purchase_id: UUID
+    review_reason: str = Field(min_length=20, max_length=240)
+    confirmed_accounting_review: bool
+
 
 class PurchaseOrderReceiveV2(BaseModel):
     client_operation_id: UUID
@@ -232,6 +240,48 @@ async def update_purchase_order_status(
     await db.commit()
     return _po_payload(order)
 
+
+
+@router.post("/{order_id}/invoice-links", status_code=status.HTTP_201_CREATED)
+async def create_purchase_order_invoice_link(
+    order_id: UUID,
+    payload: PurchaseInvoiceLinkRequest,
+    context: TenantContext = Depends(require_permissions(
+        "purchases.approve", "accounting.write"
+    )),
+    principal: Principal = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Explicit reviewed attribution; does not transfer or value inventory."""
+    if context.branch is None:
+        raise HTTPException(status_code=400, detail="X-Branch-ID is required")
+    if not payload.confirmed_accounting_review:
+        raise HTTPException(status_code=422, detail="Accounting review confirmation is required")
+    try:
+        link, replay = await link_purchase_invoice(
+            db, tenant_id=context.tenant.id,
+            branch_id=context.branch.id, order_id=order_id,
+            purchase_id=payload.purchase_id, actor_id=principal.user.id,
+            review_reason=payload.review_reason,
+        )
+        await db.commit()
+    except InvoiceLinkConflict as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Invoice was attributed concurrently") from exc
+    except Exception:
+        await db.rollback()
+        raise
+    return {
+        "id": link.id,
+        "purchase_order_id": order_id,
+        "purchase_id": link.purchase_id,
+        "idempotent_replay": replay,
+        "accounting_reconciliation_ready": False,
+        "goods_receiving_activation_allowed": False,
+    }
 
 
 @router.get("/{order_id}/receipt-reconciliation")
