@@ -47,14 +47,36 @@ async function request(path, options = {}, retry = true) {
   if (result.status === 204) return null;
   return result.json();
 }
+// Public pages are entirely local: never call authenticated POS APIs for marketing navigation.
+function showPublicPage(page){
+  if(state.access && state.me)return;
+  const name=['home','features','how','login'].includes(page)?page:'home';
+  const landing=$('public-pages');
+  if(landing) landing.hidden=name==='login';
+  $('login-view').hidden=name!=='login';
+  for(const section of ['home','features','how']){
+    const node=$('public-'+section);
+    if(node)node.hidden=name!==section;
+  }
+  for(const button of document.querySelectorAll?.('[data-public-page]')||[]){
+    if(!button.classList)continue;
+    const selected=button.dataset?.publicPage===name;
+    button.classList.toggle?.('active',selected);
+    if(selected)button.setAttribute?.('aria-current','page');
+    else button.removeAttribute?.('aria-current');
+  }
+  if(name==='login') $('identifier').focus?.();
+}
 function signOut(remote = true) {
   if (remote && state.access) request('/auth/logout',{method:'POST'}).catch(()=>{});
   state.access = null; state.refresh = null; state.me = null; state.tenant = null;
   state.branch = null; state.products = []; state.customers = []; state.suppliers = []; state.staff = []; state.productEdit = null; state.cart.clear(); state.pendingId = null; state.expensePending = null;
   resetLazyScreens();
   closeMobileMenus(); $('mobile-bottom-nav').hidden = true;
-  $('app-view').hidden = true; $('session-controls').hidden = true; $('login-view').hidden = false;
-  $('password').value = ''; $('identifier').focus(); clearNotify();
+  $('app-view').hidden = true; $('session-controls').hidden = true;
+  $('public-navigation').hidden = false;
+  $('password').value = ''; clearNotify();
+  showPublicPage('home');
 }
 async function login(event) {
   event.preventDefault();
@@ -71,7 +93,9 @@ async function login(event) {
       throw new Error('No approved business is assigned to your account.');
     }
     $('welcome').textContent = me.display_name || me.email || 'Signed in';
-    $('login-view').hidden = true; $('app-view').hidden = false; $('session-controls').hidden = false;
+    $('login-view').hidden = true; $('public-pages').hidden = true;
+    $('public-navigation').hidden = true;
+    $('app-view').hidden = false; $('session-controls').hidden = false;
     $('mobile-bottom-nav').hidden = false;
     fillTenants();
     openView('overview');
@@ -1019,6 +1043,10 @@ $('mobile-cart-back').addEventListener('click',()=>{
   $('checkout-grid').classList?.remove?.('mobile-cart-mode');
   $('mobile-show-cart').focus?.();
 });
+for(const link of document.querySelectorAll?.('[data-public-page]')||[]){
+  link.addEventListener('click',()=>showPublicPage(link.dataset.publicPage));
+}
+$('login-back-home').addEventListener('click',()=>showPublicPage('home'));
 $('login-form').addEventListener('submit',login);
 $('logout').addEventListener('click',()=>signOut());
 $('tenant-picker').addEventListener('change',()=>switchScope('tenant'));

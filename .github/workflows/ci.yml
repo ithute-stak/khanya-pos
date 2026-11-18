@@ -62,6 +62,7 @@ jobs:
         run: |
           python ../../scripts/test_web_mobile_shell.py
           python ../../scripts/test_web_task_screens.py
+          python ../../scripts/test_web_public_landing.py
           node --check ../../apps/web/app.js
           node --test ../../apps/web/lazy_screen.test.cjs
       - name: Compile
