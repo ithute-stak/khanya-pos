@@ -973,6 +973,7 @@ $('account-workspace').addEventListener('click',()=>{
   $('tenant-picker').focus({preventScroll:true});
   document.querySelector('.workspace-head').scrollIntoView({behavior:'smooth',block:'start'});
 });
+if (typeof document.addEventListener === 'function') {
 document.addEventListener('keydown',event=>{
   if(event.key === 'Escape') closeMobileMenus();
 });
@@ -983,5 +984,6 @@ document.addEventListener('click',event=>{
   }
   if(!$('account-menu').hidden && !event.target.closest('#account-menu, #account-toggle'))setAccountMenu(false);
 });
+}
 
 renderCart();
