@@ -877,21 +877,21 @@ async function verifyQr(){
 const primaryMobileViews = new Set(['checkout','catalog','stock','customers']);
 function closeMobileMenus() {
   $('mobile-more-menu').hidden = true;
-  $('mobile-more-toggle').setAttribute('aria-expanded', 'false');
+  $('mobile-more-toggle').setAttribute?.('aria-expanded', 'false');
   $('account-menu').hidden = true;
-  $('account-toggle').setAttribute('aria-expanded', 'false');
+  $('account-toggle').setAttribute?.('aria-expanded', 'false');
 }
 function syncMobileNavigation(name) {
   for (const item of document.querySelectorAll('[data-mobile-view]')) {
     const selected = item.dataset.mobileView === name;
-    item.classList.toggle('active', selected);
-    if (selected) item.setAttribute('aria-current', 'page');
-    else item.removeAttribute('aria-current');
+    item.classList?.toggle?.('active', selected);
+    if (selected) item.setAttribute?.('aria-current', 'page');
+    else item.removeAttribute?.('aria-current');
   }
   const moreIsActive = !primaryMobileViews.has(name);
-  $('mobile-more-toggle').classList.toggle('active', moreIsActive);
-  if (moreIsActive) $('mobile-more-toggle').setAttribute('aria-current', 'page');
-  else $('mobile-more-toggle').removeAttribute('aria-current');
+  $('mobile-more-toggle').classList?.toggle?.('active', moreIsActive);
+  if (moreIsActive) $('mobile-more-toggle').setAttribute?.('aria-current', 'page');
+  else $('mobile-more-toggle').removeAttribute?.('aria-current');
 }
 function setAccountMenu(open) {
   $('account-menu').hidden = !open;
