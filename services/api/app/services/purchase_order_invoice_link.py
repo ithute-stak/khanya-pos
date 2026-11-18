@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy.exc import IntegrityError
 from app.models.accounting import JournalEntry
 from app.models.purchasing import PurchaseLine
 from app.models.operations import PurchaseOrderLine
