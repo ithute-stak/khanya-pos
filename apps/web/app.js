@@ -51,6 +51,7 @@ function signOut(remote = true) {
   if (remote && state.access) request('/auth/logout',{method:'POST'}).catch(()=>{});
   state.access = null; state.refresh = null; state.me = null; state.tenant = null;
   state.branch = null; state.products = []; state.customers = []; state.suppliers = []; state.staff = []; state.productEdit = null; state.cart.clear(); state.pendingId = null; state.expensePending = null;
+  resetLazyScreens();
   closeMobileMenus(); $('mobile-bottom-nav').hidden = true;
   $('app-view').hidden = true; $('session-controls').hidden = true; $('login-view').hidden = false;
   $('password').value = ''; $('identifier').focus(); clearNotify();
@@ -72,8 +73,8 @@ async function login(event) {
     $('welcome').textContent = me.display_name || me.email || 'Signed in';
     $('login-view').hidden = true; $('app-view').hidden = false; $('session-controls').hidden = false;
     $('mobile-bottom-nav').hidden = false;
+    fillTenants();
     openView('overview');
-    fillTenants(); await loadProducts();
   } catch (error) { if (!state.me) signOut(false); notify(error.message, true); }
   finally { state.busy = false; $('login-button').disabled = false; }
 }
@@ -106,12 +107,18 @@ function switchScope(kind) {
     state.branch = (state.tenant.branches || []).find(b=>b.id === $('branch-picker').value);
     $('branch-title').textContent = (state.branch?.name || 'No active branch') + ' · ' + state.tenant.role;
   }
+  resetLazyScreens();
+  state.products=[];
   state.cart.clear(); state.customers=[]; state.suppliers=[]; state.staff=[]; $('suppliers-list').replaceChildren(); $('staff-list').replaceChildren(); cancelProductEdit(); state.pendingId = null; $('cash-received').value = ''; renderCart();
-  loadProducts().catch(e=>notify(e.message,true));
+  loadScreenOnDemand(state.currentView);
 }
 async function loadProducts() {
   if (!state.branch) { notify('Select an active branch.',true); return; }
-  state.products = await request('/products');
+  const tenant=state.tenant?.tenant_id, branch=state.branch?.id;
+  const products=await request('/products');
+  // A response from the previous branch must never overwrite this branch's catalogue.
+  if(state.tenant?.tenant_id!==tenant || state.branch?.id!==branch)return;
+  state.products = Array.isArray(products)?products:[];
   renderProducts(); renderCatalog(); renderStock();
 }
 function renderProducts() {
@@ -356,9 +363,11 @@ async function saveStock(event) {
   }
 }
 async function loadCustomers(){
-  const target=$('customers-list');target.replaceChildren(h('p','empty','Loading customers…'));
+  const target=$('customers-list'),tenant=state.tenant?.tenant_id,branch=state.branch?.id;
+  showLazySkeleton('customers-list');
   try{
     const customers=await request('/customers?limit=250');
+    if(state.tenant?.tenant_id!==tenant || state.branch?.id!==branch)return;
     state.customers=Array.isArray(customers)?customers:[];
     renderCustomers();
   }catch(e){target.replaceChildren(h('p','empty','Unable to load customers: '+e.message));}
@@ -527,9 +536,12 @@ async function printSaleReceipt(saleId){
 }
 
 async function loadHistory(){
-  const box=$('history-list');box.replaceChildren(h('p','empty','Loading sales…'));
+  const box=$('history-list'),tenant=state.tenant?.tenant_id,branch=state.branch?.id;
+  showLazySkeleton('history-list');
   try{
-    const sales=await request('/pos/sales?limit=60');box.replaceChildren();
+    const sales=await request('/pos/sales?limit=60');
+    if(state.tenant?.tenant_id!==tenant || state.branch?.id!==branch)return;
+    box.replaceChildren();
     for(const sale of sales){
       const row=h('div','record'),left=h('div'),right=h('div');
       left.append(h('strong',null,sale.sale_number),h('small',null,
@@ -546,7 +558,7 @@ async function loadHistory(){
   }catch(e){box.replaceChildren(h('p','empty',e.message));}
 }
 async function loadSuppliers(){
-  const target=$('suppliers-list');target.replaceChildren(h('p','empty','Loading suppliers…'));
+  const target=$('suppliers-list');showLazySkeleton('suppliers-list');
   const tenant=state.tenant?.tenant_id;
   try {
     const suppliers=await request('/suppliers');
@@ -587,7 +599,7 @@ async function saveSupplier(event){
 
 async function loadExpenses(){
   const target=$('expenses-list'), tenant=state.tenant?.tenant_id, branch=state.branch?.id;
-  target.replaceChildren(h('p','empty','Loading expenses…'));
+  showLazySkeleton('expenses-list');
   if(!tenant||!branch)return;
   try{
     const entries=await request('/expenses');
@@ -672,7 +684,7 @@ async function loadSalesReport(event){
 }
 async function loadStaff(){
   const target=$('staff-list'),tenant=state.tenant?.tenant_id,branch=state.branch?.id;
-  target.replaceChildren(h('p','empty','Loading staff directory…'));
+  showLazySkeleton('staff-list');
   if(!tenant||!branch)return;
   try{
     const data=await request('/staff');
@@ -697,7 +709,7 @@ function renderStaff(){
   }
   if(!matches.length)target.append(h('p','empty','No staff members found or accessible.'));
 }
-async function loadPurchasing(){
+async function loadPurchasing(only = null){
   const tenant=state.tenant?.tenant_id,branch=state.branch?.id;
   if(!tenant||!branch)return;
   const kinds=[
@@ -719,8 +731,8 @@ async function loadPurchasing(){
       row.append(left,right);return row;
     }}
   ];
-  await Promise.all(kinds.map(async kind=>{
-    const target=$(kind.target);target.replaceChildren(h('p','empty','Loading…'));
+  await Promise.all(kinds.filter(kind => !only || kind.target === only).map(async kind=>{
+    const target=$(kind.target);showLazySkeleton(kind.target);
     try{
       const result=await request(kind.path);
       if(state.tenant?.tenant_id!==tenant||state.branch?.id!==branch)return;
@@ -907,6 +919,62 @@ function setAccountMenu(open) {
     $('mobile-more-toggle').setAttribute('aria-expanded', 'false');
   }
 }
+// Each screen is loaded on first visit and revalidated after a short interval.
+// Records are kept only in memory; never persist session or tenant data to the browser.
+const lazyScreenCache = new Map();
+const LAZY_REFRESH_MS = 15000;
+function resetLazyScreens(){ lazyScreenCache.clear(); }
+function showLazySkeleton(targetId){
+  const target=$(targetId);
+  if(!target) return;
+  const lines=[];
+  for(let i=0;i<3;i++) lines.push(h('div','skeleton-line'));
+  const shell=h('div','skeleton-list');
+  shell.setAttribute?.('role','status');
+  shell.setAttribute?.('aria-label','Loading records');
+  shell.append(...lines);
+  target.replaceChildren(shell);
+}
+function screenDataSpec(name){
+  if(['checkout','catalog','stock','order-create'].includes(name)){
+    return {id:'products',target:name==='checkout'?'product-list':name==='catalog'?'catalog-list':name==='stock'?'stock-list':null,run:loadProducts};
+  }
+  const views={
+    customers:['customers-list',loadCustomers],
+    suppliers:['suppliers-list',loadSuppliers],
+    expenses:['expenses-list',loadExpenses],
+    staff:['staff-list',loadStaff],
+    history:['history-list',loadHistory],
+    purchasing:['orders-list',()=>loadPurchasing('orders-list')],
+    purchases:['purchases-list',()=>loadPurchasing('purchases-list')]
+  };
+  const match=views[name];
+  return match?{id:name,target:match[0],run:match[1]}:null;
+}
+function loadScreenOnDemand(name,{force=false}={}){
+  if(!state.access || !state.tenant || !state.branch)return Promise.resolve();
+  const spec=screenDataSpec(name);
+  if(!spec)return Promise.resolve(); // Overview and forms make no unnecessary requests.
+  const scope=state.tenant.tenant_id+':'+state.branch.id;
+  const key=scope+':'+spec.id;
+  const previous=lazyScreenCache.get(key);
+  if(!force && previous?.promise)return previous.promise; // Avoid duplicate requests.
+  if(!force && previous?.ok && Date.now()-previous.at<LAZY_REFRESH_MS)return Promise.resolve();
+  if(spec.target)showLazySkeleton(spec.target);
+  const entry={promise:null,ok:false,at:0};
+  lazyScreenCache.set(key,entry);
+  const task=Promise.resolve().then(spec.run).then(()=>{
+    if(lazyScreenCache.get(key)===entry){entry.ok=true;entry.at=Date.now();}
+  }).catch(error=>{
+    if(lazyScreenCache.get(key)===entry){
+      lazyScreenCache.delete(key);
+      if(spec.target)$(spec.target).replaceChildren(h('p','empty','Unable to load records. Use Refresh to retry.'));
+      notify(error.message||'Unable to load screen',true);
+    }
+  }).finally(()=>{entry.promise=null;});
+  entry.promise=task;
+  return task;
+}
 function openView(name){
   closeMobileMenus();
   const grid=$('checkout-grid'); if(grid)grid.classList?.remove?.('mobile-cart-mode');
@@ -914,13 +982,7 @@ function openView(name){
   syncMobileNavigation(name);
   for(const el of document.querySelectorAll('.view'))el.hidden=el.id!==name+'-view';
   for(const el of document.querySelectorAll('.tab'))el.classList.toggle('active',el.dataset.view===name);
-  if(name==='history')loadHistory();
-  if(name==='customers')loadCustomers();
-  if(name==='suppliers')loadSuppliers();
-  if(name==='expenses')loadExpenses();
-  if(name==='staff')loadStaff();
-  if(name==='purchasing' || name==='purchases')loadPurchasing();
-  if(name==='stock')renderStock();
+  loadScreenOnDemand(name);
 }
 /* Task-focused screens reuse the existing authenticated API operations and form IDs. */
 for(const action of document.querySelectorAll('[data-workspace-view]')) action.addEventListener('click',()=>openView(action.dataset.workspaceView));
