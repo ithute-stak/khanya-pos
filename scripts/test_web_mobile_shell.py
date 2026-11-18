@@ -59,3 +59,10 @@ def test_mobile_css_respects_login_and_receipt_printing():
     assert "env(safe-area-inset-bottom)" in CSS
     assert ".mobile-bottom-nav,.mobile-more-menu,.account-menu{display:none!important}" in CSS
     assert 'id="receipt-print"' in HTML
+
+
+if __name__ == "__main__":
+    test_mobile_nav_markup_and_navigation_sections()
+    test_mobile_navigation_preserves_existing_pos_actions()
+    test_mobile_css_respects_login_and_receipt_printing()
+    print("Mobile web shell checks passed")
