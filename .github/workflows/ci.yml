@@ -61,6 +61,7 @@ jobs:
       - name: Check responsive web app shell
         run: |
           python ../../scripts/test_web_mobile_shell.py
+          python ../../scripts/test_web_task_screens.py
           node --check ../../apps/web/app.js
       - name: Compile
         run: python -m compileall app alembic

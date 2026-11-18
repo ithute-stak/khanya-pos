@@ -72,7 +72,7 @@ async function login(event) {
     $('welcome').textContent = me.display_name || me.email || 'Signed in';
     $('login-view').hidden = true; $('app-view').hidden = false; $('session-controls').hidden = false;
     $('mobile-bottom-nav').hidden = false;
-    openView('checkout');
+    openView('overview');
     fillTenants(); await loadProducts();
   } catch (error) { if (!state.me) signOut(false); notify(error.message, true); }
   finally { state.busy = false; $('login-button').disabled = false; }
@@ -206,6 +206,7 @@ async function beginProductEdit(id){
     $('product-editor-title').textContent='Edit product';
     $('save-product').textContent='Save changes';
     $('cancel-product-edit').hidden=false;
+    openView('catalog-form');
     notify('Editing '+product.name+'. Prices and stock movements remain server-controlled.');
   }catch(e){notify('Could not load product details: '+e.message,true);}
   finally{state.busy=false;$('save-product').disabled=false;}
@@ -316,7 +317,8 @@ async function saveProduct(event) {
   finally{state.busy=false; $('save-product').disabled=false;renderCart();}
   if(created) {
     try{await loadProducts();}
-    catch(e){notify('Product created, but the catalogue could not refresh: '+e.message,true);}
+    catch(e){notify('Product saved, but the catalogue could not refresh: '+e.message,true);}
+    openView('catalog');
   }
 }
 async function saveStock(event) {
@@ -350,6 +352,7 @@ async function saveStock(event) {
   if(completed){
     try{await loadProducts();}
     catch(e){notify('Adjustment recorded; stock refresh failed: '+e.message,true);}
+    openView('stock');
   }
 }
 async function loadCustomers(){
@@ -390,7 +393,7 @@ async function saveCustomer(event){
     form.reset();notify('Customer '+created.name+' created.');
   }catch(e){notify(e.message+' — Check the customer list before creating the same customer again.',true);}
   finally{state.busy=false;$('save-customer').disabled=false;renderCart();}
-  if(created)await loadCustomers();
+  if(created){ await loadCustomers(); openView('customers'); }
 }
 
 function addProduct(id) {
@@ -419,6 +422,7 @@ function renderCart() {
   }
   if (!count) box.append(h('p','empty','Your cart is empty'));
   $('cart-count').textContent=String(count);$('cart-total').textContent=money(total/100);
+  const mobileCount=$('mobile-cart-count'); if(mobileCount) mobileCount.textContent=String(count);
   const received=Number($('cash-received').value);
   $('change-total').textContent=money(Math.max(0,received-total/100));
   const validCash=/^\d+(?:\.\d{1,2})?$/.test($('cash-received').value.trim());
@@ -576,6 +580,7 @@ async function saveSupplier(event){
     await request('/suppliers',{method:'POST',body:JSON.stringify(payload)});
     if(state.tenant?.tenant_id===tenant){event.currentTarget.reset();await loadSuppliers();}
     notify('Supplier saved.');
+    openView('suppliers');
   }catch(e){notify('Supplier was not confirmed: '+e.message+'; check the list before retrying.',true);}
   finally{state.busy=false;$('save-supplier').disabled=false;}
 }
@@ -625,7 +630,7 @@ async function saveExpense(event){
     })});
     state.expensePending=null;form.reset();
     notify('Expense recorded.');
-    if(state.tenant?.tenant_id===tenant&&state.branch?.id===branch)await loadExpenses();
+    if(state.tenant?.tenant_id===tenant&&state.branch?.id===branch){await loadExpenses();openView('expenses');}
   }catch(e){notify('Expense was not confirmed: '+e.message+'. Check records before retrying.',true);}
   finally{state.busy=false;$('save-expense').disabled=false;}
 }
@@ -882,13 +887,14 @@ function closeMobileMenus() {
   $('account-toggle').setAttribute?.('aria-expanded', 'false');
 }
 function syncMobileNavigation(name) {
+  const section = ({'catalog-form':'catalog','stock-form':'stock','customers-form':'customers'})[name] || name;
   for (const item of document.querySelectorAll('[data-mobile-view]')) {
-    const selected = item.dataset.mobileView === name;
+    const selected = item.dataset.mobileView === section;
     item.classList?.toggle?.('active', selected);
     if (selected) item.setAttribute?.('aria-current', 'page');
     else item.removeAttribute?.('aria-current');
   }
-  const moreIsActive = !primaryMobileViews.has(name);
+  const moreIsActive = !primaryMobileViews.has(section);
   $('mobile-more-toggle').classList?.toggle?.('active', moreIsActive);
   if (moreIsActive) $('mobile-more-toggle').setAttribute?.('aria-current', 'page');
   else $('mobile-more-toggle').removeAttribute?.('aria-current');
@@ -903,6 +909,7 @@ function setAccountMenu(open) {
 }
 function openView(name){
   closeMobileMenus();
+  const grid=$('checkout-grid'); if(grid)grid.classList?.remove?.('mobile-cart-mode');
   state.currentView=name;
   syncMobileNavigation(name);
   for(const el of document.querySelectorAll('.view'))el.hidden=el.id!==name+'-view';
@@ -912,9 +919,33 @@ function openView(name){
   if(name==='suppliers')loadSuppliers();
   if(name==='expenses')loadExpenses();
   if(name==='staff')loadStaff();
-  if(name==='purchasing')loadPurchasing();
+  if(name==='purchasing' || name==='purchases')loadPurchasing();
   if(name==='stock')renderStock();
 }
+/* Task-focused screens reuse the existing authenticated API operations and form IDs. */
+for(const action of document.querySelectorAll('[data-workspace-view]')) action.addEventListener('click',()=>openView(action.dataset.workspaceView));
+for(const action of document.querySelectorAll('[data-open-form]'))action.addEventListener('click',()=>{
+  if(state.busy)return;
+  const section=action.dataset.openForm;
+  if(section==='catalog')cancelProductEdit();
+  openView(section+'-form');
+});
+for(const action of document.querySelectorAll('[data-back-view]'))action.addEventListener('click',()=>{
+  if(state.busy)return;
+  if(action.dataset.backView==='catalog')cancelProductEdit();
+  openView(action.dataset.backView);
+});
+$('purchasing-purchases-open').addEventListener('click',()=>openView('purchases'));
+$('mobile-show-cart').addEventListener('click',()=>{
+  if(state.busy)return;
+  $('checkout-grid').classList?.add?.('mobile-cart-mode');
+  $('mobile-cart-back').focus?.();
+});
+$('mobile-cart-back').addEventListener('click',()=>{
+  if(state.busy)return;
+  $('checkout-grid').classList?.remove?.('mobile-cart-mode');
+  $('mobile-show-cart').focus?.();
+});
 $('login-form').addEventListener('submit',login);
 $('logout').addEventListener('click',()=>signOut());
 $('tenant-picker').addEventListener('change',()=>switchScope('tenant'));
